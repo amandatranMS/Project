@@ -1,16 +1,21 @@
 openapi: 3.0.3
 info:
   title: MSX Milestone Assistant API (Mock)
-  version: 0.1.0
+  version: 0.2.0
   description: >
     REST API for the MSX Milestone Assistant, a SYNTHETIC MOCK application for
-    Solution Engineering opportunity and milestone management. This API is NOT
-    connected to real MSX, Dataverse, Power Platform, or any customer data.
+    Solution Engineering opportunity and milestone management. NOT connected to
+    real MSX, Dataverse, Power Platform, or customer data.
 
-    Agent governance model:
-      * Agents may read context, create recommendations, and submit approval requests freely.
-      * Agents may ONLY create real milestone records by fulfilling an APPROVED approval request.
-      * Every agent action is written to the Agent Action Audit Log.
+    Data is imported from the Excel workbook (the single source of truth):
+    data/MSX_Mirror_Necessary_Tables_Import_10_More_Entries.xlsx.
+
+    Agent governance:
+      * Agents may read context and view recommendations/approvals freely.
+      * A real milestone may only be created by fulfilling an APPROVED approval
+        request (POST /api/agent/approvals/{id}/fulfill). Fulfilling a non-approved
+        request returns 403 and is audited as "Denied".
+      * Every agent write path is written to the Agent Action Audit Log.
 servers:
   - url: http://localhost:4000
     description: Local mock server
@@ -28,23 +33,17 @@ paths:
       tags: [Health]
       summary: Health check
       responses:
-        '200':
-          description: Service is healthy
+        '200': { description: Service is healthy }
 
   /api/opportunities:
     get:
       tags: [Opportunities]
       summary: List opportunities
       parameters:
-        - in: query
-          name: status
-          schema: { type: string }
-        - in: query
-          name: dealStage
-          schema: { type: string }
+        - { in: query, name: status, schema: { type: string } }
+        - { in: query, name: salesStage, schema: { type: string } }
       responses:
-        '200':
-          description: Array of opportunities
+        '200': { description: Array of opportunities }
     post:
       tags: [Opportunities]
       summary: Create an opportunity
@@ -60,27 +59,20 @@ paths:
     get:
       tags: [Opportunities]
       summary: Get an opportunity with milestones, team, notes and recommendations
-      parameters:
-        - $ref: '#/components/parameters/IdParam'
+      parameters: [{ $ref: '#/components/parameters/IdParam' }]
       responses:
         '200': { description: Opportunity }
         '404': { description: Not found }
     patch:
       tags: [Opportunities]
       summary: Update an opportunity
-      parameters:
-        - $ref: '#/components/parameters/IdParam'
-      requestBody:
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/OpportunityInput' }
+      parameters: [{ $ref: '#/components/parameters/IdParam' }]
       responses:
         '200': { description: Updated }
     delete:
       tags: [Opportunities]
       summary: Delete an opportunity
-      parameters:
-        - $ref: '#/components/parameters/IdParam'
+      parameters: [{ $ref: '#/components/parameters/IdParam' }]
       responses:
         '204': { description: Deleted }
 
@@ -89,17 +81,13 @@ paths:
       tags: [Milestones]
       summary: List milestones
       parameters:
-        - in: query
-          name: opportunityId
-          schema: { type: string }
-        - in: query
-          name: status
-          schema: { type: string }
+        - { in: query, name: opportunityId, schema: { type: string } }
+        - { in: query, name: milestoneStatus, schema: { type: string } }
       responses:
         '200': { description: Array of milestones }
     post:
       tags: [Milestones]
-      summary: Create a milestone (human/direct path)
+      summary: Create a milestone (connect to an opportunity by name)
       requestBody:
         required: true
         content:
@@ -111,31 +99,27 @@ paths:
     get:
       tags: [Milestones]
       summary: Get a milestone with history, recommendations, approvals and notes
-      parameters:
-        - $ref: '#/components/parameters/IdParam'
+      parameters: [{ $ref: '#/components/parameters/IdParam' }]
       responses:
         '200': { description: Milestone }
         '404': { description: Not found }
     patch:
       tags: [Milestones]
       summary: Update a milestone
-      parameters:
-        - $ref: '#/components/parameters/IdParam'
+      parameters: [{ $ref: '#/components/parameters/IdParam' }]
       responses:
         '200': { description: Updated }
     delete:
       tags: [Milestones]
       summary: Delete a milestone
-      parameters:
-        - $ref: '#/components/parameters/IdParam'
+      parameters: [{ $ref: '#/components/parameters/IdParam' }]
       responses:
         '204': { description: Deleted }
   /api/milestones/{id}/status:
     post:
       tags: [Milestones]
       summary: Change milestone status (writes Milestone Status History)
-      parameters:
-        - $ref: '#/components/parameters/IdParam'
+      parameters: [{ $ref: '#/components/parameters/IdParam' }]
       requestBody:
         required: true
         content:
@@ -146,7 +130,7 @@ paths:
               properties:
                 newStatus: { type: string }
                 changedBy: { type: string }
-                changeReason: { type: string }
+                reason: { type: string }
       responses:
         '200': { description: Updated }
 
@@ -166,10 +150,7 @@ paths:
       tags: [Collaboration]
       summary: List deal team members for an opportunity
       parameters:
-        - in: query
-          name: opportunityId
-          required: true
-          schema: { type: string }
+        - { in: query, name: opportunityId, required: true, schema: { type: string } }
       responses:
         '200': { description: Members }
     post:
@@ -181,74 +162,34 @@ paths:
   /api/agent/context/{opportunityId}:
     get:
       tags: [Agent]
-      summary: Read opportunity context for an agent (audited as ReadContext)
+      summary: Read opportunity context for an agent (audited as Read)
       parameters:
-        - in: path
-          name: opportunityId
-          required: true
-          schema: { type: string }
-        - in: query
-          name: agentName
-          schema: { type: string }
+        - { in: path, name: opportunityId, required: true, schema: { type: string } }
+        - { in: query, name: agentName, schema: { type: string } }
       responses:
         '200': { description: Opportunity context }
-  /api/agent/runs:
-    get:
-      tags: [Agent]
-      summary: List agent runs
-      responses:
-        '200': { description: Runs }
-    post:
-      tags: [Agent]
-      summary: Start an agent run
-      responses:
-        '201': { description: Created }
-  /api/agent/runs/{id}/complete:
-    post:
-      tags: [Agent]
-      summary: Complete an agent run
-      parameters:
-        - $ref: '#/components/parameters/IdParam'
-      responses:
-        '200': { description: Completed }
   /api/agent/recommendations:
     get:
       tags: [Agent]
       summary: List AI milestone recommendations
+      parameters:
+        - { in: query, name: reviewStatus, schema: { type: string } }
+        - { in: query, name: opportunityId, schema: { type: string } }
       responses:
         '200': { description: Recommendations }
-    post:
-      tags: [Agent]
-      summary: Create an AI milestone recommendation (audited)
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/RecommendationInput' }
-      responses:
-        '201': { description: Created }
   /api/agent/approvals:
     get:
       tags: [Agent]
       summary: List approval requests
+      parameters:
+        - { in: query, name: approvalStatus, schema: { type: string } }
       responses:
         '200': { description: Approvals }
-    post:
-      tags: [Agent]
-      summary: Submit an approval request (audited as SubmitApproval)
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/ApprovalInput' }
-      responses:
-        '201': { description: Created }
   /api/agent/approvals/{id}/decision:
     post:
       tags: [Agent]
       summary: Human decision (approve/reject) on an approval request
-      parameters:
-        - $ref: '#/components/parameters/IdParam'
+      parameters: [{ $ref: '#/components/parameters/IdParam' }]
       requestBody:
         required: true
         content:
@@ -267,10 +208,9 @@ paths:
     post:
       tags: [Agent]
       summary: >
-        Create the real milestone from an APPROVED approval request. Blocked (403)
-        and audited as "Denied" if the request is not Approved.
-      parameters:
-        - $ref: '#/components/parameters/IdParam'
+        Create the real milestone from an APPROVED approval request (using its
+        related recommendation). Blocked (403) and audited as "Denied" if not Approved.
+      parameters: [{ $ref: '#/components/parameters/IdParam' }]
       requestBody:
         content:
           application/json:
@@ -281,14 +221,18 @@ paths:
       responses:
         '201': { description: Milestone created }
         '403': { description: Blocked — approval not granted }
+  /api/agent/runs:
+    get:
+      tags: [Agent]
+      summary: List agent runs (from the workbook)
+      responses:
+        '200': { description: Runs }
   /api/agent/audit:
     get:
       tags: [Agent]
       summary: Read the agent action audit log
       parameters:
-        - in: query
-          name: agentName
-          schema: { type: string }
+        - { in: query, name: agentName, schema: { type: string } }
       responses:
         '200': { description: Audit log entries }
 
@@ -296,34 +240,31 @@ paths:
     get:
       tags: [Notifications]
       summary: List agent notifications
+      parameters:
+        - { in: query, name: notifyRole, schema: { type: string } }
+        - { in: query, name: status, schema: { type: string } }
       responses:
         '200': { description: Notifications }
   /api/notifications/{id}/read:
     post:
       tags: [Notifications]
       summary: Mark a notification as read
-      parameters:
-        - $ref: '#/components/parameters/IdParam'
+      parameters: [{ $ref: '#/components/parameters/IdParam' }]
       responses:
         '200': { description: Updated }
 
   /api/dashboard/metrics:
     get:
       tags: [Dashboard]
-      summary: Live dashboard metrics
+      summary: Live dashboard metrics (computed from imported data)
       responses:
         '200': { description: Metrics }
   /api/dashboard/snapshots:
     get:
       tags: [Dashboard]
-      summary: List dashboard metric snapshots
+      summary: List Dashboard Metric Snapshot rows from the workbook
       responses:
         '200': { description: Snapshots }
-    post:
-      tags: [Dashboard]
-      summary: Persist a metric snapshot
-      responses:
-        '201': { description: Created }
 
 components:
   parameters:
@@ -335,62 +276,39 @@ components:
   schemas:
     OpportunityInput:
       type: object
-      required: [name, accountName, customerSegment, owner]
+      required: [opportunityBusinessId, opportunityName]
       properties:
-        name: { type: string }
-        accountName: { type: string }
-        customerSegment: { type: string, enum: [Enterprise, Commercial, SMB, Public Sector] }
+        opportunityBusinessId: { type: string, example: OPP-016 }
+        opportunityName: { type: string }
+        tpid: { type: string }
+        customerName: { type: string }
         industry: { type: string }
-        dealStage: { type: string, enum: [Qualify, Develop, Propose, Commit, Closed Won, Closed Lost] }
-        estimatedValue: { type: number }
-        currency: { type: string }
-        probability: { type: integer }
+        solutionArea: { type: string, example: Modern Work }
+        salesStage: { type: string, example: Listen & Consult }
+        status: { type: string, example: Active }
+        estimatedRevenue: { type: number }
         closeDate: { type: string, format: date }
-        owner: { type: string }
-        partnerName: { type: string }
-        partnerType: { type: string, enum: [ISV, SI, Reseller, None] }
+        aeOwner: { type: string }
+        assignedSE: { type: string }
         competitorName: { type: string }
-        competitorThreatLevel: { type: string, enum: [Low, Medium, High] }
-        riskLevel: { type: string, enum: [Low, Medium, High] }
-        riskNotes: { type: string }
-        status: { type: string, enum: [Open, On Hold, Won, Lost] }
+        consumptionPhase: { type: string }
+        businessProblem: { type: string }
+        nextStep: { type: string }
     MilestoneInput:
       type: object
-      required: [opportunityId, title, owner]
+      required: [milestoneBusinessId, milestoneName, opportunityName]
       properties:
-        opportunityId: { type: string }
-        title: { type: string }
-        description: { type: string }
-        milestoneType: { type: string, enum: [Technical Win, POC, Architecture Review, Security Review, Deployment, Custom] }
-        status: { type: string, enum: [Not Started, In Progress, Blocked, At Risk, Completed, Cancelled] }
-        priority: { type: string, enum: [Low, Medium, High, Critical] }
+        milestoneBusinessId: { type: string, example: MS-016 }
+        milestoneName: { type: string }
+        opportunityName: { type: string, description: Lookup target — connects to Opportunity.opportunityName }
+        workload: { type: string }
+        milestoneCategory: { type: string }
+        milestoneStatus: { type: string, example: On Track }
+        partnerName: { type: string }
+        estDate: { type: string, format: date }
+        fitCharge: { type: number }
+        riskDescription: { type: string }
+        riskImpact: { type: string, example: Medium }
+        mitigationPlan: { type: string }
+        blockedReason: { type: string }
         owner: { type: string }
-        dueDate: { type: string, format: date }
-        blockerDescription: { type: string }
-        blockerStatus: { type: string, enum: [None, Open, Mitigating, Resolved] }
-        riskAssessment: { type: string }
-        riskScore: { type: integer }
-    RecommendationInput:
-      type: object
-      required: [recommendationType, title, recommendationText, generatedByAgent]
-      properties:
-        opportunityId: { type: string }
-        milestoneId: { type: string }
-        recommendationType: { type: string, enum: [Next Milestone, Risk Mitigation, Status Change, Deal Team, General] }
-        title: { type: string }
-        recommendationText: { type: string }
-        rationale: { type: string }
-        confidenceScore: { type: number }
-        generatedByAgent: { type: string }
-        agentRunId: { type: string }
-    ApprovalInput:
-      type: object
-      required: [requestType, requestedBy, summary, payload]
-      properties:
-        recommendationId: { type: string }
-        milestoneId: { type: string }
-        requestType: { type: string, enum: [Create Milestone, Update Milestone, Status Change, Other] }
-        requestedBy: { type: string }
-        summary: { type: string }
-        payload: { type: object }
-        agentRunId: { type: string }

@@ -8,13 +8,13 @@ export const opportunitiesRouter = Router();
 opportunitiesRouter.get(
   '/',
   asyncHandler(async (req, res) => {
-    const { status, dealStage } = req.query;
+    const { status, salesStage } = req.query;
     const opportunities = await prisma.opportunity.findMany({
       where: {
         status: typeof status === 'string' ? status : undefined,
-        dealStage: typeof dealStage === 'string' ? dealStage : undefined,
+        salesStage: typeof salesStage === 'string' ? salesStage : undefined,
       },
-      orderBy: { updatedAt: 'desc' },
+      orderBy: { opportunityBusinessId: 'asc' },
       include: { _count: { select: { milestones: true } } },
     });
     res.json(opportunities);
@@ -27,10 +27,10 @@ opportunitiesRouter.get(
     const opportunity = await prisma.opportunity.findUnique({
       where: { id: req.params.id },
       include: {
-        milestones: { orderBy: { createdAt: 'asc' } },
+        milestones: { orderBy: { milestoneBusinessId: 'asc' } },
         dealTeamMembers: true,
-        collaborationNotes: { orderBy: { createdAt: 'desc' } },
-        recommendations: { orderBy: { createdAt: 'desc' } },
+        collaborationNotes: { orderBy: { createdOn: 'desc' } },
+        recommendations: { orderBy: { recommendationBusinessId: 'asc' } },
       },
     });
     if (!opportunity) throw new HttpError(404, 'Opportunity not found');

@@ -23,27 +23,27 @@ export default function Milestones() {
       <table>
         <thead>
           <tr>
-            <th>Title</th>
+            <th>ID</th>
+            <th>Name</th>
             <th>Opportunity</th>
-            <th>Type</th>
+            <th>Category</th>
             <th>Status</th>
-            <th>Priority</th>
             <th>Owner</th>
-            <th>Due</th>
-            <th>Blocker</th>
+            <th>Est Date</th>
+            <th>Risk</th>
           </tr>
         </thead>
         <tbody>
           {items.map((m) => (
             <tr key={m.id}>
-              <td><Link to={`/milestones/${m.id}`}>{m.title}</Link></td>
-              <td>{m.opportunity?.name ?? '—'}</td>
-              <td>{m.milestoneType}</td>
-              <td><span className={`badge ${statusBadgeClass(m.status)}`}>{m.status}</span></td>
-              <td>{m.priority}</td>
-              <td>{m.owner}</td>
-              <td>{formatDate(m.dueDate)}</td>
-              <td>{m.blockerStatus !== 'None' ? m.blockerStatus : '—'}</td>
+              <td>{m.milestoneBusinessId}</td>
+              <td><Link to={`/milestones/${m.id}`}>{m.milestoneName}</Link></td>
+              <td>{m.opportunity?.opportunityName ?? '—'}</td>
+              <td>{m.milestoneCategory ?? '—'}</td>
+              <td><span className={`badge ${statusBadgeClass(m.milestoneStatus)}`}>{m.milestoneStatus ?? '—'}</span></td>
+              <td>{m.owner ?? '—'}</td>
+              <td>{formatDate(m.estDate)}</td>
+              <td>{m.riskImpact ?? '—'}</td>
             </tr>
           ))}
           {items.length === 0 && !error && (

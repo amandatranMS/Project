@@ -15,8 +15,8 @@ export default function Dashboard() {
 
   const cards = metrics
     ? [
-        { label: 'Open Opportunities', value: metrics.openOpportunities },
-        { label: 'Open Pipeline', value: formatCurrency(metrics.openPipelineValue) },
+        { label: 'Active Opportunities', value: metrics.activeOpportunities },
+        { label: 'Pipeline Value', value: formatCurrency(metrics.pipelineValue) },
         { label: 'Total Milestones', value: metrics.totalMilestones },
         { label: 'Milestones At Risk', value: metrics.milestonesAtRisk },
         { label: 'Blocked Milestones', value: metrics.blockedMilestones },

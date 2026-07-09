@@ -74,22 +74,60 @@ Then open **http://localhost:5173**.
 
 | Script                     | Description                                            |
 | -------------------------- | ------------------------------------------------------ |
-| `npm run setup`            | install + prisma generate + db push + seed             |
+| `npm run setup`            | install + prisma generate + db push + import-workbook  |
 | `npm run dev`              | run API + web concurrently                             |
 | `npm run dev:api`          | run only the API                                       |
 | `npm run dev:web`          | run only the web app                                   |
-| `npm run db:seed`          | (re)seed synthetic data                                |
-| `npm run db:reset`         | reset the SQLite DB and reseed                         |
+| `npm run import-workbook`  | reset tables and reload from the Excel workbook        |
+| `npm run db:seed`          | seed the DB (runs the workbook import)                 |
+| `npm run db:reset`         | force-reset the schema then reload the workbook        |
 | `npm run prisma:generate`  | regenerate the Prisma client after schema changes      |
 | `npm run build`            | build shared, api, and web                             |
+
+## Data import pipeline (workbook is the single source of truth)
+
+Records are **not** hardcoded. They are imported from the Excel workbook:
+
+```
+Excel Workbook  →  XLSX Parser  →  JSON Objects  →  Prisma (connect)  →  SQLite
+ data/*.xlsx        scripts/          per-row map       @unique keys        dev.db
+                 parseWorkbook.ts   workbookMappings.ts
+```
+
+- **Workbook:** `data/MSX_Mirror_Necessary_Tables_Import_10_More_Entries.xlsx`
+  (one worksheet per table).
+- **Mappings:** `scripts/workbookMappings.ts` maps every Excel column to a Prisma
+  field, with type hints (`string | int | float | bool | date | datetime`).
+- **Parser:** `scripts/parseWorkbook.ts` reads each sheet, converts values
+  (Excel serial dates, `Yes/No` → boolean, blank/`---` → null), resolves lookups
+  with Prisma `connect` against `@unique` business keys, and inserts in strict
+  dependency order.
+- **Seed:** `prisma/seed.ts` simply calls the importer.
+
+Run it:
+
+```bash
+npm run import-workbook   # reset all tables, then reload from the workbook
+```
+
+Expected output:
+
+```
+====================================
+Import Complete
+====================================
+Opportunities: 15
+Milestones: 15
+... (15 per table)
+```
 
 ## Agent governance flow
 
 The whole point of the POC: agents are useful but **gated**.
 
-1. Agent **reads context** → audited as `ReadContext`.
-2. Agent **creates a recommendation** → audited as `CreateRecommendation`.
-3. Agent **submits an approval request** → audited as `SubmitApproval`.
+1. Agent **reads context** → audited as `Read`.
+2. Agent recommendations are surfaced from the workbook (`AI Milestone Recommendation`).
+3. Approval requests carry an `approvalStatus` (`Pending` / `Approved` / `Rejected`).
 4. Agent tries to create a milestone **before approval** → **403 Denied** (audited).
 5. A **human approves** on the Approvals page.
 6. Agent **fulfills** the approved request → milestone created, audited as

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, type ApprovalRequest } from '../api/client';
-import { statusBadgeClass, formatDate } from '../ui';
+import { statusBadgeClass } from '../ui';
 
 export default function Approvals() {
   const [items, setItems] = useState<ApprovalRequest[]>([]);
@@ -34,8 +34,11 @@ export default function Approvals() {
     setBusyId(id);
     setMessage(null);
     try {
-      const created = await api.post<{ id: string; title: string }>(`/agent/approvals/${id}/fulfill`, { agentName: 'MilestoneAdvisor' });
-      setMessage(`Milestone created after approval: ${created.title}`);
+      const created = await api.post<{ milestoneBusinessId: string; milestoneName: string }>(
+        `/agent/approvals/${id}/fulfill`,
+        { agentName: 'MilestoneAdvisor' },
+      );
+      setMessage(`Milestone created after approval: ${created.milestoneBusinessId} — ${created.milestoneName}`);
       load();
     } catch (e) {
       setError((e as Error).message);
@@ -57,42 +60,45 @@ export default function Approvals() {
       <table>
         <thead>
           <tr>
-            <th>Summary</th>
-            <th>Type</th>
+            <th>ID</th>
+            <th>Request</th>
+            <th>Opportunity</th>
             <th>Requested By</th>
-            <th>Created</th>
-            <th>Status</th>
+            <th>Approval</th>
+            <th>Writeback</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
           {items.map((a) => (
             <tr key={a.id}>
-              <td>{a.summary}</td>
-              <td>{a.requestType}</td>
-              <td>{a.requestedBy}</td>
-              <td>{formatDate(a.createdAt)}</td>
-              <td><span className={`badge ${statusBadgeClass(a.status)}`}>{a.status}</span></td>
+              <td>{a.approvalRequestBusinessId}</td>
+              <td>{a.requestName ?? '—'}</td>
+              <td>{a.opportunity?.opportunityName ?? '—'}</td>
+              <td>{a.requestedBy ?? '—'}</td>
+              <td><span className={`badge ${statusBadgeClass(a.approvalStatus)}`}>{a.approvalStatus ?? '—'}</span></td>
+              <td>{a.mockWritebackStatus ?? '—'}</td>
               <td>
                 <div className="btn-row">
-                  {a.status === 'Pending' && (
+                  {a.approvalStatus === 'Pending' && (
                     <>
                       <button disabled={busyId === a.id} onClick={() => decide(a.id, 'Approved')}>Approve</button>
                       <button className="danger" disabled={busyId === a.id} onClick={() => decide(a.id, 'Rejected')}>Reject</button>
                     </>
                   )}
-                  {a.status === 'Approved' && a.requestType === 'Create Milestone' && (
+                  {a.approvalStatus === 'Approved' && a.mockWritebackStatus !== 'Completed' && (
                     <button className="secondary" disabled={busyId === a.id} onClick={() => fulfill(a.id)}>
                       Create milestone
                     </button>
                   )}
-                  {a.status === 'Rejected' && <span className="muted">Rejected</span>}
+                  {a.approvalStatus === 'Rejected' && <span className="muted">Rejected</span>}
+                  {a.mockWritebackStatus === 'Completed' && <span className="muted">Fulfilled</span>}
                 </div>
               </td>
             </tr>
           ))}
           {items.length === 0 && !error && (
-            <tr><td colSpan={6} className="muted">No approval requests.</td></tr>
+            <tr><td colSpan={7} className="muted">No approval requests.</td></tr>
           )}
         </tbody>
       </table>

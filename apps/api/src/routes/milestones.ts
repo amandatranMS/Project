@@ -8,14 +8,14 @@ export const milestonesRouter = Router();
 milestonesRouter.get(
   '/',
   asyncHandler(async (req, res) => {
-    const { opportunityId, status } = req.query;
+    const { opportunityId, milestoneStatus } = req.query;
     const milestones = await prisma.opportunityMilestone.findMany({
       where: {
         opportunityId: typeof opportunityId === 'string' ? opportunityId : undefined,
-        status: typeof status === 'string' ? status : undefined,
+        milestoneStatus: typeof milestoneStatus === 'string' ? milestoneStatus : undefined,
       },
-      orderBy: { updatedAt: 'desc' },
-      include: { opportunity: { select: { id: true, name: true, accountName: true } } },
+      orderBy: { milestoneBusinessId: 'asc' },
+      include: { opportunity: { select: { id: true, opportunityName: true, customerName: true } } },
     });
     res.json(milestones);
   }),
@@ -28,10 +28,10 @@ milestonesRouter.get(
       where: { id: req.params.id },
       include: {
         opportunity: true,
-        statusHistory: { orderBy: { changedAt: 'desc' } },
-        recommendations: { orderBy: { createdAt: 'desc' } },
-        approvalRequests: { orderBy: { createdAt: 'desc' } },
-        collaborationNotes: { orderBy: { createdAt: 'desc' } },
+        statusHistories: { orderBy: { statusDate: 'desc' } },
+        recommendations: true,
+        approvalRequests: true,
+        collaborationNotes: true,
       },
     });
     if (!milestone) throw new HttpError(404, 'Milestone not found');
@@ -43,13 +43,14 @@ milestonesRouter.post(
   '/',
   asyncHandler(async (req, res) => {
     const data = createMilestoneSchema.parse(req.body);
-    const opportunity = await prisma.opportunity.findUnique({ where: { id: data.opportunityId } });
-    if (!opportunity) throw new HttpError(400, 'opportunityId does not reference an existing opportunity');
+    const { opportunityName, estDate, ...rest } = data;
+    const opportunity = await prisma.opportunity.findUnique({ where: { opportunityName } });
+    if (!opportunity) throw new HttpError(400, 'opportunityName does not reference an existing opportunity');
     const milestone = await prisma.opportunityMilestone.create({
       data: {
-        ...data,
-        dueDate: data.dueDate ? new Date(data.dueDate) : null,
-        completedDate: data.completedDate ? new Date(data.completedDate) : null,
+        ...rest,
+        estDate: estDate ? new Date(estDate) : null,
+        opportunity: { connect: { opportunityName } },
       },
     });
     res.status(201).json(milestone);
@@ -64,11 +65,7 @@ milestonesRouter.patch(
     if (!existing) throw new HttpError(404, 'Milestone not found');
     const milestone = await prisma.opportunityMilestone.update({
       where: { id: req.params.id },
-      data: {
-        ...data,
-        dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
-        completedDate: data.completedDate ? new Date(data.completedDate) : undefined,
-      },
+      data: { ...data, estDate: data.estDate ? new Date(data.estDate) : undefined },
     });
     res.json(milestone);
   }),
@@ -78,25 +75,25 @@ milestonesRouter.patch(
 milestonesRouter.post(
   '/:id/status',
   asyncHandler(async (req, res) => {
-    const { newStatus, changedBy, changeReason } = changeStatusSchema.parse(req.body);
+    const { newStatus, changedBy, reason } = changeStatusSchema.parse(req.body);
     const existing = await prisma.opportunityMilestone.findUnique({ where: { id: req.params.id } });
     if (!existing) throw new HttpError(404, 'Milestone not found');
 
     const [milestone] = await prisma.$transaction([
       prisma.opportunityMilestone.update({
         where: { id: req.params.id },
-        data: {
-          status: newStatus,
-          completedDate: newStatus === 'Completed' ? new Date() : existing.completedDate,
-        },
+        data: { milestoneStatus: newStatus },
       }),
       prisma.milestoneStatusHistory.create({
         data: {
-          milestoneId: req.params.id,
-          previousStatus: existing.status,
+          statusHistoryBusinessId: `SH-RUNTIME-${Date.now()}`,
+          milestone: { connect: { id: req.params.id } },
+          opportunity: { connect: { id: existing.opportunityId } },
+          oldStatus: existing.milestoneStatus,
           newStatus,
+          statusDate: new Date(),
+          reason,
           changedBy,
-          changeReason,
         },
       }),
     ]);

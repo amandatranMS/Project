@@ -17,6 +17,18 @@ React + Express + SQLite + Prisma app.
   AiMilestoneRecommendation, ApprovalRequest, CollaborationNote, DealTeamMember,
   AgentNotification, AgentRunLog, AgentActionAuditLog, DashboardMetricSnapshot.
 
+## Data — the Excel workbook is the single source of truth
+- Records are imported from `data/MSX_Mirror_Necessary_Tables_Import_10_More_Entries.xlsx`,
+  NOT hardcoded. `prisma/seed.ts` just calls the importer.
+- Pipeline: Excel → `scripts/parseWorkbook.ts` (xlsx) → JSON → Prisma `connect` → SQLite.
+- Column→field maps live in `scripts/workbookMappings.ts`. The schema mirrors the
+  workbook columns; each table has a `@unique` business id (opportunityBusinessId,
+  milestoneBusinessId, recommendationBusinessId, etc.) and children resolve lookups
+  with Prisma `connect` (e.g. `opportunity: { connect: { opportunityName } }`).
+- Load order: Opportunity → Milestone → StatusHistory → Recommendation → Approval →
+  Note → DealTeam → Notification → RunLog → Audit → Snapshot.
+- Blank/"---" → null; Yes/No → boolean; dates accept ISO, "YYYY-MM-DD HH:mm", or Excel serial.
+
 ## Agent governance (must be preserved)
 - Agents may read context, create recommendations, and submit approval requests.
 - Agents may create a real milestone **only** by fulfilling an **Approved**
@@ -35,9 +47,11 @@ React + Express + SQLite + Prisma app.
 - Keep the REST API and `openapi/msx-milestone-assistant.openapi.yaml` in sync.
 
 ## Commands
-- `npm run setup` — install + prisma generate + db push + seed.
+- `npm run setup` — install + prisma generate + db push + import-workbook.
 - `npm run dev` — API on :4000 and web on :5173 concurrently.
-- `npm run db:reset` — reset and reseed the SQLite database.
+- `npm run import-workbook` — reset tables and reload from the Excel workbook.
+- `npm run db:seed` / `npm run seed` — same as import (workbook-driven).
+- `npm run db:reset` — force-reset the schema then reload the workbook.
 - After changing `schema.prisma`, run `npm run prisma:generate` and `npm run db:push`.
 
 ## When adding features

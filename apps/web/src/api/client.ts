@@ -31,96 +31,100 @@ export const api = {
   del: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
 };
 
-// ---- Shared response shapes (subset of Prisma models) ----
+// ---- Response shapes (subset of Prisma models / workbook columns) ----
 export interface Opportunity {
   id: string;
-  name: string;
-  accountName: string;
-  customerSegment: string;
-  dealStage: string;
-  estimatedValue: number;
-  currency: string;
-  probability: number;
-  owner: string;
-  partnerName?: string | null;
-  competitorName?: string | null;
-  competitorThreatLevel?: string | null;
-  riskLevel: string;
-  riskNotes?: string | null;
-  status: string;
+  opportunityBusinessId: string;
+  opportunityName: string;
+  customerName?: string | null;
+  industry?: string | null;
+  solutionArea?: string | null;
+  salesStage?: string | null;
+  status?: string | null;
+  estimatedRevenue?: number | null;
   closeDate?: string | null;
+  aeOwner?: string | null;
+  assignedSE?: string | null;
+  competitorName?: string | null;
+  businessProblem?: string | null;
+  nextStep?: string | null;
   _count?: { milestones: number };
 }
 
 export interface Milestone {
   id: string;
+  milestoneBusinessId: string;
+  milestoneName: string;
   opportunityId: string;
-  title: string;
-  description?: string | null;
-  milestoneType: string;
-  status: string;
-  priority: string;
-  owner: string;
-  dueDate?: string | null;
-  blockerDescription?: string | null;
-  blockerStatus: string;
-  riskAssessment?: string | null;
-  riskScore: number;
-  opportunity?: { id: string; name: string; accountName: string };
+  workload?: string | null;
+  milestoneCategory?: string | null;
+  milestoneStatus?: string | null;
+  partnerName?: string | null;
+  estDate?: string | null;
+  fitCharge?: number | null;
+  riskDescription?: string | null;
+  riskImpact?: string | null;
+  blockedReason?: string | null;
+  competitorName?: string | null;
+  owner?: string | null;
+  opportunity?: { id: string; opportunityName: string; customerName?: string | null };
 }
 
 export interface Recommendation {
   id: string;
-  title: string;
-  recommendationText: string;
-  rationale?: string | null;
-  recommendationType: string;
-  confidenceScore: number;
-  generatedByAgent: string;
-  status: string;
-  milestoneId?: string | null;
-  opportunityId?: string | null;
-  createdAt: string;
+  recommendationBusinessId: string;
+  recommendedMilestoneTitle?: string | null;
+  suggestedDescription?: string | null;
+  priority?: string | null;
+  confidence?: string | null;
+  reviewStatus?: string | null;
+  readyForMockCreation?: boolean | null;
+  opportunity?: { opportunityName: string } | null;
 }
 
 export interface ApprovalRequest {
   id: string;
-  requestType: string;
-  requestedBy: string;
-  summary: string;
-  payloadJson: string;
-  status: string;
-  reviewedBy?: string | null;
-  decisionNotes?: string | null;
-  createdAt: string;
+  approvalRequestBusinessId: string;
+  requestName?: string | null;
+  requestStatus?: string | null;
+  approvalStatus?: string | null;
+  requestedBy?: string | null;
+  approvedBy?: string | null;
+  mockWritebackStatus?: string | null;
+  opportunity?: { opportunityName: string } | null;
+  relatedRecommendation?: { recommendationBusinessId: string; recommendedMilestoneTitle?: string | null } | null;
+  relatedMilestone?: { milestoneBusinessId: string; milestoneName: string } | null;
 }
 
 export interface AuditLog {
   id: string;
-  agentName: string;
-  actionType: string;
-  entityType?: string | null;
-  entityId?: string | null;
-  outcome: string;
-  notes?: string | null;
-  performedAt: string;
+  auditBusinessId: string;
+  actionName?: string | null;
+  agentName?: string | null;
+  actionType?: string | null;
+  actor?: string | null;
+  result?: string | null;
+  securityEvent?: boolean | null;
+  outputSummary?: string | null;
+  timestamp?: string | null;
+  createdAt: string;
 }
 
 export interface DashboardMetrics {
-  openOpportunities: number;
+  activeOpportunities: number;
   totalMilestones: number;
   milestonesAtRisk: number;
   blockedMilestones: number;
   pendingApprovals: number;
-  openPipelineValue: number;
+  pipelineValue: number;
 }
 
 export interface Notification {
   id: string;
-  recipient: string;
-  notificationType: string;
-  title: string;
-  message: string;
-  isRead: boolean;
-  createdAt: string;
+  notificationBusinessId: string;
+  severity?: string | null;
+  notifyRole?: string | null;
+  message?: string | null;
+  status?: string | null;
+  createdDate?: string | null;
 }

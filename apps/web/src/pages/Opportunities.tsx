@@ -23,12 +23,12 @@ export default function Opportunities() {
       <table>
         <thead>
           <tr>
+            <th>ID</th>
             <th>Name</th>
-            <th>Account</th>
-            <th>Segment</th>
-            <th>Stage</th>
-            <th>Value</th>
-            <th>Risk</th>
+            <th>Customer</th>
+            <th>Solution Area</th>
+            <th>Sales Stage</th>
+            <th>Revenue</th>
             <th>Milestones</th>
             <th>Status</th>
           </tr>
@@ -36,28 +36,24 @@ export default function Opportunities() {
         <tbody>
           {items.map((o) => (
             <tr key={o.id}>
+              <td>{o.opportunityBusinessId}</td>
               <td>
-                <Link to={`/opportunities/${o.id}`}>{o.name}</Link>
+                <Link to={`/opportunities/${o.id}`}>{o.opportunityName}</Link>
               </td>
-              <td>{o.accountName}</td>
-              <td>{o.customerSegment}</td>
-              <td>{o.dealStage}</td>
-              <td>{formatCurrency(o.estimatedValue, o.currency)}</td>
-              <td>
-                <span className={`badge ${statusBadgeClass(o.riskLevel === 'High' ? 'Blocked' : o.riskLevel === 'Medium' ? 'At Risk' : 'Completed')}`}>
-                  {o.riskLevel}
-                </span>
-              </td>
+              <td>{o.customerName ?? '—'}</td>
+              <td>{o.solutionArea ?? '—'}</td>
+              <td>{o.salesStage ?? '—'}</td>
+              <td>{formatCurrency(o.estimatedRevenue)}</td>
               <td>{o._count?.milestones ?? 0}</td>
               <td>
-                <span className={`badge ${statusBadgeClass(o.status)}`}>{o.status}</span>
+                <span className={`badge ${statusBadgeClass(o.status)}`}>{o.status ?? '—'}</span>
               </td>
             </tr>
           ))}
           {items.length === 0 && !error && (
             <tr>
               <td colSpan={8} className="muted">
-                No opportunities yet.
+                No opportunities yet. Run <code>npm run import-workbook</code>.
               </td>
             </tr>
           )}

@@ -4,56 +4,43 @@ import { asyncHandler } from '../middleware/errorHandler.js';
 
 export const dashboardRouter = Router();
 
-// Live metrics computed on demand.
+// Live metrics computed on demand from the imported workbook data.
 dashboardRouter.get(
   '/metrics',
   asyncHandler(async (_req, res) => {
-    const [openOpportunities, totalMilestones, milestonesAtRisk, blockedMilestones, pendingApprovals, totalPipeline] =
-      await Promise.all([
-        prisma.opportunity.count({ where: { status: 'Open' } }),
-        prisma.opportunityMilestone.count(),
-        prisma.opportunityMilestone.count({ where: { status: 'At Risk' } }),
-        prisma.opportunityMilestone.count({ where: { status: 'Blocked' } }),
-        prisma.approvalRequest.count({ where: { status: 'Pending' } }),
-        prisma.opportunity.aggregate({ _sum: { estimatedValue: true }, where: { status: 'Open' } }),
-      ]);
-
-    res.json({
-      openOpportunities,
+    const [
+      activeOpportunities,
       totalMilestones,
       milestonesAtRisk,
       blockedMilestones,
       pendingApprovals,
-      openPipelineValue: totalPipeline._sum.estimatedValue ?? 0,
-    });
-  }),
-);
-
-// Persist a snapshot of current metrics into Dashboard Metric Snapshot.
-dashboardRouter.post(
-  '/snapshots',
-  asyncHandler(async (_req, res) => {
-    const [openOpportunities, milestonesAtRisk, pendingApprovals] = await Promise.all([
-      prisma.opportunity.count({ where: { status: 'Open' } }),
-      prisma.opportunityMilestone.count({ where: { status: 'At Risk' } }),
-      prisma.approvalRequest.count({ where: { status: 'Pending' } }),
+      totalPipeline,
+    ] = await Promise.all([
+      prisma.opportunity.count({ where: { status: 'Active' } }),
+      prisma.opportunityMilestone.count(),
+      prisma.opportunityMilestone.count({ where: { milestoneStatus: 'At Risk' } }),
+      prisma.opportunityMilestone.count({ where: { milestoneStatus: 'Blocked' } }),
+      prisma.approvalRequest.count({ where: { approvalStatus: 'Pending' } }),
+      prisma.opportunity.aggregate({ _sum: { estimatedRevenue: true } }),
     ]);
-    const created = await prisma.dashboardMetricSnapshot.createMany({
-      data: [
-        { metricName: 'OpenOpportunities', metricValue: openOpportunities },
-        { metricName: 'MilestonesAtRisk', metricValue: milestonesAtRisk },
-        { metricName: 'PendingApprovals', metricValue: pendingApprovals },
-      ],
+
+    res.json({
+      activeOpportunities,
+      totalMilestones,
+      milestonesAtRisk,
+      blockedMilestones,
+      pendingApprovals,
+      pipelineValue: totalPipeline._sum.estimatedRevenue ?? 0,
     });
-    res.status(201).json({ created: created.count });
   }),
 );
 
+// The workbook's own Dashboard Metric Snapshot rows.
 dashboardRouter.get(
   '/snapshots',
   asyncHandler(async (_req, res) => {
     const snapshots = await prisma.dashboardMetricSnapshot.findMany({
-      orderBy: { snapshotDate: 'desc' },
+      orderBy: { snapshotName: 'asc' },
       take: 100,
     });
     res.json(snapshots);

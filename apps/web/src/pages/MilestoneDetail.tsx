@@ -1,16 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { api, type Milestone, type Recommendation, type ApprovalRequest } from '../api/client';
+import { api, type Milestone } from '../api/client';
 import { statusBadgeClass, formatDate } from '../ui';
 
 interface MilestoneDetailData extends Milestone {
-  statusHistory: { id: string; previousStatus?: string | null; newStatus: string; changedBy: string; changeReason?: string | null; changedAt: string }[];
-  recommendations: Recommendation[];
-  approvalRequests: ApprovalRequest[];
-  collaborationNotes: { id: string; authorName: string; noteText: string }[];
+  statusHistories: { id: string; oldStatus?: string | null; newStatus?: string | null; changedBy?: string | null; reason?: string | null; statusDate?: string | null }[];
+  mitigationPlan?: string | null;
 }
 
-const STATUSES = ['Not Started', 'In Progress', 'Blocked', 'At Risk', 'Completed', 'Cancelled'];
+const STATUSES = ['Not Started', 'On Track', 'At Risk', 'Blocked', 'Completed', 'Lost to Competitor'];
 
 export default function MilestoneDetail() {
   const { id } = useParams();
@@ -32,7 +30,7 @@ export default function MilestoneDetail() {
     if (!id) return;
     setBusy(true);
     try {
-      await api.post(`/milestones/${id}/status`, { newStatus, changedBy: 'Demo User', changeReason: 'Manual update from UI' });
+      await api.post(`/milestones/${id}/status`, { newStatus, changedBy: 'Demo User', reason: 'Manual update from UI' });
       load();
     } catch (e) {
       setError((e as Error).message);
@@ -47,29 +45,31 @@ export default function MilestoneDetail() {
   return (
     <div className="stack">
       <div className="page-header">
-        <h1>{data.title}</h1>
-        <span className={`badge ${statusBadgeClass(data.status)}`}>{data.status}</span>
+        <h1>{data.milestoneName}</h1>
+        <span className={`badge ${statusBadgeClass(data.milestoneStatus)}`}>{data.milestoneStatus ?? '—'}</span>
       </div>
 
       <div className="card">
         <div className="grid cols-3">
-          <div><div className="muted">Type</div>{data.milestoneType}</div>
-          <div><div className="muted">Priority</div>{data.priority}</div>
-          <div><div className="muted">Owner</div>{data.owner}</div>
-          <div><div className="muted">Due</div>{formatDate(data.dueDate)}</div>
-          <div><div className="muted">Blocker</div>{data.blockerStatus}</div>
-          <div><div className="muted">Risk Score</div>{data.riskScore}</div>
+          <div><div className="muted">Milestone ID</div>{data.milestoneBusinessId}</div>
+          <div><div className="muted">Category</div>{data.milestoneCategory ?? '—'}</div>
+          <div><div className="muted">Owner</div>{data.owner ?? '—'}</div>
+          <div><div className="muted">Workload</div>{data.workload ?? '—'}</div>
+          <div><div className="muted">Partner</div>{data.partnerName ?? '—'}</div>
+          <div><div className="muted">Est Date</div>{formatDate(data.estDate)}</div>
+          <div><div className="muted">Risk Impact</div>{data.riskImpact ?? '—'}</div>
+          <div><div className="muted">Competitor</div>{data.competitorName ?? '—'}</div>
         </div>
-        {data.description && <p className="section">{data.description}</p>}
-        {data.blockerDescription && <p className="muted">Blocker: {data.blockerDescription}</p>}
-        {data.riskAssessment && <p className="muted">Risk: {data.riskAssessment}</p>}
+        {data.riskDescription && <p className="section muted">Risk: {data.riskDescription}</p>}
+        {data.mitigationPlan && <p className="muted">Mitigation: {data.mitigationPlan}</p>}
+        {data.blockedReason && <p className="muted">Blocked: {data.blockedReason}</p>}
       </div>
 
       <div className="card">
         <h2>Change status</h2>
         <div className="btn-row">
           {STATUSES.map((s) => (
-            <button key={s} className="secondary" disabled={busy || s === data.status} onClick={() => changeStatus(s)}>
+            <button key={s} className="secondary" disabled={busy || s === data.milestoneStatus} onClick={() => changeStatus(s)}>
               {s}
             </button>
           ))}
@@ -83,16 +83,16 @@ export default function MilestoneDetail() {
             <tr><th>When</th><th>From</th><th>To</th><th>By</th><th>Reason</th></tr>
           </thead>
           <tbody>
-            {data.statusHistory.map((h) => (
+            {data.statusHistories.map((h) => (
               <tr key={h.id}>
-                <td>{formatDate(h.changedAt)}</td>
-                <td>{h.previousStatus ?? '—'}</td>
+                <td>{formatDate(h.statusDate)}</td>
+                <td>{h.oldStatus ?? '—'}</td>
                 <td><span className={`badge ${statusBadgeClass(h.newStatus)}`}>{h.newStatus}</span></td>
-                <td>{h.changedBy}</td>
-                <td>{h.changeReason ?? '—'}</td>
+                <td>{h.changedBy ?? '—'}</td>
+                <td>{h.reason ?? '—'}</td>
               </tr>
             ))}
-            {data.statusHistory.length === 0 && <tr><td colSpan={5} className="muted">No history.</td></tr>}
+            {data.statusHistories.length === 0 && <tr><td colSpan={5} className="muted">No history.</td></tr>}
           </tbody>
         </table>
       </div>

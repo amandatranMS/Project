@@ -15,9 +15,12 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev --name init",
     "db:push": "prisma db push",
+    "seed": "tsx prisma/seed.ts",
     "db:seed": "tsx prisma/seed.ts",
+    "import-workbook": "tsx scripts/parseWorkbook.ts",
+    "reset-db": "prisma migrate reset",
     "db:reset": "prisma db push --force-reset && npm run db:seed",
-    "setup": "npm install && npm run prisma:generate && npm run db:push && npm run db:seed"
+    "setup": "npm install && npm run prisma:generate && npm run db:push && npm run import-workbook"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -29,6 +32,7 @@
     "typescript": "^5.7.3"
   },
   "dependencies": {
-    "@prisma/client": "^6.2.1"
+    "@prisma/client": "^6.2.1",
+    "xlsx": "^0.18.5"
   }
 }

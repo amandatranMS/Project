@@ -5,8 +5,8 @@ import { statusBadgeClass, formatCurrency, formatDate } from '../ui';
 
 interface OpportunityDetailData extends Opportunity {
   milestones: Milestone[];
-  dealTeamMembers: { id: string; memberName: string; role: string; isPrimary: boolean }[];
-  collaborationNotes: { id: string; authorName: string; noteText: string; createdAt: string }[];
+  dealTeamMembers: { id: string; personName?: string | null; role?: string | null; active?: boolean | null }[];
+  collaborationNotes: { id: string; createdBy?: string | null; noteSummary?: string | null }[];
   recommendations: Recommendation[];
 }
 
@@ -29,25 +29,25 @@ export default function OpportunityDetail() {
   return (
     <div className="stack">
       <div className="page-header">
-        <h1>{data.name}</h1>
-        <span className={`badge ${statusBadgeClass(data.status)}`}>{data.status}</span>
+        <h1>{data.opportunityName}</h1>
+        <span className={`badge ${statusBadgeClass(data.status)}`}>{data.status ?? '—'}</span>
       </div>
 
       <div className="card">
         <div className="grid cols-3">
-          <div><div className="muted">Account</div>{data.accountName}</div>
-          <div><div className="muted">Segment</div>{data.customerSegment}</div>
-          <div><div className="muted">Deal Stage</div>{data.dealStage}</div>
-          <div><div className="muted">Estimated Value</div>{formatCurrency(data.estimatedValue, data.currency)}</div>
-          <div><div className="muted">Owner</div>{data.owner}</div>
-          <div><div className="muted">Partner</div>{data.partnerName ?? '—'}</div>
-          <div><div className="muted">Competitor</div>{data.competitorName ?? '—'} {data.competitorThreatLevel ? `(${data.competitorThreatLevel})` : ''}</div>
-          <div><div className="muted">Risk Level</div>{data.riskLevel}</div>
+          <div><div className="muted">Opportunity ID</div>{data.opportunityBusinessId}</div>
+          <div><div className="muted">Customer</div>{data.customerName ?? '—'}</div>
+          <div><div className="muted">Industry</div>{data.industry ?? '—'}</div>
+          <div><div className="muted">Solution Area</div>{data.solutionArea ?? '—'}</div>
+          <div><div className="muted">Sales Stage</div>{data.salesStage ?? '—'}</div>
+          <div><div className="muted">Estimated Revenue</div>{formatCurrency(data.estimatedRevenue)}</div>
+          <div><div className="muted">AE Owner</div>{data.aeOwner ?? '—'}</div>
+          <div><div className="muted">Assigned SE</div>{data.assignedSE ?? '—'}</div>
+          <div><div className="muted">Competitor</div>{data.competitorName ?? '—'}</div>
           <div><div className="muted">Close Date</div>{formatDate(data.closeDate)}</div>
         </div>
-        {data.riskNotes && (
-          <p className="section muted">Risk notes: {data.riskNotes}</p>
-        )}
+        {data.businessProblem && <p className="section muted">Business problem: {data.businessProblem}</p>}
+        {data.nextStep && <p className="muted">Next step: {data.nextStep}</p>}
       </div>
 
       <div className="card">
@@ -55,25 +55,25 @@ export default function OpportunityDetail() {
         <table>
           <thead>
             <tr>
-              <th>Title</th>
-              <th>Type</th>
+              <th>ID</th>
+              <th>Name</th>
+              <th>Category</th>
               <th>Status</th>
-              <th>Priority</th>
               <th>Owner</th>
-              <th>Due</th>
+              <th>Est Date</th>
               <th>Risk</th>
             </tr>
           </thead>
           <tbody>
             {data.milestones.map((m) => (
               <tr key={m.id}>
-                <td><Link to={`/milestones/${m.id}`}>{m.title}</Link></td>
-                <td>{m.milestoneType}</td>
-                <td><span className={`badge ${statusBadgeClass(m.status)}`}>{m.status}</span></td>
-                <td>{m.priority}</td>
-                <td>{m.owner}</td>
-                <td>{formatDate(m.dueDate)}</td>
-                <td>{m.riskScore}</td>
+                <td>{m.milestoneBusinessId}</td>
+                <td><Link to={`/milestones/${m.id}`}>{m.milestoneName}</Link></td>
+                <td>{m.milestoneCategory ?? '—'}</td>
+                <td><span className={`badge ${statusBadgeClass(m.milestoneStatus)}`}>{m.milestoneStatus ?? '—'}</span></td>
+                <td>{m.owner ?? '—'}</td>
+                <td>{formatDate(m.estDate)}</td>
+                <td>{m.riskImpact ?? '—'}</td>
               </tr>
             ))}
             {data.milestones.length === 0 && (
@@ -88,7 +88,7 @@ export default function OpportunityDetail() {
           <h2>Deal Team</h2>
           <ul>
             {data.dealTeamMembers.map((d) => (
-              <li key={d.id}>{d.memberName} — {d.role}{d.isPrimary ? ' (primary)' : ''}</li>
+              <li key={d.id}>{d.personName} — {d.role}{d.active ? '' : ' (inactive)'}</li>
             ))}
             {data.dealTeamMembers.length === 0 && <li className="muted">No members.</li>}
           </ul>
@@ -97,7 +97,7 @@ export default function OpportunityDetail() {
           <h2>Recommendations</h2>
           <ul>
             {data.recommendations.map((r) => (
-              <li key={r.id}>{r.title} <span className={`badge ${statusBadgeClass(r.status)}`}>{r.status}</span></li>
+              <li key={r.id}>{r.recommendedMilestoneTitle} <span className={`badge ${statusBadgeClass(r.reviewStatus)}`}>{r.reviewStatus}</span></li>
             ))}
             {data.recommendations.length === 0 && <li className="muted">None.</li>}
           </ul>
@@ -106,7 +106,7 @@ export default function OpportunityDetail() {
           <h2>Notes</h2>
           <ul>
             {data.collaborationNotes.map((n) => (
-              <li key={n.id}><strong>{n.authorName}:</strong> {n.noteText}</li>
+              <li key={n.id}><strong>{n.createdBy}:</strong> {n.noteSummary}</li>
             ))}
             {data.collaborationNotes.length === 0 && <li className="muted">No notes.</li>}
           </ul>

@@ -1,138 +1,82 @@
 import { z } from 'zod';
-import {
-  CUSTOMER_SEGMENTS,
-  DEAL_STAGES,
-  OPPORTUNITY_STATUSES,
-  PARTNER_TYPES,
-  THREAT_LEVELS,
-  RISK_LEVELS,
-  MILESTONE_TYPES,
-  MILESTONE_STATUSES,
-  PRIORITIES,
-  BLOCKER_STATUSES,
-  RECOMMENDATION_TYPES,
-  APPROVAL_REQUEST_TYPES,
-} from '@msx/shared';
 
-const optionalDate = z
-  .string()
-  .datetime({ offset: true })
-  .or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/))
-  .optional()
-  .nullable();
+// Dates arrive as ISO strings or yyyy-mm-dd; coerce leniently.
+const dateish = z.string().min(1).optional().nullable();
 
 // ---- Opportunity ----
 export const createOpportunitySchema = z.object({
-  name: z.string().min(1),
-  accountName: z.string().min(1),
-  customerSegment: z.enum(CUSTOMER_SEGMENTS),
+  opportunityBusinessId: z.string().min(1),
+  opportunityName: z.string().min(1),
+  tpid: z.string().optional().nullable(),
+  customerName: z.string().optional().nullable(),
   industry: z.string().optional().nullable(),
-  dealStage: z.enum(DEAL_STAGES).optional(),
-  estimatedValue: z.number().nonnegative().optional(),
-  currency: z.string().length(3).optional(),
-  probability: z.number().int().min(0).max(100).optional(),
-  closeDate: optionalDate,
-  owner: z.string().min(1),
-  partnerName: z.string().optional().nullable(),
-  partnerType: z.enum(PARTNER_TYPES).optional().nullable(),
+  solutionArea: z.string().optional().nullable(),
+  salesStage: z.string().optional().nullable(),
+  status: z.string().optional().nullable(),
+  estimatedRevenue: z.number().optional().nullable(),
+  closeDate: dateish,
+  aeOwner: z.string().optional().nullable(),
+  assignedSE: z.string().optional().nullable(),
   competitorName: z.string().optional().nullable(),
-  competitorThreatLevel: z.enum(THREAT_LEVELS).optional().nullable(),
-  riskLevel: z.enum(RISK_LEVELS).optional(),
-  riskNotes: z.string().optional().nullable(),
-  status: z.enum(OPPORTUNITY_STATUSES).optional(),
+  consumptionPhase: z.string().optional().nullable(),
+  businessProblem: z.string().optional().nullable(),
+  nextStep: z.string().optional().nullable(),
 });
-export const updateOpportunitySchema = createOpportunitySchema.partial();
+export const updateOpportunitySchema = createOpportunitySchema.partial().omit({ opportunityBusinessId: true });
 
 // ---- Milestone ----
 export const createMilestoneSchema = z.object({
-  opportunityId: z.string().min(1),
-  title: z.string().min(1),
-  description: z.string().optional().nullable(),
-  milestoneType: z.enum(MILESTONE_TYPES).optional(),
-  status: z.enum(MILESTONE_STATUSES).optional(),
-  priority: z.enum(PRIORITIES).optional(),
-  owner: z.string().min(1),
-  dueDate: optionalDate,
-  completedDate: optionalDate,
-  blockerDescription: z.string().optional().nullable(),
-  blockerStatus: z.enum(BLOCKER_STATUSES).optional(),
-  riskAssessment: z.string().optional().nullable(),
-  riskScore: z.number().int().min(0).max(100).optional(),
+  milestoneBusinessId: z.string().min(1),
+  milestoneName: z.string().min(1),
+  opportunityName: z.string().min(1), // lookup target for connect
+  workload: z.string().optional().nullable(),
+  milestoneCategory: z.string().optional().nullable(),
+  milestoneStatus: z.string().optional().nullable(),
+  partnerName: z.string().optional().nullable(),
+  estDate: dateish,
+  fitCharge: z.number().optional().nullable(),
+  riskDescription: z.string().optional().nullable(),
+  riskImpact: z.string().optional().nullable(),
+  mitigationPlan: z.string().optional().nullable(),
+  blockedReason: z.string().optional().nullable(),
+  owner: z.string().optional().nullable(),
 });
-export const updateMilestoneSchema = createMilestoneSchema.partial().omit({ opportunityId: true });
+export const updateMilestoneSchema = createMilestoneSchema.partial().omit({ opportunityName: true });
 
 export const changeStatusSchema = z.object({
-  newStatus: z.enum(MILESTONE_STATUSES),
+  newStatus: z.string().min(1),
   changedBy: z.string().min(1),
-  changeReason: z.string().optional().nullable(),
+  reason: z.string().optional().nullable(),
 });
 
-// ---- Collaboration note ----
+// ---- Collaboration ----
 export const createNoteSchema = z
   .object({
-    opportunityId: z.string().optional().nullable(),
-    milestoneId: z.string().optional().nullable(),
-    authorName: z.string().min(1),
-    authorType: z.enum(['Human', 'Agent']).optional(),
-    noteText: z.string().min(1),
-    visibility: z.enum(['Team', 'Private']).optional(),
+    collaborationNoteBusinessId: z.string().min(1),
+    noteTitle: z.string().optional().nullable(),
+    opportunityName: z.string().optional().nullable(),
+    relatedMilestoneBusinessId: z.string().optional().nullable(),
+    noteType: z.string().optional().nullable(),
+    teamArea: z.string().optional().nullable(),
+    noteSummary: z.string().min(1),
+    createdBy: z.string().optional().nullable(),
   })
-  .refine((d) => d.opportunityId || d.milestoneId, {
-    message: 'Provide opportunityId or milestoneId',
+  .refine((d) => d.opportunityName || d.relatedMilestoneBusinessId, {
+    message: 'Provide opportunityName or relatedMilestoneBusinessId',
   });
 
-// ---- Deal team member ----
 export const createDealTeamMemberSchema = z.object({
-  opportunityId: z.string().min(1),
-  memberName: z.string().min(1),
-  email: z.string().email().optional().nullable(),
-  role: z.enum(['Solution Engineer', 'Account Executive', 'Specialist', 'Partner', 'Manager']),
-  isPrimary: z.boolean().optional(),
+  dealTeamMemberBusinessId: z.string().min(1),
+  opportunityName: z.string().min(1),
+  personName: z.string().optional().nullable(),
+  role: z.string().optional().nullable(),
+  teamArea: z.string().optional().nullable(),
+  active: z.boolean().optional(),
 });
 
-// ---- Agent: recommendation ----
-export const createRecommendationSchema = z
-  .object({
-    opportunityId: z.string().optional().nullable(),
-    milestoneId: z.string().optional().nullable(),
-    recommendationType: z.enum(RECOMMENDATION_TYPES),
-    title: z.string().min(1),
-    recommendationText: z.string().min(1),
-    rationale: z.string().optional().nullable(),
-    confidenceScore: z.number().min(0).max(1).optional(),
-    generatedByAgent: z.string().min(1),
-    agentRunId: z.string().optional().nullable(),
-  })
-  .refine((d) => d.opportunityId || d.milestoneId, {
-    message: 'Provide opportunityId or milestoneId',
-  });
-
-// ---- Agent: approval request ----
-export const createApprovalSchema = z.object({
-  recommendationId: z.string().optional().nullable(),
-  milestoneId: z.string().optional().nullable(),
-  requestType: z.enum(APPROVAL_REQUEST_TYPES),
-  requestedBy: z.string().min(1),
-  summary: z.string().min(1),
-  payload: z.record(z.unknown()),
-  agentRunId: z.string().optional().nullable(),
-});
-
+// ---- Agent governance ----
 export const decideApprovalSchema = z.object({
   decision: z.enum(['Approved', 'Rejected']),
   reviewedBy: z.string().min(1),
   decisionNotes: z.string().optional().nullable(),
-});
-
-// ---- Agent: run log ----
-export const createRunSchema = z.object({
-  agentName: z.string().min(1),
-  runType: z.enum(['Recommend', 'Analyze', 'CreateMilestone', 'Other']),
-  input: z.record(z.unknown()).optional(),
-});
-
-export const completeRunSchema = z.object({
-  status: z.enum(['Succeeded', 'Failed']),
-  output: z.record(z.unknown()).optional(),
-  errorText: z.string().optional().nullable(),
 });

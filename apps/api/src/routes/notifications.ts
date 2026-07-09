@@ -7,13 +7,13 @@ export const notificationsRouter = Router();
 notificationsRouter.get(
   '/',
   asyncHandler(async (req, res) => {
-    const { recipient, isRead } = req.query;
+    const { notifyRole, status } = req.query;
     const notifications = await prisma.agentNotification.findMany({
       where: {
-        recipient: typeof recipient === 'string' ? recipient : undefined,
-        isRead: typeof isRead === 'string' ? isRead === 'true' : undefined,
+        notifyRole: typeof notifyRole === 'string' ? notifyRole : undefined,
+        status: typeof status === 'string' ? status : undefined,
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdDate: 'desc' },
       take: 100,
     });
     res.json(notifications);
@@ -27,7 +27,7 @@ notificationsRouter.post(
     if (!existing) throw new HttpError(404, 'Notification not found');
     const notification = await prisma.agentNotification.update({
       where: { id: req.params.id },
-      data: { isRead: true },
+      data: { status: 'Read' },
     });
     res.json(notification);
   }),

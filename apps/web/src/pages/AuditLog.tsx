@@ -23,27 +23,29 @@ export default function AuditLog() {
       <table>
         <thead>
           <tr>
+            <th>ID</th>
             <th>When</th>
             <th>Agent</th>
             <th>Action</th>
-            <th>Entity</th>
-            <th>Outcome</th>
-            <th>Notes</th>
+            <th>Type</th>
+            <th>Result</th>
+            <th>Summary</th>
           </tr>
         </thead>
         <tbody>
           {items.map((l) => (
             <tr key={l.id}>
-              <td>{formatDate(l.performedAt)}</td>
-              <td>{l.agentName}</td>
-              <td>{l.actionType}</td>
-              <td>{l.entityType ? `${l.entityType}` : '—'}</td>
-              <td><span className={`badge ${statusBadgeClass(l.outcome === 'Blocked' ? 'Rejected' : l.outcome === 'Success' ? 'Approved' : 'Failed')}`}>{l.outcome}</span></td>
-              <td className="muted">{l.notes ?? '—'}</td>
+              <td>{l.auditBusinessId}</td>
+              <td>{formatDate(l.timestamp ?? l.createdAt)}</td>
+              <td>{l.agentName ?? '—'}</td>
+              <td>{l.actionName ?? '—'}</td>
+              <td>{l.actionType ?? '—'}</td>
+              <td><span className={`badge ${statusBadgeClass(l.result)}`}>{l.result ?? '—'}</span></td>
+              <td className="muted">{l.outputSummary ?? '—'}</td>
             </tr>
           ))}
           {items.length === 0 && !error && (
-            <tr><td colSpan={6} className="muted">No agent actions recorded yet.</td></tr>
+            <tr><td colSpan={7} className="muted">No agent actions recorded yet.</td></tr>
           )}
         </tbody>
       </table>
