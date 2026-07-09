@@ -8,11 +8,12 @@ export const opportunitiesRouter = Router();
 opportunitiesRouter.get(
   '/',
   asyncHandler(async (req, res) => {
-    const { status, salesStage } = req.query;
+    const { status, salesStage, solutionArea } = req.query;
     const opportunities = await prisma.opportunity.findMany({
       where: {
         status: typeof status === 'string' ? status : undefined,
         salesStage: typeof salesStage === 'string' ? salesStage : undefined,
+        solutionArea: typeof solutionArea === 'string' ? solutionArea : undefined,
       },
       orderBy: { opportunityBusinessId: 'asc' },
       include: { _count: { select: { milestones: true } } },

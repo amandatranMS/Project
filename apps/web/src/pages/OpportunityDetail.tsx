@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { choiceLabel } from '@msx/shared';
 import { api, type Milestone, type Opportunity, type Recommendation } from '../api/client';
 import { statusBadgeClass, formatCurrency, formatDate } from '../ui';
 
@@ -38,8 +39,8 @@ export default function OpportunityDetail() {
           <div><div className="muted">Opportunity ID</div>{data.opportunityBusinessId}</div>
           <div><div className="muted">Customer</div>{data.customerName ?? '—'}</div>
           <div><div className="muted">Industry</div>{data.industry ?? '—'}</div>
-          <div><div className="muted">Solution Area</div>{data.solutionArea ?? '—'}</div>
-          <div><div className="muted">Sales Stage</div>{data.salesStage ?? '—'}</div>
+          <div><div className="muted">Solution Area</div>{choiceLabel(data.solutionArea)}</div>
+          <div><div className="muted">Sales Stage</div>{choiceLabel(data.salesStage)}</div>
           <div><div className="muted">Estimated Revenue</div>{formatCurrency(data.estimatedRevenue)}</div>
           <div><div className="muted">AE Owner</div>{data.aeOwner ?? '—'}</div>
           <div><div className="muted">Assigned SE</div>{data.assignedSE ?? '—'}</div>
@@ -69,11 +70,11 @@ export default function OpportunityDetail() {
               <tr key={m.id}>
                 <td>{m.milestoneBusinessId}</td>
                 <td><Link to={`/milestones/${m.id}`}>{m.milestoneName}</Link></td>
-                <td>{m.milestoneCategory ?? '—'}</td>
-                <td><span className={`badge ${statusBadgeClass(m.milestoneStatus)}`}>{m.milestoneStatus ?? '—'}</span></td>
+                <td>{choiceLabel(m.milestoneCategory)}</td>
+                <td><span className={`badge ${statusBadgeClass(m.milestoneStatus)}`}>{choiceLabel(m.milestoneStatus)}</span></td>
                 <td>{m.owner ?? '—'}</td>
                 <td>{formatDate(m.estDate)}</td>
-                <td>{m.riskImpact ?? '—'}</td>
+                <td>{choiceLabel(m.riskImpact)}</td>
               </tr>
             ))}
             {data.milestones.length === 0 && (
@@ -97,7 +98,7 @@ export default function OpportunityDetail() {
           <h2>Recommendations</h2>
           <ul>
             {data.recommendations.map((r) => (
-              <li key={r.id}>{r.recommendedMilestoneTitle} <span className={`badge ${statusBadgeClass(r.reviewStatus)}`}>{r.reviewStatus}</span></li>
+              <li key={r.id}>{r.recommendedMilestoneTitle} <span className={`badge ${statusBadgeClass(r.reviewStatus)}`}>{choiceLabel(r.reviewStatus)}</span></li>
             ))}
             {data.recommendations.length === 0 && <li className="muted">None.</li>}
           </ul>

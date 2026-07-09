@@ -8,21 +8,30 @@ export function statusBadgeClass(status?: string | null): string {
     case 'Approved':
     case 'Active':
     case 'Success':
+    case 'Committed':
+    case 'Contracted':
       return 'green';
     case 'In Progress':
     case 'Reviewed':
     case 'Read':
+    case 'Submitted':
       return 'blue';
     case 'At Risk':
     case 'Pending':
     case 'On Hold':
+    case 'Needs Changes':
+    case 'Warning':
+    case 'Verbal':
       return 'amber';
     case 'Blocked':
     case 'Lost':
     case 'Lost to Competitor':
+    case 'Lost To Competitor':
+    case 'Cancelled':
     case 'Rejected':
     case 'Failed':
     case 'Denied':
+    case 'Critical':
       return 'red';
     default:
       return 'gray';

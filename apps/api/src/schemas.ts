@@ -1,4 +1,13 @@
 import { z } from 'zod';
+import {
+  SOLUTION_AREAS,
+  SALES_STAGES,
+  OPPORTUNITY_STATUSES,
+  MILESTONE_STATUSES,
+  WORKLOADS,
+  MILESTONE_CATEGORIES,
+  RISK_IMPACTS,
+} from '@msx/shared';
 
 // Dates arrive as ISO strings or yyyy-mm-dd; coerce leniently.
 const dateish = z.string().min(1).optional().nullable();
@@ -10,9 +19,9 @@ export const createOpportunitySchema = z.object({
   tpid: z.string().optional().nullable(),
   customerName: z.string().optional().nullable(),
   industry: z.string().optional().nullable(),
-  solutionArea: z.string().optional().nullable(),
-  salesStage: z.string().optional().nullable(),
-  status: z.string().optional().nullable(),
+  solutionArea: z.enum(SOLUTION_AREAS).optional().nullable(),
+  salesStage: z.enum(SALES_STAGES).optional().nullable(),
+  status: z.enum(OPPORTUNITY_STATUSES).optional().nullable(),
   estimatedRevenue: z.number().optional().nullable(),
   closeDate: dateish,
   aeOwner: z.string().optional().nullable(),
@@ -29,14 +38,14 @@ export const createMilestoneSchema = z.object({
   milestoneBusinessId: z.string().min(1),
   milestoneName: z.string().min(1),
   opportunityName: z.string().min(1), // lookup target for connect
-  workload: z.string().optional().nullable(),
-  milestoneCategory: z.string().optional().nullable(),
-  milestoneStatus: z.string().optional().nullable(),
+  workload: z.enum(WORKLOADS).optional().nullable(),
+  milestoneCategory: z.enum(MILESTONE_CATEGORIES).optional().nullable(),
+  milestoneStatus: z.enum(MILESTONE_STATUSES).optional().nullable(),
   partnerName: z.string().optional().nullable(),
   estDate: dateish,
   fitCharge: z.number().optional().nullable(),
   riskDescription: z.string().optional().nullable(),
-  riskImpact: z.string().optional().nullable(),
+  riskImpact: z.enum(RISK_IMPACTS).optional().nullable(),
   mitigationPlan: z.string().optional().nullable(),
   blockedReason: z.string().optional().nullable(),
   owner: z.string().optional().nullable(),
@@ -44,7 +53,7 @@ export const createMilestoneSchema = z.object({
 export const updateMilestoneSchema = createMilestoneSchema.partial().omit({ opportunityName: true });
 
 export const changeStatusSchema = z.object({
-  newStatus: z.string().min(1),
+  newStatus: z.enum(MILESTONE_STATUSES),
   changedBy: z.string().min(1),
   reason: z.string().optional().nullable(),
 });

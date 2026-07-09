@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { MILESTONE_STATUSES, choiceLabel } from '@msx/shared';
 import { api, type Milestone } from '../api/client';
 import { statusBadgeClass, formatDate } from '../ui';
 
@@ -8,7 +9,7 @@ interface MilestoneDetailData extends Milestone {
   mitigationPlan?: string | null;
 }
 
-const STATUSES = ['Not Started', 'On Track', 'At Risk', 'Blocked', 'Completed', 'Lost to Competitor'];
+const STATUSES = MILESTONE_STATUSES;
 
 export default function MilestoneDetail() {
   const { id } = useParams();
@@ -46,18 +47,18 @@ export default function MilestoneDetail() {
     <div className="stack">
       <div className="page-header">
         <h1>{data.milestoneName}</h1>
-        <span className={`badge ${statusBadgeClass(data.milestoneStatus)}`}>{data.milestoneStatus ?? '—'}</span>
+        <span className={`badge ${statusBadgeClass(data.milestoneStatus)}`}>{choiceLabel(data.milestoneStatus)}</span>
       </div>
 
       <div className="card">
         <div className="grid cols-3">
           <div><div className="muted">Milestone ID</div>{data.milestoneBusinessId}</div>
-          <div><div className="muted">Category</div>{data.milestoneCategory ?? '—'}</div>
+          <div><div className="muted">Category</div>{choiceLabel(data.milestoneCategory)}</div>
           <div><div className="muted">Owner</div>{data.owner ?? '—'}</div>
-          <div><div className="muted">Workload</div>{data.workload ?? '—'}</div>
+          <div><div className="muted">Workload</div>{choiceLabel(data.workload)}</div>
           <div><div className="muted">Partner</div>{data.partnerName ?? '—'}</div>
           <div><div className="muted">Est Date</div>{formatDate(data.estDate)}</div>
-          <div><div className="muted">Risk Impact</div>{data.riskImpact ?? '—'}</div>
+          <div><div className="muted">Risk Impact</div>{choiceLabel(data.riskImpact)}</div>
           <div><div className="muted">Competitor</div>{data.competitorName ?? '—'}</div>
         </div>
         {data.riskDescription && <p className="section muted">Risk: {data.riskDescription}</p>}
@@ -70,7 +71,7 @@ export default function MilestoneDetail() {
         <div className="btn-row">
           {STATUSES.map((s) => (
             <button key={s} className="secondary" disabled={busy || s === data.milestoneStatus} onClick={() => changeStatus(s)}>
-              {s}
+              {choiceLabel(s)}
             </button>
           ))}
         </div>
@@ -86,8 +87,8 @@ export default function MilestoneDetail() {
             {data.statusHistories.map((h) => (
               <tr key={h.id}>
                 <td>{formatDate(h.statusDate)}</td>
-                <td>{h.oldStatus ?? '—'}</td>
-                <td><span className={`badge ${statusBadgeClass(h.newStatus)}`}>{h.newStatus}</span></td>
+                <td>{choiceLabel(h.oldStatus)}</td>
+                <td><span className={`badge ${statusBadgeClass(h.newStatus)}`}>{choiceLabel(h.newStatus)}</span></td>
                 <td>{h.changedBy ?? '—'}</td>
                 <td>{h.reason ?? '—'}</td>
               </tr>

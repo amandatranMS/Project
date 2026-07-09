@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { choiceLabel } from '@msx/shared';
 import { api, type ApprovalRequest } from '../api/client';
 import { statusBadgeClass } from '../ui';
 
@@ -76,7 +77,7 @@ export default function Approvals() {
               <td>{a.requestName ?? '—'}</td>
               <td>{a.opportunity?.opportunityName ?? '—'}</td>
               <td>{a.requestedBy ?? '—'}</td>
-              <td><span className={`badge ${statusBadgeClass(a.approvalStatus)}`}>{a.approvalStatus ?? '—'}</span></td>
+              <td><span className={`badge ${statusBadgeClass(a.approvalStatus)}`}>{choiceLabel(a.approvalStatus)}</span></td>
               <td>{a.mockWritebackStatus ?? '—'}</td>
               <td>
                 <div className="btn-row">

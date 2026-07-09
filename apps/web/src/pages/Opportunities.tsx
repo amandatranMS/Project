@@ -1,24 +1,41 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { SOLUTION_AREAS, SALES_STAGES, OPPORTUNITY_STATUSES, choiceLabel } from '@msx/shared';
 import { api, type Opportunity } from '../api/client';
 import { statusBadgeClass, formatCurrency } from '../ui';
+import FilterSelect from '../components/FilterSelect';
 
 export default function Opportunities() {
   const [items, setItems] = useState<Opportunity[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [solutionArea, setSolutionArea] = useState('');
+  const [salesStage, setSalesStage] = useState('');
+  const [status, setStatus] = useState('');
 
   useEffect(() => {
+    const params = new URLSearchParams();
+    if (solutionArea) params.set('solutionArea', solutionArea);
+    if (salesStage) params.set('salesStage', salesStage);
+    if (status) params.set('status', status);
+    const qs = params.toString();
     api
-      .get<Opportunity[]>('/opportunities')
+      .get<Opportunity[]>(`/opportunities${qs ? `?${qs}` : ''}`)
       .then(setItems)
       .catch((e) => setError(e.message));
-  }, []);
+  }, [solutionArea, salesStage, status]);
 
   return (
     <div>
       <div className="page-header">
         <h1>Opportunities</h1>
       </div>
+
+      <div className="filters">
+        <FilterSelect label="Solution Area" value={solutionArea} options={SOLUTION_AREAS} onChange={setSolutionArea} allLabel="All solution areas" />
+        <FilterSelect label="Sales Stage" value={salesStage} options={SALES_STAGES} onChange={setSalesStage} allLabel="All sales stages" />
+        <FilterSelect label="Status" value={status} options={OPPORTUNITY_STATUSES} onChange={setStatus} allLabel="All statuses" />
+      </div>
+
       {error && <p className="error">{error}</p>}
       <table>
         <thead>
@@ -41,19 +58,19 @@ export default function Opportunities() {
                 <Link to={`/opportunities/${o.id}`}>{o.opportunityName}</Link>
               </td>
               <td>{o.customerName ?? '—'}</td>
-              <td>{o.solutionArea ?? '—'}</td>
-              <td>{o.salesStage ?? '—'}</td>
+              <td>{choiceLabel(o.solutionArea)}</td>
+              <td>{choiceLabel(o.salesStage)}</td>
               <td>{formatCurrency(o.estimatedRevenue)}</td>
               <td>{o._count?.milestones ?? 0}</td>
               <td>
-                <span className={`badge ${statusBadgeClass(o.status)}`}>{o.status ?? '—'}</span>
+                <span className={`badge ${statusBadgeClass(o.status)}`}>{choiceLabel(o.status)}</span>
               </td>
             </tr>
           ))}
           {items.length === 0 && !error && (
             <tr>
               <td colSpan={8} className="muted">
-                No opportunities yet. Run <code>npm run import-workbook</code>.
+                No opportunities match these filters.
               </td>
             </tr>
           )}
