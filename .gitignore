@@ -32,3 +32,8 @@ npm-debug.log*
 
 # Vite
 apps/web/dist/
+
+# Python (agent app)
+.venv/
+__pycache__/
+*.pyc
