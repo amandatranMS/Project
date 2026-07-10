@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { SOLUTION_AREAS, SALES_STAGES, OPPORTUNITY_STATUSES, choiceLabel } from '@msx/shared';
 import { api, type Opportunity } from '../api/client';
-import { statusBadgeClass, formatCurrency } from '../ui';
+import { statusBadgeClass, formatCurrency, formatDate } from '../ui';
 import FilterSelect from '../components/FilterSelect';
 
 export default function Opportunities() {
@@ -42,10 +42,13 @@ export default function Opportunities() {
           <tr>
             <th>ID</th>
             <th>Name</th>
-            <th>Customer</th>
+            <th>Account</th>
+            <th>TPID</th>
             <th>Solution Area</th>
             <th>Sales Stage</th>
-            <th>Revenue</th>
+            <th>Est. Revenue</th>
+            <th>Competitor</th>
+            <th>Est. Close Date</th>
             <th>Milestones</th>
             <th>Status</th>
           </tr>
@@ -58,9 +61,12 @@ export default function Opportunities() {
                 <Link to={`/opportunities/${o.id}`}>{o.opportunityName}</Link>
               </td>
               <td>{o.customerName ?? '—'}</td>
+              <td>{o.tpid ?? '—'}</td>
               <td>{choiceLabel(o.solutionArea)}</td>
               <td>{choiceLabel(o.salesStage)}</td>
               <td>{formatCurrency(o.estimatedRevenue)}</td>
+              <td>{o.competitorName ?? '—'}</td>
+              <td>{formatDate(o.closeDate)}</td>
               <td>{o._count?.milestones ?? 0}</td>
               <td>
                 <span className={`badge ${statusBadgeClass(o.status)}`}>{choiceLabel(o.status)}</span>
@@ -69,7 +75,7 @@ export default function Opportunities() {
           ))}
           {items.length === 0 && !error && (
             <tr>
-              <td colSpan={8} className="muted">
+              <td colSpan={11} className="muted">
                 No opportunities match these filters.
               </td>
             </tr>

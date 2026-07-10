@@ -44,6 +44,7 @@ export interface Opportunity {
   id: string;
   opportunityBusinessId: string;
   opportunityName: string;
+  tpid?: string | null;
   customerName?: string | null;
   industry?: string | null;
   solutionArea?: string | null;
