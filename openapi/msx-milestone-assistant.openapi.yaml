@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: MSX Milestone Assistant API (Mock)
-  version: 0.3.0
+  version: 0.4.0
   description: >
     REST API for the MSX Milestone Assistant, a SYNTHETIC MOCK application for
     Solution Engineering opportunity and milestone management. NOT connected to
@@ -20,7 +20,9 @@ info:
     "CreateMilestone". reject / needs-changes never create a milestone.
 servers:
   - url: http://localhost:4000
-    description: Local mock server
+    description: Local mock server (replace with your public tunnel URL when connecting an agent)
+security:
+  - ApiKeyAuth: []
 tags:
   - name: Health
   - name: Opportunities
@@ -36,7 +38,7 @@ tags:
   - name: Dashboard
 paths:
   /api/health:
-    get: { tags: [Health], summary: Health check, responses: { '200': { description: OK } } }
+    get: { tags: [Health], summary: Health check, security: [], responses: { '200': { description: OK } } }
 
   /api/opportunities:
     get:
@@ -282,6 +284,14 @@ paths:
     post: { tags: [Dashboard], summary: Create a metric snapshot, responses: { '201': { description: Created } } }
 
 components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+      description: >
+        Optional API key. Only enforced when the server has API_KEY set (e.g. when
+        exposed over a public tunnel). Send it in the `x-api-key` request header.
   parameters:
     IdParam:
       in: path

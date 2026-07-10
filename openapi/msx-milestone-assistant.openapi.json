@@ -1,0 +1,1084 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "MSX Milestone Assistant API (Mock)",
+    "version": "0.4.0",
+    "description": "REST API for the MSX Milestone Assistant, a SYNTHETIC MOCK application for Solution Engineering opportunity and milestone management. NOT connected to real MSX, Dataverse, Power Platform, or customer data.\nData is imported from the Excel workbook (single source of truth): data/MSX_Mirror_Necessary_Tables_Import_10_More_Entries.xlsx.\nEvery response uses a consistent envelope:\n  success: { \"success\": true, \"data\": ... }\n  error:   { \"success\": false, \"error\": \"Plain language error message\" }\n\nGovernance: a real milestone is created only when a human decides an approval request via PATCH /api/approval-requests/{id}/approve, which performs the mock milestone writeback and records it in the Agent Action Audit Log as \"CreateMilestone\". reject / needs-changes never create a milestone.\n"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:4000",
+      "description": "Local mock server (replace with your public tunnel URL when connecting an agent)"
+    }
+  ],
+  "security": [
+    {
+      "ApiKeyAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Health"
+    },
+    {
+      "name": "Opportunities"
+    },
+    {
+      "name": "Milestones"
+    },
+    {
+      "name": "Status History"
+    },
+    {
+      "name": "Recommendations"
+    },
+    {
+      "name": "Approval Requests"
+    },
+    {
+      "name": "Collaboration Notes"
+    },
+    {
+      "name": "Deal Team Members"
+    },
+    {
+      "name": "Agent Notifications"
+    },
+    {
+      "name": "Agent Run Logs"
+    },
+    {
+      "name": "Agent Action Audit Logs"
+    },
+    {
+      "name": "Dashboard"
+    }
+  ],
+  "paths": {
+    "/api/health": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Health check",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/opportunities": {
+      "get": {
+        "tags": [
+          "Opportunities"
+        ],
+        "summary": "List opportunities",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "salesStage",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "solutionArea",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope with array of opportunities"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Opportunities"
+        ],
+        "summary": "Create an opportunity",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpportunityInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          },
+          "400": {
+            "description": "Validation error"
+          }
+        }
+      }
+    },
+    "/api/opportunities/{id}": {
+      "get": {
+        "tags": [
+          "Opportunities"
+        ],
+        "summary": "Get an opportunity (with milestones, team, notes, recommendations)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdParam"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Opportunity"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Opportunities"
+        ],
+        "summary": "Update an opportunity",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdParam"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Opportunities"
+        ],
+        "summary": "Delete an opportunity. Blocked (409) when it still has milestones unless cascade=true is supplied, which removes the opportunity and all related records.\n",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdParam"
+          },
+          {
+            "in": "query",
+            "name": "cascade",
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "Delete attached milestones and related records"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Has milestones and cascade not confirmed"
+          }
+        }
+      }
+    },
+    "/api/opportunities/{id}/context": {
+      "get": {
+        "tags": [
+          "Opportunities"
+        ],
+        "summary": "Full 360° context — opportunity plus milestones, status history, recommendations, approval requests, collaboration notes, deal team members, notifications, agent run logs, and audit logs.\n",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdParam"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Opportunity context"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/api/milestones": {
+      "get": {
+        "tags": [
+          "Milestones"
+        ],
+        "summary": "List milestones",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "opportunityId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "milestoneStatus",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Array of milestones"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Milestones"
+        ],
+        "summary": "Create a milestone (connect to an opportunity by name)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MilestoneInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          },
+          "400": {
+            "description": "Validation error"
+          }
+        }
+      }
+    },
+    "/api/milestones/{id}": {
+      "get": {
+        "tags": [
+          "Milestones"
+        ],
+        "summary": "Get a milestone (with history, recommendations, approvals, notes)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdParam"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Milestone"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Milestones"
+        ],
+        "summary": "Update a milestone",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdParam"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Milestones"
+        ],
+        "summary": "Delete a milestone (status history is also removed)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdParam"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/api/status-history": {
+      "get": {
+        "tags": [
+          "Status History"
+        ],
+        "summary": "List milestone status history",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "milestoneId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "History rows"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Status History"
+        ],
+        "summary": "Add a status change (moves the milestone to the new status)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "milestoneBusinessId",
+                  "newStatus",
+                  "changedBy"
+                ],
+                "properties": {
+                  "milestoneBusinessId": {
+                    "type": "string",
+                    "example": "MS-001"
+                  },
+                  "newStatus": {
+                    "type": "string",
+                    "example": "At Risk"
+                  },
+                  "oldStatus": {
+                    "type": "string"
+                  },
+                  "changedBy": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/recommendations": {
+      "get": {
+        "tags": [
+          "Recommendations"
+        ],
+        "summary": "List AI milestone recommendations",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "reviewStatus",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "opportunityId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recommendations"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Recommendations"
+        ],
+        "summary": "Create a recommendation",
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/recommendations/{id}": {
+      "get": {
+        "tags": [
+          "Recommendations"
+        ],
+        "summary": "Get a recommendation",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdParam"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recommendation"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Recommendations"
+        ],
+        "summary": "Update a recommendation (e.g. review status)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdParam"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated"
+          }
+        }
+      }
+    },
+    "/api/approval-requests": {
+      "get": {
+        "tags": [
+          "Approval Requests"
+        ],
+        "summary": "List approval requests",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "approvalStatus",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Approval requests"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Approval Requests"
+        ],
+        "summary": "Create an approval request",
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/approval-requests/{id}": {
+      "get": {
+        "tags": [
+          "Approval Requests"
+        ],
+        "summary": "Get an approval request",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdParam"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Approval request"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Approval Requests"
+        ],
+        "summary": "Update an approval request",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdParam"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated"
+          }
+        }
+      }
+    },
+    "/api/approval-requests/{id}/approve": {
+      "patch": {
+        "tags": [
+          "Approval Requests"
+        ],
+        "summary": "Approve — performs the mock milestone writeback (creates the milestone from the related recommendation) and audits it as CreateMilestone.\n",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdParam"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecisionInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Approved (returns approval + created milestone)"
+          },
+          "409": {
+            "description": "Already approved"
+          }
+        }
+      }
+    },
+    "/api/approval-requests/{id}/reject": {
+      "patch": {
+        "tags": [
+          "Approval Requests"
+        ],
+        "summary": "Reject an approval request (no milestone created; audited)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdParam"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecisionInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Rejected"
+          }
+        }
+      }
+    },
+    "/api/approval-requests/{id}/needs-changes": {
+      "patch": {
+        "tags": [
+          "Approval Requests"
+        ],
+        "summary": "Mark an approval request as needing changes (audited)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdParam"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecisionInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated"
+          }
+        }
+      }
+    },
+    "/api/collaboration-notes": {
+      "get": {
+        "tags": [
+          "Collaboration Notes"
+        ],
+        "summary": "List collaboration notes",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "opportunityId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "relatedMilestoneId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Notes"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Collaboration Notes"
+        ],
+        "summary": "Add a collaboration note",
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/deal-team-members": {
+      "get": {
+        "tags": [
+          "Deal Team Members"
+        ],
+        "summary": "List deal team members for an opportunity",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "opportunityId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Members"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Deal Team Members"
+        ],
+        "summary": "Add a deal team member",
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/agent-notifications": {
+      "get": {
+        "tags": [
+          "Agent Notifications"
+        ],
+        "summary": "List agent notifications",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "notifyRole",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Notifications"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Agent Notifications"
+        ],
+        "summary": "Create a notification",
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/agent-notifications/{id}": {
+      "patch": {
+        "tags": [
+          "Agent Notifications"
+        ],
+        "summary": "Update a notification (e.g. mark read)",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdParam"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated"
+          }
+        }
+      }
+    },
+    "/api/agent-run-logs": {
+      "get": {
+        "tags": [
+          "Agent Run Logs"
+        ],
+        "summary": "List agent run logs",
+        "responses": {
+          "200": {
+            "description": "Runs"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Agent Run Logs"
+        ],
+        "summary": "Create an agent run log",
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/agent-action-audit-logs": {
+      "get": {
+        "tags": [
+          "Agent Action Audit Logs"
+        ],
+        "summary": "List agent action audit logs",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "agentName",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "actionType",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Audit log entries"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Agent Action Audit Logs"
+        ],
+        "summary": "Record an agent action",
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/dashboard/summary": {
+      "get": {
+        "tags": [
+          "Dashboard"
+        ],
+        "summary": "Live dashboard metrics",
+        "responses": {
+          "200": {
+            "description": "Metrics"
+          }
+        }
+      }
+    },
+    "/api/dashboard-metric-snapshots": {
+      "get": {
+        "tags": [
+          "Dashboard"
+        ],
+        "summary": "List metric snapshots",
+        "responses": {
+          "200": {
+            "description": "Snapshots"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Dashboard"
+        ],
+        "summary": "Create a metric snapshot",
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-api-key",
+        "description": "Optional API key. Only enforced when the server has API_KEY set (e.g. when exposed over a public tunnel). Send it in the `x-api-key` request header.\n"
+      }
+    },
+    "parameters": {
+      "IdParam": {
+        "in": "path",
+        "name": "id",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "schemas": {
+      "Envelope": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "data": {},
+          "error": {
+            "type": "string"
+          }
+        }
+      },
+      "DecisionInput": {
+        "type": "object",
+        "required": [
+          "reviewedBy"
+        ],
+        "properties": {
+          "reviewedBy": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "agentName": {
+            "type": "string"
+          }
+        }
+      },
+      "OpportunityInput": {
+        "type": "object",
+        "required": [
+          "opportunityName"
+        ],
+        "properties": {
+          "opportunityBusinessId": {
+            "type": "string",
+            "description": "Auto-generated if omitted"
+          },
+          "opportunityName": {
+            "type": "string"
+          },
+          "tpid": {
+            "type": "string"
+          },
+          "customerName": {
+            "type": "string"
+          },
+          "industry": {
+            "type": "string"
+          },
+          "solutionArea": {
+            "type": "string"
+          },
+          "salesStage": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "estimatedRevenue": {
+            "type": "number"
+          },
+          "closeDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "aeOwner": {
+            "type": "string"
+          },
+          "assignedSE": {
+            "type": "string"
+          },
+          "competitorName": {
+            "type": "string"
+          },
+          "businessProblem": {
+            "type": "string"
+          },
+          "nextStep": {
+            "type": "string"
+          }
+        }
+      },
+      "MilestoneInput": {
+        "type": "object",
+        "required": [
+          "milestoneName",
+          "opportunityName"
+        ],
+        "properties": {
+          "milestoneBusinessId": {
+            "type": "string",
+            "description": "Auto-generated if omitted"
+          },
+          "milestoneName": {
+            "type": "string"
+          },
+          "opportunityName": {
+            "type": "string",
+            "description": "Connects to Opportunity.opportunityName"
+          },
+          "workload": {
+            "type": "string",
+            "enum": [
+              "M365 Copilot for Microsoft 365",
+              "Microsoft Sentinel",
+              "Microsoft Purview",
+              "Azure Migration",
+              "Copilot Studio",
+              "Defender XDR",
+              "Teams Premium"
+            ]
+          },
+          "customerCommitment": {
+            "type": "string",
+            "enum": [
+              "Uncommitted",
+              "Verbal",
+              "Committed",
+              "Contracted"
+            ]
+          },
+          "deliveredBy": {
+            "type": "string",
+            "enum": [
+              "Microsoft",
+              "Partner",
+              "Customer",
+              "Joint"
+            ]
+          },
+          "milestoneCategory": {
+            "type": "string",
+            "enum": [
+              "Production",
+              "Pilot",
+              "Workshop",
+              "Assessment",
+              "Deployment",
+              "Adoption"
+            ]
+          },
+          "milestoneStatus": {
+            "type": "string",
+            "enum": [
+              "---",
+              "On Track",
+              "At Risk",
+              "Blocked",
+              "Completed",
+              "Cancelled",
+              "Lost To Competitor",
+              "Hygiene/Duplicate"
+            ]
+          },
+          "estDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "fitCharge": {
+            "type": "number"
+          },
+          "riskImpact": {
+            "type": "string",
+            "enum": [
+              "High",
+              "Medium",
+              "Low"
+            ]
+          },
+          "azureCapacityType": {
+            "type": "string",
+            "enum": [
+              "---",
+              "Azure Commit",
+              "MACC",
+              "Open",
+              "CSP",
+              "EA"
+            ]
+          },
+          "preferredAzureRegion": {
+            "type": "string",
+            "enum": [
+              "Canada Central",
+              "Canada East",
+              "East US",
+              "West US",
+              "West Europe",
+              "North Europe"
+            ]
+          },
+          "owner": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
