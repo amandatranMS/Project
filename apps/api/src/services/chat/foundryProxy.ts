@@ -44,13 +44,18 @@ export async function runFoundryAgent(messages: ChatMessage[]): Promise<string> 
     );
   }
 
-  const lastUser = [...messages].reverse().find((m) => m.role === 'user');
   const token = await getToken();
+
+  // Send the entire conversation as Responses input items. The hosted agent runs
+  // statelessly (store:false), so each request must carry the full history —
+  // otherwise a bare "yes, create it" loses the milestone details from earlier
+  // turns and the agent re-asks for them.
+  const input = messages.map((m) => ({ role: m.role, content: m.content }));
 
   const res = await fetch(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ input: lastUser?.content ?? '', stream: false }),
+    body: JSON.stringify({ input, stream: false }),
   });
 
   const text = await res.text();
