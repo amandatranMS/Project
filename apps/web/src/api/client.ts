@@ -39,6 +39,22 @@ export const api = {
   del: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
 };
 
+// ---- Chat assistant ----
+export type ChatEngine = 'in-app' | 'foundry';
+export interface ChatTurn {
+  role: 'user' | 'assistant';
+  content: string;
+}
+export interface ChatResult {
+  reply: string;
+  engine: ChatEngine;
+}
+
+/** Send the running transcript to the assistant and get the next reply. */
+export function sendChat(messages: ChatTurn[], engine: ChatEngine) {
+  return api.post<ChatResult>('/chat', { messages, engine });
+}
+
 // ---- Response shapes (subset of Prisma models / workbook columns) ----
 export interface Opportunity {
   id: string;
