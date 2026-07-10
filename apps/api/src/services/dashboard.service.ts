@@ -1,0 +1,40 @@
+import { prisma } from '../lib/prisma.js';
+import { genId } from '../lib/ids.js';
+import type { z } from 'zod';
+import type { createSnapshotSchema } from '../validators/schemas.js';
+
+type CreateInput = z.infer<typeof createSnapshotSchema>;
+
+export const dashboardService = {
+  /** Live summary metrics computed from the imported workbook data. */
+  async summary() {
+    const [activeOpportunities, totalMilestones, milestonesAtRisk, blockedMilestones, pendingApprovals, revenue] =
+      await Promise.all([
+        prisma.opportunity.count({ where: { status: 'Active' } }),
+        prisma.opportunityMilestone.count(),
+        prisma.opportunityMilestone.count({ where: { milestoneStatus: 'At Risk' } }),
+        prisma.opportunityMilestone.count({ where: { milestoneStatus: 'Blocked' } }),
+        prisma.approvalRequest.count({ where: { approvalStatus: 'Pending' } }),
+        prisma.opportunity.aggregate({ _sum: { estimatedRevenue: true } }),
+      ]);
+    return {
+      activeOpportunities,
+      totalMilestones,
+      milestonesAtRisk,
+      blockedMilestones,
+      pendingApprovals,
+      pipelineValue: revenue._sum.estimatedRevenue ?? 0,
+    };
+  },
+
+  listSnapshots() {
+    return prisma.dashboardMetricSnapshot.findMany({ orderBy: { snapshotName: 'asc' }, take: 200 });
+  },
+
+  createSnapshot(input: CreateInput) {
+    const { snapshotName, ...rest } = input;
+    return prisma.dashboardMetricSnapshot.create({
+      data: { ...rest, snapshotName: snapshotName || genId('SNAP'), snapshotDate: new Date() },
+    });
+  },
+};

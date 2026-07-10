@@ -8,7 +8,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     api
-      .get<DashboardMetrics>('/dashboard/metrics')
+      .get<DashboardMetrics>('/dashboard/summary')
       .then(setMetrics)
       .catch((e) => setError(e.message));
   }, []);

@@ -8,7 +8,7 @@ export default function AuditLog() {
 
   useEffect(() => {
     api
-      .get<AuditLogEntry[]>('/agent/audit')
+      .get<AuditLogEntry[]>('/agent-action-audit-logs')
       .then(setItems)
       .catch((e) => setError(e.message));
   }, []);
