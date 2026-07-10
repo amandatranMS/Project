@@ -251,6 +251,16 @@ select {
   color: var(--text);
   min-width: 180px;
 }
+.filters input[type='search'],
+.filters input[type='text'] {
+  font: inherit;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--text);
+  min-width: 240px;
+}
 
 /* Modal + forms */
 .modal-overlay {
