@@ -31,4 +31,9 @@ export const milestonesController = {
     const data = await milestonesService.update(req.params.id, input);
     sendOk(res, data);
   }),
+
+  remove: asyncHandler(async (req, res) => {
+    const data = await milestonesService.remove(req.params.id);
+    sendOk(res, data);
+  }),
 };

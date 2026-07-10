@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { MILESTONE_STATUSES, choiceLabel } from '@msx/shared';
 import { api, type Milestone } from '../api/client';
 import { statusBadgeClass, formatDate } from '../ui';
+import MilestoneForm from '../components/form/MilestoneForm';
+import Modal from '../components/Modal';
 
 interface MilestoneDetailData extends Milestone {
   statusHistories: { id: string; oldStatus?: string | null; newStatus?: string | null; changedBy?: string | null; reason?: string | null; statusDate?: string | null }[];
@@ -13,9 +15,14 @@ const STATUSES = MILESTONE_STATUSES;
 
 export default function MilestoneDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [data, setData] = useState<MilestoneDetailData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   function load() {
     if (!id) return;
@@ -26,6 +33,20 @@ export default function MilestoneDetail() {
   }
 
   useEffect(load, [id]);
+
+  async function handleDelete() {
+    if (!id) return;
+    setDeleteBusy(true);
+    setDeleteError(null);
+    try {
+      await api.del(`/milestones/${id}`);
+      navigate('/milestones');
+    } catch (e) {
+      setDeleteError((e as Error).message);
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
 
   async function changeStatus(newStatus: string) {
     if (!data) return;
@@ -52,8 +73,33 @@ export default function MilestoneDetail() {
     <div className="stack">
       <div className="page-header">
         <h1>{data.milestoneName}</h1>
-        <span className={`badge ${statusBadgeClass(data.milestoneStatus)}`}>{choiceLabel(data.milestoneStatus)}</span>
+        <div className="btn-row">
+          <button className="secondary" onClick={() => setEditing(true)}>Edit</button>
+          <button className="danger" onClick={() => { setDeleteError(null); setConfirmingDelete(true); }}>Delete</button>
+          <span className={`badge ${statusBadgeClass(data.milestoneStatus)}`}>{choiceLabel(data.milestoneStatus)}</span>
+        </div>
       </div>
+
+      {editing && <MilestoneForm initial={data} onClose={() => setEditing(false)} onSaved={load} />}
+
+      {confirmingDelete && (
+        <Modal
+          title="Delete milestone"
+          onClose={() => setConfirmingDelete(false)}
+          footer={
+            <div className="btn-row">
+              <button className="secondary" onClick={() => setConfirmingDelete(false)} disabled={deleteBusy}>Cancel</button>
+              <button className="danger" onClick={handleDelete} disabled={deleteBusy}>
+                {deleteBusy ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          }
+        >
+          <p>Delete <strong>{data.milestoneName}</strong>? This can’t be undone.</p>
+          <p className="muted">Its status history will also be removed.</p>
+          {deleteError && <p className="error">{deleteError}</p>}
+        </Modal>
+      )}
 
       <div className="card">
         <div className="grid cols-3">

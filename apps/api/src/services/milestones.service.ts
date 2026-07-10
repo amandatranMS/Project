@@ -64,4 +64,22 @@ export const milestonesService = {
       data: { ...rest, estDate: estDate ? new Date(estDate) : undefined },
     });
   },
+
+  /** Deletes a milestone (status history cascades; other links are set to null). */
+  async remove(id: string) {
+    const existing = await prisma.opportunityMilestone.findUnique({ where: { id } });
+    if (!existing) throw new HttpError(404, 'Milestone not found.');
+
+    await prisma.opportunityMilestone.delete({ where: { id } });
+
+    await recordAgentAction({
+      agentName: 'system',
+      actionType: 'Delete',
+      actionName: 'Milestone deleted',
+      opportunityId: existing.opportunityId,
+      inputSummary: `Deleted ${existing.milestoneBusinessId} (${existing.milestoneName})`,
+    });
+
+    return { id, milestoneBusinessId: existing.milestoneBusinessId };
+  },
 };

@@ -47,12 +47,36 @@ paths:
         - { in: query, name: salesStage, schema: { type: string } }
         - { in: query, name: solutionArea, schema: { type: string } }
       responses: { '200': { description: Envelope with array of opportunities } }
+    post:
+      tags: [Opportunities]
+      summary: Create an opportunity
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/OpportunityInput' } } }
+      responses: { '201': { description: Created }, '400': { description: Validation error } }
   /api/opportunities/{id}:
     get:
       tags: [Opportunities]
       summary: Get an opportunity (with milestones, team, notes, recommendations)
       parameters: [{ $ref: '#/components/parameters/IdParam' }]
       responses: { '200': { description: Opportunity }, '404': { description: Not found } }
+    patch:
+      tags: [Opportunities]
+      summary: Update an opportunity
+      parameters: [{ $ref: '#/components/parameters/IdParam' }]
+      responses: { '200': { description: Updated }, '404': { description: Not found } }
+    delete:
+      tags: [Opportunities]
+      summary: >
+        Delete an opportunity. Blocked (409) when it still has milestones unless
+        cascade=true is supplied, which removes the opportunity and all related records.
+      parameters:
+        - { $ref: '#/components/parameters/IdParam' }
+        - { in: query, name: cascade, schema: { type: boolean }, description: Delete attached milestones and related records }
+      responses:
+        '200': { description: Deleted }
+        '404': { description: Not found }
+        '409': { description: Has milestones and cascade not confirmed }
   /api/opportunities/{id}/context:
     get:
       tags: [Opportunities]
@@ -89,6 +113,11 @@ paths:
       summary: Update a milestone
       parameters: [{ $ref: '#/components/parameters/IdParam' }]
       responses: { '200': { description: Updated } }
+    delete:
+      tags: [Milestones]
+      summary: Delete a milestone (status history is also removed)
+      parameters: [{ $ref: '#/components/parameters/IdParam' }]
+      responses: { '200': { description: Deleted }, '404': { description: Not found } }
 
   /api/status-history:
     get:
@@ -273,6 +302,25 @@ components:
         reviewedBy: { type: string }
         notes: { type: string }
         agentName: { type: string }
+    OpportunityInput:
+      type: object
+      required: [opportunityName]
+      properties:
+        opportunityBusinessId: { type: string, description: Auto-generated if omitted }
+        opportunityName: { type: string }
+        tpid: { type: string }
+        customerName: { type: string }
+        industry: { type: string }
+        solutionArea: { type: string }
+        salesStage: { type: string }
+        status: { type: string }
+        estimatedRevenue: { type: number }
+        closeDate: { type: string, format: date }
+        aeOwner: { type: string }
+        assignedSE: { type: string }
+        competitorName: { type: string }
+        businessProblem: { type: string }
+        nextStep: { type: string }
     MilestoneInput:
       type: object
       required: [milestoneName, opportunityName]
