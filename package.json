@@ -18,6 +18,7 @@
     "seed": "tsx prisma/seed.ts",
     "db:seed": "tsx prisma/seed.ts",
     "import-workbook": "tsx scripts/parseWorkbook.ts",
+    "openapi:json": "node scripts/openapiToJson.mjs",
     "reset-db": "prisma migrate reset",
     "db:reset": "prisma db push --force-reset && npm run db:seed",
     "setup": "npm install && npm run prisma:generate && npm run db:push && npm run import-workbook"
@@ -29,7 +30,8 @@
     "concurrently": "^9.1.0",
     "prisma": "^6.2.1",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "yaml": "^2.9.0"
   },
   "dependencies": {
     "@prisma/client": "^6.2.1",

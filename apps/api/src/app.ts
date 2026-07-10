@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import apiRoutes from './routes/index.js';
 import { errorHandler } from './lib/errorHandler.js';
+import { apiKeyAuth } from './lib/apiKeyAuth.js';
 import { sendOk } from './lib/responses.js';
 
 /** Builds and configures the Express application. */
@@ -19,7 +20,7 @@ export function createApp() {
     sendOk(res, { status: 'ok', service: 'msx-milestone-assistant-api', mock: true });
   });
 
-  app.use('/api', apiRoutes);
+  app.use('/api', apiKeyAuth, apiRoutes);
 
   app.use(errorHandler);
 
