@@ -227,3 +227,16 @@ export const createSnapshotSchema = z.object({
   pendingApprovals: z.number().int().optional().nullable(),
   lastScheduledRunStatus: nstr,
 });
+
+// ---- Chat (assistant) ----
+export const chatSchema = z.object({
+  messages: z
+    .array(
+      z.object({
+        role: z.enum(['user', 'assistant']),
+        content: z.string().min(1),
+      }),
+    )
+    .min(1),
+  engine: z.enum(['in-app', 'foundry']).optional().default('in-app'),
+});

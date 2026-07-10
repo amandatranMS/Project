@@ -6,6 +6,7 @@ import Milestones from './pages/Milestones';
 import MilestoneDetail from './pages/MilestoneDetail';
 import Approvals from './pages/Approvals';
 import AuditLog from './pages/AuditLog';
+import ChatWidget from './components/ChatWidget';
 
 const navItems = [
   { to: '/', label: 'Dashboard', end: true },
@@ -45,6 +46,7 @@ export default function App() {
           <Route path="/audit" element={<AuditLog />} />
         </Routes>
       </main>
+      <ChatWidget />
     </div>
   );
 }
