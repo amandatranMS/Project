@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { choiceLabel } from '@msx/shared';
 import { api, type Milestone, type Opportunity, type Recommendation } from '../api/client';
 import { statusBadgeClass, formatCurrency, formatDate } from '../ui';
 import OpportunityForm from '../components/form/OpportunityForm';
 import MilestoneForm from '../components/form/MilestoneForm';
+import Modal from '../components/Modal';
 
 interface OpportunityDetailData extends Opportunity {
   milestones: Milestone[];
@@ -15,10 +16,15 @@ interface OpportunityDetailData extends Opportunity {
 
 export default function OpportunityDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [data, setData] = useState<OpportunityDetailData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [addingMilestone, setAddingMilestone] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [cascade, setCascade] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   function load() {
     if (!id) return;
@@ -30,8 +36,25 @@ export default function OpportunityDetail() {
 
   useEffect(load, [id]);
 
+  async function handleDelete() {
+    if (!id) return;
+    setDeleteBusy(true);
+    setDeleteError(null);
+    try {
+      await api.del(`/opportunities/${id}?cascade=${cascade}`);
+      navigate('/opportunities');
+    } catch (e) {
+      setDeleteError((e as Error).message);
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
+
   if (error) return <p className="error">{error}</p>;
   if (!data) return <p className="muted">Loading…</p>;
+
+  const milestoneCount = data.milestones.length;
+  const canDelete = milestoneCount === 0 || cascade;
 
   return (
     <div className="stack">
@@ -39,6 +62,7 @@ export default function OpportunityDetail() {
         <h1>{data.opportunityName}</h1>
         <div className="btn-row">
           <button className="secondary" onClick={() => setEditing(true)}>Edit</button>
+          <button className="danger" onClick={() => { setCascade(false); setDeleteError(null); setConfirmingDelete(true); }}>Delete</button>
           <span className={`badge ${statusBadgeClass(data.status)}`}>{choiceLabel(data.status)}</span>
         </div>
       </div>
@@ -50,6 +74,36 @@ export default function OpportunityDetail() {
           onClose={() => setAddingMilestone(false)}
           onSaved={load}
         />
+      )}
+
+      {confirmingDelete && (
+        <Modal
+          title="Delete opportunity"
+          onClose={() => setConfirmingDelete(false)}
+          footer={
+            <div className="btn-row">
+              <button className="secondary" onClick={() => setConfirmingDelete(false)} disabled={deleteBusy}>Cancel</button>
+              <button className="danger" onClick={handleDelete} disabled={!canDelete || deleteBusy}>
+                {deleteBusy ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          }
+        >
+          <p>Delete <strong>{data.opportunityName}</strong>? This can’t be undone.</p>
+          {milestoneCount > 0 && (
+            <>
+              <p className="muted">
+                This opportunity has <strong>{milestoneCount}</strong> milestone(s) plus any related notes,
+                recommendations and approvals. You must confirm a cascade delete to remove them all.
+              </p>
+              <label className="row">
+                <input type="checkbox" checked={cascade} onChange={(e) => setCascade(e.target.checked)} />
+                <span>Also delete all {milestoneCount} milestone(s) and related records</span>
+              </label>
+            </>
+          )}
+          {deleteError && <p className="error">{deleteError}</p>}
+        </Modal>
       )}
 
       <div className="card">

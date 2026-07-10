@@ -68,7 +68,7 @@ export const SEVERITIES = ['Info', 'Warning', 'Critical'] as const;
 export const RUN_TYPES = ['User-triggered', 'Scheduled', 'System-triggered'] as const;
 export const RESULT_STATUSES = ['Success', 'Failed', 'Blocked'] as const;
 
-export const AGENT_ACTION_TYPES = ['Read', 'Create', 'Update', 'Recommend', 'SubmitApproval', 'CreateMilestone', 'Denied'] as const;
+export const AGENT_ACTION_TYPES = ['Read', 'Create', 'Update', 'Delete', 'Recommend', 'SubmitApproval', 'CreateMilestone', 'Denied'] as const;
 
 /** Groups every controlled list for convenient consumption by the UI. */
 export const CHOICES = {

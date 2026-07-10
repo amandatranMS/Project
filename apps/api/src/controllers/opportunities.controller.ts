@@ -38,4 +38,10 @@ export const opportunitiesController = {
     const data = await opportunitiesService.update(req.params.id, input);
     sendOk(res, data);
   }),
+
+  remove: asyncHandler(async (req, res) => {
+    const cascade = q(req.query.cascade) === 'true';
+    const data = await opportunitiesService.remove(req.params.id, cascade);
+    sendOk(res, data);
+  }),
 };

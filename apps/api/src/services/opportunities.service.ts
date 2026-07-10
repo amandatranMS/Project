@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma.js';
 import { HttpError } from '../lib/httpError.js';
 import { genId } from '../lib/ids.js';
+import { recordAgentAction } from '../lib/audit.js';
 import type { z } from 'zod';
 import type { createOpportunitySchema, updateOpportunitySchema } from '../validators/schemas.js';
 
@@ -64,5 +65,42 @@ export const opportunitiesService = {
       where: { id },
       data: { ...rest, closeDate: closeDate ? new Date(closeDate) : undefined },
     });
+  },
+
+  /**
+   * Deletes an opportunity. Blocks by default when it still has milestones;
+   * pass cascade=true to remove the opportunity and all its related records.
+   */
+  async remove(id: string, cascade: boolean) {
+    const existing = await prisma.opportunity.findUnique({
+      where: { id },
+      include: { _count: { select: { milestones: true } } },
+    });
+    if (!existing) throw new HttpError(404, 'Opportunity not found.');
+
+    const milestoneCount = existing._count.milestones;
+    if (milestoneCount > 0 && !cascade) {
+      throw new HttpError(
+        409,
+        `This opportunity has ${milestoneCount} milestone(s). Remove them first, or confirm a cascade delete to remove the opportunity and all related records.`,
+      );
+    }
+
+    // The Prisma schema cascades milestones, notes and deal-team members, and
+    // sets related recommendations/approvals/notifications/logs to null.
+    await prisma.opportunity.delete({ where: { id } });
+
+    await recordAgentAction({
+      agentName: 'system',
+      actionType: 'Delete',
+      actionName: cascade && milestoneCount > 0 ? 'Opportunity deleted (cascade)' : 'Opportunity deleted',
+      inputSummary: `Deleted ${existing.opportunityBusinessId} (${existing.opportunityName})`,
+      outputSummary:
+        milestoneCount > 0
+          ? `Also removed ${milestoneCount} milestone(s) and related records`
+          : 'No milestones were attached',
+    });
+
+    return { id, opportunityBusinessId: existing.opportunityBusinessId, milestonesDeleted: milestoneCount };
   },
 };
