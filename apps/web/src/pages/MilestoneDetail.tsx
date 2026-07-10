@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { MILESTONE_STATUSES, choiceLabel } from '@msx/shared';
 import { api, type Milestone } from '../api/client';
 import { statusBadgeClass, formatDate } from '../ui';
+import MilestoneForm from '../components/form/MilestoneForm';
 
 interface MilestoneDetailData extends Milestone {
   statusHistories: { id: string; oldStatus?: string | null; newStatus?: string | null; changedBy?: string | null; reason?: string | null; statusDate?: string | null }[];
@@ -16,6 +17,7 @@ export default function MilestoneDetail() {
   const [data, setData] = useState<MilestoneDetailData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   function load() {
     if (!id) return;
@@ -52,8 +54,13 @@ export default function MilestoneDetail() {
     <div className="stack">
       <div className="page-header">
         <h1>{data.milestoneName}</h1>
-        <span className={`badge ${statusBadgeClass(data.milestoneStatus)}`}>{choiceLabel(data.milestoneStatus)}</span>
+        <div className="btn-row">
+          <button className="secondary" onClick={() => setEditing(true)}>Edit</button>
+          <span className={`badge ${statusBadgeClass(data.milestoneStatus)}`}>{choiceLabel(data.milestoneStatus)}</span>
+        </div>
       </div>
+
+      {editing && <MilestoneForm initial={data} onClose={() => setEditing(false)} onSaved={load} />}
 
       <div className="card">
         <div className="grid cols-3">

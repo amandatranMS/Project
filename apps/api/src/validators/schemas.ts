@@ -25,6 +25,27 @@ import {
 const dateish = z.string().min(1).optional().nullable();
 const nstr = z.string().optional().nullable();
 
+// ---- Opportunities ----
+export const createOpportunitySchema = z.object({
+  opportunityBusinessId: z.string().optional(),
+  opportunityName: z.string().min(1),
+  tpid: nstr,
+  customerName: nstr,
+  industry: nstr,
+  solutionArea: z.enum(SOLUTION_AREAS).optional().nullable(),
+  salesStage: z.enum(SALES_STAGES).optional().nullable(),
+  status: z.enum(OPPORTUNITY_STATUSES).optional().nullable(),
+  estimatedRevenue: z.number().optional().nullable(),
+  closeDate: dateish,
+  aeOwner: nstr,
+  assignedSE: nstr,
+  competitorName: nstr,
+  consumptionPhase: nstr,
+  businessProblem: nstr,
+  nextStep: nstr,
+});
+export const updateOpportunitySchema = createOpportunitySchema.partial().omit({ opportunityBusinessId: true });
+
 // ---- Milestones ----
 export const createMilestoneSchema = z.object({
   milestoneBusinessId: z.string().optional(),

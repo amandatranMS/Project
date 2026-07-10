@@ -1,4 +1,11 @@
 import { prisma } from '../lib/prisma.js';
+import { HttpError } from '../lib/httpError.js';
+import { genId } from '../lib/ids.js';
+import type { z } from 'zod';
+import type { createOpportunitySchema, updateOpportunitySchema } from '../validators/schemas.js';
+
+type CreateInput = z.infer<typeof createOpportunitySchema>;
+type UpdateInput = z.infer<typeof updateOpportunitySchema>;
 
 const childInclude = {
   milestones: { orderBy: { milestoneBusinessId: 'asc' } },
@@ -36,5 +43,26 @@ export const opportunitiesService = {
   /** Full 360° context: opportunity plus every related record. */
   context(id: string) {
     return prisma.opportunity.findUnique({ where: { id }, include: childInclude });
+  },
+
+  async create(input: CreateInput) {
+    const { opportunityBusinessId, closeDate, ...rest } = input;
+    return prisma.opportunity.create({
+      data: {
+        ...rest,
+        opportunityBusinessId: opportunityBusinessId || genId('OPP'),
+        closeDate: closeDate ? new Date(closeDate) : null,
+      },
+    });
+  },
+
+  async update(id: string, input: UpdateInput) {
+    const existing = await prisma.opportunity.findUnique({ where: { id } });
+    if (!existing) throw new HttpError(404, 'Opportunity not found.');
+    const { closeDate, ...rest } = input;
+    return prisma.opportunity.update({
+      where: { id },
+      data: { ...rest, closeDate: closeDate ? new Date(closeDate) : undefined },
+    });
   },
 };

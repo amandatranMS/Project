@@ -3,6 +3,8 @@ import { Link, useParams } from 'react-router-dom';
 import { choiceLabel } from '@msx/shared';
 import { api, type Milestone, type Opportunity, type Recommendation } from '../api/client';
 import { statusBadgeClass, formatCurrency, formatDate } from '../ui';
+import OpportunityForm from '../components/form/OpportunityForm';
+import MilestoneForm from '../components/form/MilestoneForm';
 
 interface OpportunityDetailData extends Opportunity {
   milestones: Milestone[];
@@ -15,14 +17,18 @@ export default function OpportunityDetail() {
   const { id } = useParams();
   const [data, setData] = useState<OpportunityDetailData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [addingMilestone, setAddingMilestone] = useState(false);
 
-  useEffect(() => {
+  function load() {
     if (!id) return;
     api
       .get<OpportunityDetailData>(`/opportunities/${id}`)
       .then(setData)
       .catch((e) => setError(e.message));
-  }, [id]);
+  }
+
+  useEffect(load, [id]);
 
   if (error) return <p className="error">{error}</p>;
   if (!data) return <p className="muted">Loading…</p>;
@@ -31,8 +37,20 @@ export default function OpportunityDetail() {
     <div className="stack">
       <div className="page-header">
         <h1>{data.opportunityName}</h1>
-        <span className={`badge ${statusBadgeClass(data.status)}`}>{data.status ?? '—'}</span>
+        <div className="btn-row">
+          <button className="secondary" onClick={() => setEditing(true)}>Edit</button>
+          <span className={`badge ${statusBadgeClass(data.status)}`}>{choiceLabel(data.status)}</span>
+        </div>
       </div>
+
+      {editing && <OpportunityForm initial={data} onClose={() => setEditing(false)} onSaved={load} />}
+      {addingMilestone && (
+        <MilestoneForm
+          defaultOpportunityName={data.opportunityName}
+          onClose={() => setAddingMilestone(false)}
+          onSaved={load}
+        />
+      )}
 
       <div className="card">
         <div className="grid cols-3">
@@ -52,7 +70,10 @@ export default function OpportunityDetail() {
       </div>
 
       <div className="card">
-        <h2>Milestones</h2>
+        <div className="spread">
+          <h2>Milestones</h2>
+          <button className="secondary" onClick={() => setAddingMilestone(true)}>+ Add milestone</button>
+        </div>
         <table>
           <thead>
             <tr>

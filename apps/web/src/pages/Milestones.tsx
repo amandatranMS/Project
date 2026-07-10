@@ -4,11 +4,14 @@ import { MILESTONE_STATUSES, choiceLabel } from '@msx/shared';
 import { api, type Milestone } from '../api/client';
 import { statusBadgeClass, formatDate } from '../ui';
 import FilterSelect from '../components/FilterSelect';
+import MilestoneForm from '../components/form/MilestoneForm';
 
 export default function Milestones() {
   const [items, setItems] = useState<Milestone[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [milestoneStatus, setMilestoneStatus] = useState('');
+  const [showForm, setShowForm] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -18,13 +21,18 @@ export default function Milestones() {
       .get<Milestone[]>(`/milestones${qs ? `?${qs}` : ''}`)
       .then(setItems)
       .catch((e) => setError(e.message));
-  }, [milestoneStatus]);
+  }, [milestoneStatus, refreshKey]);
 
   return (
     <div>
       <div className="page-header">
         <h1>Milestones</h1>
+        <button onClick={() => setShowForm(true)}>+ New milestone</button>
       </div>
+
+      {showForm && (
+        <MilestoneForm onClose={() => setShowForm(false)} onSaved={() => setRefreshKey((k) => k + 1)} />
+      )}
 
       <div className="filters">
         <FilterSelect label="Milestone Status" value={milestoneStatus} options={MILESTONE_STATUSES} onChange={setMilestoneStatus} allLabel="All statuses" />

@@ -5,4 +5,6 @@ const router = Router();
 router.get('/', c.list);
 router.get('/:id', c.get);
 router.get('/:id/context', c.context);
+router.post('/', c.create);
+router.patch('/:id', c.update);
 export default router;

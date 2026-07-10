@@ -4,6 +4,7 @@ import { SOLUTION_AREAS, SALES_STAGES, OPPORTUNITY_STATUSES, choiceLabel } from 
 import { api, type Opportunity } from '../api/client';
 import { statusBadgeClass, formatCurrency, formatDate } from '../ui';
 import FilterSelect from '../components/FilterSelect';
+import OpportunityForm from '../components/form/OpportunityForm';
 
 export default function Opportunities() {
   const [items, setItems] = useState<Opportunity[]>([]);
@@ -11,6 +12,8 @@ export default function Opportunities() {
   const [solutionArea, setSolutionArea] = useState('');
   const [salesStage, setSalesStage] = useState('');
   const [status, setStatus] = useState('');
+  const [showForm, setShowForm] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -22,13 +25,18 @@ export default function Opportunities() {
       .get<Opportunity[]>(`/opportunities${qs ? `?${qs}` : ''}`)
       .then(setItems)
       .catch((e) => setError(e.message));
-  }, [solutionArea, salesStage, status]);
+  }, [solutionArea, salesStage, status, refreshKey]);
 
   return (
     <div>
       <div className="page-header">
         <h1>Opportunities</h1>
+        <button onClick={() => setShowForm(true)}>+ New opportunity</button>
       </div>
+
+      {showForm && (
+        <OpportunityForm onClose={() => setShowForm(false)} onSaved={() => setRefreshKey((k) => k + 1)} />
+      )}
 
       <div className="filters">
         <FilterSelect label="Solution Area" value={solutionArea} options={SOLUTION_AREAS} onChange={setSolutionArea} allLabel="All solution areas" />
