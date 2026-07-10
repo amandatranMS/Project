@@ -8,7 +8,7 @@
   "servers": [
     {
       "url": "http://localhost:4000",
-      "description": "Local mock server (replace with your public tunnel URL when connecting an agent)"
+      "description": "Local mock server (replace with your public tunnel URL when connecting an agent, then run `npm run openapi:json`)"
     }
   ],
   "security": [
