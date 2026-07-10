@@ -1,25 +1,33 @@
 // Thin fetch wrapper for the MSX Milestone Assistant API.
 // Requests go through the Vite dev proxy to the Express backend.
+// Every endpoint returns { success, data } | { success, error }; we unwrap it here.
 
 const BASE = '/api';
+
+interface Envelope<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+}
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     headers: { 'Content-Type': 'application/json' },
     ...options,
   });
-  if (!res.ok) {
-    let message = `Request failed (${res.status})`;
-    try {
-      const body = await res.json();
-      if (body?.error) message = body.error;
-    } catch {
-      /* ignore */
-    }
-    throw new Error(message);
-  }
   if (res.status === 204) return undefined as T;
-  return res.json() as Promise<T>;
+
+  let body: Envelope<T> | null = null;
+  try {
+    body = (await res.json()) as Envelope<T>;
+  } catch {
+    /* non-JSON response */
+  }
+
+  if (!res.ok || !body || body.success === false) {
+    throw new Error(body?.error ?? `Request failed (${res.status})`);
+  }
+  return body.data as T;
 }
 
 export const api = {

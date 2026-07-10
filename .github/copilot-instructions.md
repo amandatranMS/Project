@@ -30,20 +30,32 @@ React + Express + SQLite + Prisma app.
 - Blank/"---" → null; Yes/No → boolean; dates accept ISO, "YYYY-MM-DD HH:mm", or Excel serial.
 
 ## Agent governance (must be preserved)
-- Agents may read context, create recommendations, and submit approval requests.
-- Agents may create a real milestone **only** by fulfilling an **Approved**
-  approval request (`POST /api/agent/approvals/:id/fulfill`). Fulfilling a
-  non-approved request must return 403 and be audited as `Denied`.
-- **Every** agent action must be written to `AgentActionAuditLog` via
+- Agents may read context (`GET /api/opportunities/:id/context`), create
+  recommendations, and submit approval requests.
+- A real milestone is created **only** when a human decides an approval request via
+  `PATCH /api/approval-requests/:id/approve`. Approving performs the mock milestone
+  writeback and audits it as `CreateMilestone`. `reject` / `needs-changes` never
+  create a milestone.
+- **Every** governed action is written to `AgentActionAuditLog` via
   `recordAgentAction` (`apps/api/src/lib/audit.ts`).
+
+## Backend architecture (layered)
+- Entry: `apps/api/src/server.ts` → `app.ts` (registers `/api` routes + error handler).
+- Layers: `routes/*.routes.ts` → `controllers/*.controller.ts` → `services/*.service.ts`.
+- Shared helpers in `apps/api/src/lib/`: `prisma`, `responses` (sendOk/asyncHandler),
+  `httpError`, `errorHandler`, `audit`, `ids` (genId), `connect` (Prisma connect helpers).
+- Zod schemas live in `apps/api/src/validators/schemas.ts`.
+- **Every response uses the envelope**: success `{ "success": true, "data": ... }`,
+  error `{ "success": false, "error": "plain message" }`. The web client unwraps `.data`.
 
 ## Tech + conventions
 - Frontend: React + TypeScript (Vite) in `apps/web`.
 - Backend: Node + Express + TypeScript in `apps/api`, ESM (`"type": "module"`),
   NodeNext resolution — local imports use `.js` extensions.
 - ORM: Prisma, schema at `prisma/schema.prisma`, SQLite (`prisma/dev.db`).
-- Validation: Zod in `apps/api/src/schemas.ts`. SQLite has no enums, so status/type
-  fields are Strings; allowed values live in `packages/shared` and are enforced by Zod.
+- Validation: Zod in `apps/api/src/validators/schemas.ts`. SQLite has no enums, so
+  status/type fields are Strings; the controlled choice lists live in
+  `packages/shared` and are enforced by Zod `z.enum`.
 - Keep the REST API and `openapi/msx-milestone-assistant.openapi.yaml` in sync.
 
 ## Commands
@@ -55,6 +67,8 @@ React + Express + SQLite + Prisma app.
 - After changing `schema.prisma`, run `npm run prisma:generate` and `npm run db:push`.
 
 ## When adding features
-- Add a Zod schema, a route under `apps/api/src/routes`, wire it in
-  `apps/api/src/app.ts`, then update the OpenAPI file and (if user-facing) the web UI.
+- Add a Zod schema in `validators/schemas.ts`, then a `service`, `controller`, and
+  `*.routes.ts`, and register it in `apps/api/src/routes/index.ts`. Return data via
+  `sendOk` so the response envelope stays consistent. Then update the OpenAPI file
+  and (if user-facing) the web UI.
 - Preserve the mock banner and the human-in-the-loop approval gate.

@@ -1,32 +1,34 @@
-import { prisma } from '../prisma.js';
+import { prisma } from './prisma.js';
+import { genId } from './ids.js';
 
 /**
- * Records an agent action in the Agent Action Audit Log for governance.
- * Every agent-facing write path must call this so nothing an agent does is silent.
+ * Records an agent/system action in the Agent Action Audit Log for governance.
+ * Every governed write path (approvals, milestone writeback) calls this so no
+ * action is silent.
  */
 export async function recordAgentAction(params: {
   agentName: string;
   actionType: string;
+  actionName?: string;
   actor?: string;
-  opportunityId?: string;
-  relatedMilestoneId?: string;
-  relatedRecommendationId?: string;
+  opportunityId?: string | null;
+  relatedMilestoneId?: string | null;
+  relatedRecommendationId?: string | null;
   inputSummary?: string;
   outputSummary?: string;
   securityEvent?: boolean;
-  result?: 'Success' | 'Blocked' | 'Failed';
-  actionName?: string;
+  result?: 'Success' | 'Failed' | 'Blocked';
 }) {
   return prisma.agentActionAuditLog.create({
     data: {
-      auditBusinessId: `AU-RUNTIME-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      auditBusinessId: genId('AU'),
       actionName: params.actionName ?? params.actionType,
       agentName: params.agentName,
       actionType: params.actionType,
       actor: params.actor,
-      opportunityId: params.opportunityId,
-      relatedMilestoneId: params.relatedMilestoneId,
-      relatedRecommendationId: params.relatedRecommendationId,
+      opportunityId: params.opportunityId ?? undefined,
+      relatedMilestoneId: params.relatedMilestoneId ?? undefined,
+      relatedRecommendationId: params.relatedRecommendationId ?? undefined,
       inputSummary: params.inputSummary,
       outputSummary: params.outputSummary,
       securityEvent: params.securityEvent ?? false,

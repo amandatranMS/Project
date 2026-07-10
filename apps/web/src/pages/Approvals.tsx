@@ -11,35 +11,24 @@ export default function Approvals() {
 
   function load() {
     api
-      .get<ApprovalRequest[]>('/agent/approvals')
+      .get<ApprovalRequest[]>('/approval-requests')
       .then(setItems)
       .catch((e) => setError(e.message));
   }
 
   useEffect(load, []);
 
-  async function decide(id: string, decision: 'Approved' | 'Rejected') {
+  async function decide(id: string, action: 'approve' | 'reject' | 'needs-changes') {
     setBusyId(id);
     setMessage(null);
     try {
-      await api.post(`/agent/approvals/${id}/decision`, { decision, reviewedBy: 'Demo Approver' });
-      load();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  async function fulfill(id: string) {
-    setBusyId(id);
-    setMessage(null);
-    try {
-      const created = await api.post<{ milestoneBusinessId: string; milestoneName: string }>(
-        `/agent/approvals/${id}/fulfill`,
-        { agentName: 'MilestoneAdvisor' },
+      const result = await api.patch<{ milestone?: { milestoneBusinessId: string; milestoneName: string } }>(
+        `/approval-requests/${id}/${action}`,
+        { reviewedBy: 'Demo Approver' },
       );
-      setMessage(`Milestone created after approval: ${created.milestoneBusinessId} — ${created.milestoneName}`);
+      if (action === 'approve' && result?.milestone) {
+        setMessage(`Approved — milestone created: ${result.milestone.milestoneBusinessId} — ${result.milestone.milestoneName}`);
+      }
       load();
     } catch (e) {
       setError((e as Error).message);
@@ -54,7 +43,7 @@ export default function Approvals() {
         <h1>Approval Requests</h1>
       </div>
       <p className="muted">
-        Human-in-the-loop gate. Agents can only create real milestone records after an approval is granted here.
+        Human-in-the-loop gate. Approving a request creates the real milestone and records it in the audit log.
       </p>
       {error && <p className="error">{error}</p>}
       {message && <p style={{ color: 'var(--success)' }}>{message}</p>}
@@ -81,19 +70,15 @@ export default function Approvals() {
               <td>{a.mockWritebackStatus ?? '—'}</td>
               <td>
                 <div className="btn-row">
-                  {a.approvalStatus === 'Pending' && (
+                  {(a.approvalStatus === 'Pending' || a.approvalStatus === 'Needs Changes') && (
                     <>
-                      <button disabled={busyId === a.id} onClick={() => decide(a.id, 'Approved')}>Approve</button>
-                      <button className="danger" disabled={busyId === a.id} onClick={() => decide(a.id, 'Rejected')}>Reject</button>
+                      <button disabled={busyId === a.id} onClick={() => decide(a.id, 'approve')}>Approve</button>
+                      <button className="danger" disabled={busyId === a.id} onClick={() => decide(a.id, 'reject')}>Reject</button>
+                      <button className="secondary" disabled={busyId === a.id} onClick={() => decide(a.id, 'needs-changes')}>Needs changes</button>
                     </>
                   )}
-                  {a.approvalStatus === 'Approved' && a.mockWritebackStatus !== 'Completed' && (
-                    <button className="secondary" disabled={busyId === a.id} onClick={() => fulfill(a.id)}>
-                      Create milestone
-                    </button>
-                  )}
+                  {a.approvalStatus === 'Approved' && <span className="muted">Milestone created</span>}
                   {a.approvalStatus === 'Rejected' && <span className="muted">Rejected</span>}
-                  {a.mockWritebackStatus === 'Completed' && <span className="muted">Fulfilled</span>}
                 </div>
               </td>
             </tr>

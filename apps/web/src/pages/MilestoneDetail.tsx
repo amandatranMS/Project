@@ -28,10 +28,15 @@ export default function MilestoneDetail() {
   useEffect(load, [id]);
 
   async function changeStatus(newStatus: string) {
-    if (!id) return;
+    if (!data) return;
     setBusy(true);
     try {
-      await api.post(`/milestones/${id}/status`, { newStatus, changedBy: 'Demo User', reason: 'Manual update from UI' });
+      await api.post('/status-history', {
+        milestoneBusinessId: data.milestoneBusinessId,
+        newStatus,
+        changedBy: 'Demo User',
+        reason: 'Manual update from UI',
+      });
       load();
     } catch (e) {
       setError((e as Error).message);
