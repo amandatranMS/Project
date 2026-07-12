@@ -1,87 +1,27 @@
 import { getAiClient } from '../../lib/aiClient.js';
-import { runToolLoop, type ChatMessage, type Tool } from './toolLoop.js';
+import { runToolLoop, type ChatMessage } from './toolLoop.js';
 import { milestoneTools, dashboardTools, opportunityTools } from './msxTools.js';
 
-const CONFIRM_RULE =
-  ' Before creating, updating, or deleting anything, restate the exact action and values and ask ' +
-  'the user to confirm; only proceed after they clearly agree. Never invent data — rely on your tools.';
+// Single flat agent: the assistant calls the MSX tools directly instead of
+// delegating to nested specialist sub-agents. This removes an entire layer of
+// sequential model round-trips, which roughly halves response latency for
+// multi-step actions like creating a milestone.
+const ASSISTANT_INSTRUCTIONS =
+  'You are the assistant for a SYNTHETIC MOCK MSX Milestone workspace (this is NOT real MSX, ' +
+  'Dataverse, or customer data). You can read and manage milestones and opportunities and read ' +
+  'dashboard metrics using the tools available to you. Analyze the user\'s request and call the ' +
+  'most relevant tool(s) directly; you may call several in turn (e.g. look up an opportunity, then ' +
+  'create a milestone under it). Creating a milestone requires an existing opportunity name — if ' +
+  'unsure, say so. Report ids and names clearly and combine results into one clear, plain-language ' +
+  'answer. Never invent records — rely on your tools. Before creating, updating, or deleting ' +
+  'anything, restate the exact action and values and ask the user to confirm; only proceed after ' +
+  'they clearly agree.';
 
-interface SpecialistSpec {
-  name: string;
-  description: string;
-  instructions: string;
-  tools: Tool[];
-}
+// All MSX capabilities exposed as first-class tools on the single agent.
+const ALL_TOOLS = [...milestoneTools, ...dashboardTools, ...opportunityTools];
 
-const SPECIALISTS: SpecialistSpec[] = [
-  {
-    name: 'milestone_specialist',
-    description: 'Handles milestones: list, look up, create, update, or delete milestones.',
-    instructions:
-      'You are the Milestone specialist for a SYNTHETIC MOCK MSX workspace. Use your tools to read ' +
-      'and modify milestones. Creating a milestone requires an existing opportunity name — if unsure, ' +
-      'say so. Report ids and names clearly.' + CONFIRM_RULE,
-    tools: milestoneTools,
-  },
-  {
-    name: 'dashboard_specialist',
-    description: 'Answers questions about aggregate metrics and pipeline health.',
-    instructions:
-      'You are the Dashboard specialist for a SYNTHETIC MOCK MSX workspace. Use get_dashboard_summary ' +
-      'to answer questions about counts (active opportunities, at-risk/blocked milestones, pending ' +
-      'approvals) and pipeline value. Summarize the numbers plainly.',
-    tools: dashboardTools,
-  },
-  {
-    name: 'opportunity_specialist',
-    description: 'Handles opportunities: list, look up, or create opportunities.',
-    instructions:
-      'You are the Opportunity specialist for a SYNTHETIC MOCK MSX workspace. Use your tools to read ' +
-      'and create opportunities. Report ids and names clearly.' + CONFIRM_RULE,
-    tools: opportunityTools,
-  },
-];
-
-const ORCHESTRATOR_INSTRUCTIONS =
-  'You are the main assistant for a SYNTHETIC MOCK MSX Milestone workspace (this is NOT real MSX, ' +
-  'Dataverse, or customer data). You coordinate a team of specialist agents, each exposed to you as ' +
-  'a tool. Analyze the user\'s request and delegate to the most relevant specialist(s) by calling ' +
-  'their ask_* tool with a clear, self-contained instruction. You may call several in turn (e.g. look ' +
-  'up an opportunity, then create a milestone under it). Combine their results into one clear, ' +
-  'plain-language answer. Never invent records; rely on the specialists. For any action that creates, ' +
-  'updates, or deletes data, make sure the user has confirmed before it happens.';
-
-/** Wraps each specialist as a single tool the orchestrator can call. */
-function buildSpecialistTools(model: string): Tool[] {
-  const { client } = getAiClient();
-  return SPECIALISTS.map((spec) => ({
-    name: `ask_${spec.name}`,
-    description: spec.description,
-    parameters: {
-      type: 'object',
-      properties: {
-        request: {
-          type: 'string',
-          description: 'A clear, self-contained instruction or question for this specialist.',
-        },
-      },
-      required: ['request'],
-    },
-    run: (a) =>
-      runToolLoop(
-        client,
-        model,
-        spec.instructions,
-        [{ role: 'user', content: String(a.request ?? '') }],
-        spec.tools,
-      ),
-  }));
-}
-
-/** Runs one orchestrator turn over the supplied conversation history. */
+/** Runs one assistant turn over the supplied conversation history. */
 export async function runOrchestrator(messages: ChatMessage[]): Promise<string> {
   const { client, deployment } = getAiClient();
-  const roster = SPECIALISTS.map((s) => `- ask_${s.name}: ${s.description}`).join('\n');
-  const system = `${ORCHESTRATOR_INSTRUCTIONS}\n\nYour specialist team:\n${roster}`;
-  return runToolLoop(client, deployment, system, messages, buildSpecialistTools(deployment));
+  return runToolLoop(client, deployment, ASSISTANT_INSTRUCTIONS, messages, ALL_TOOLS);
 }
