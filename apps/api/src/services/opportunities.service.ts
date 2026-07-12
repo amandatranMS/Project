@@ -30,8 +30,9 @@ export const opportunitiesService = {
   },
 
   get(id: string) {
-    return prisma.opportunity.findUnique({
-      where: { id },
+    // Accept either the internal id or the business id (e.g. "OPP-002").
+    return prisma.opportunity.findFirst({
+      where: { OR: [{ id }, { opportunityBusinessId: id }] },
       include: {
         milestones: { orderBy: { milestoneBusinessId: 'asc' } },
         dealTeamMembers: true,
@@ -43,7 +44,11 @@ export const opportunitiesService = {
 
   /** Full 360° context: opportunity plus every related record. */
   context(id: string) {
-    return prisma.opportunity.findUnique({ where: { id }, include: childInclude });
+    // Accept either the internal id or the business id (e.g. "OPP-002").
+    return prisma.opportunity.findFirst({
+      where: { OR: [{ id }, { opportunityBusinessId: id }] },
+      include: childInclude,
+    });
   },
 
   async create(input: CreateInput) {
