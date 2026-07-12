@@ -130,7 +130,9 @@ export interface AuditLog {
   actor?: string | null;
   result?: string | null;
   securityEvent?: boolean | null;
+  inputSummary?: string | null;
   outputSummary?: string | null;
+  conversation?: string | null;
   timestamp?: string | null;
   createdAt: string;
 }
