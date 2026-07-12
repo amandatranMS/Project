@@ -59,10 +59,26 @@ export const milestonesService = {
     const existing = await prisma.opportunityMilestone.findUnique({ where: { id } });
     if (!existing) throw new HttpError(404, 'Milestone not found.');
     const { estDate, ...rest } = input;
-    return prisma.opportunityMilestone.update({
+    const milestone = await prisma.opportunityMilestone.update({
       where: { id },
       data: { ...rest, estDate: estDate ? new Date(estDate) : undefined },
     });
+
+    const changedFields = Object.keys(input).filter(
+      (k) => (input as Record<string, unknown>)[k] !== undefined,
+    );
+    await recordAgentAction({
+      agentName: input.createdBy ?? 'system',
+      actionType: 'Update',
+      actionName: 'Milestone updated',
+      opportunityId: existing.opportunityId,
+      relatedMilestoneId: milestone.id,
+      inputSummary: `Updated ${existing.milestoneBusinessId}${
+        changedFields.length ? ` (fields: ${changedFields.join(', ')})` : ''
+      }`,
+    });
+
+    return milestone;
   },
 
   /** Deletes a milestone (status history cascades; other links are set to null). */
