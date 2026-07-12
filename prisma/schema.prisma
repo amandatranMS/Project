@@ -313,6 +313,11 @@ model AgentActionAuditLog {
   securityEvent Boolean?
   result        String?
 
+  // JSON transcript of the chat turn (prompts + answers) that produced this
+  // action, when the action originated from the in-app assistant. Null for
+  // direct UI/API actions.
+  conversation String?
+
   createdAt DateTime @default(now())
 
   @@index([actionType])
