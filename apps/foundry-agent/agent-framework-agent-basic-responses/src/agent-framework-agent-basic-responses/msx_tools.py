@@ -159,6 +159,18 @@ _CONFIRM_RULE = (
     "Never invent data — rely on your tools."
 )
 
+# When creating a milestone, these fields are optional. Ask about any that are
+# missing exactly once, then respect the user's answer (including "leave empty").
+_MILESTONE_EMPTY_FIELDS_RULE = (
+    " When creating a milestone, the optional fields are milestoneStatus, "
+    "milestoneCategory, owner, and riskDescription. If the user has not provided one "
+    "or more of these, ask the user ONE time whether they'd like to fill in the "
+    "missing field(s), listing exactly which are empty. If the user provides values, "
+    "use them; if the user says to leave them empty (or declines), proceed with "
+    "creating the milestone and leave those fields empty. Do not ask about the same "
+    "empty fields more than once."
+)
+
 
 def build_subagents(client) -> list[Agent]:
     """Create the specialist sub-agents, each owning a focused set of MSX tools."""
@@ -170,7 +182,8 @@ def build_subagents(client) -> list[Agent]:
             instructions=(
                 "You are the Milestone specialist for a SYNTHETIC MOCK MSX workspace. Use your "
                 "tools to read and modify milestones. Creating a milestone requires an existing "
-                "opportunity name — if unsure, say so. Report ids and names clearly." + _CONFIRM_RULE
+                "opportunity name — if unsure, say so. Report ids and names clearly."
+                + _MILESTONE_EMPTY_FIELDS_RULE + _CONFIRM_RULE
             ),
             tools=[list_milestones, get_milestone, create_milestone, update_milestone, delete_milestone],
         ),

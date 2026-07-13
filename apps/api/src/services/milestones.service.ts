@@ -19,8 +19,8 @@ export const milestonesService = {
   },
 
   get(id: string) {
-    return prisma.opportunityMilestone.findUnique({
-      where: { id },
+    return prisma.opportunityMilestone.findFirst({
+      where: { OR: [{ id }, { milestoneBusinessId: id }] },
       include: {
         opportunity: true,
         statusHistories: { orderBy: { statusDate: 'desc' } },
@@ -57,11 +57,13 @@ export const milestonesService = {
   },
 
   async update(id: string, input: UpdateInput) {
-    const existing = await prisma.opportunityMilestone.findUnique({ where: { id } });
+    const existing = await prisma.opportunityMilestone.findFirst({
+      where: { OR: [{ id }, { milestoneBusinessId: id }] },
+    });
     if (!existing) throw new HttpError(404, 'Milestone not found.');
     const { estDate, ...rest } = input;
     const milestone = await prisma.opportunityMilestone.update({
-      where: { id },
+      where: { id: existing.id },
       data: { ...rest, estDate: estDate ? new Date(estDate) : undefined },
       include: { opportunity: { select: { id: true, opportunityName: true, customerName: true } } },
     });
@@ -85,10 +87,12 @@ export const milestonesService = {
 
   /** Deletes a milestone (status history cascades; other links are set to null). */
   async remove(id: string) {
-    const existing = await prisma.opportunityMilestone.findUnique({ where: { id } });
+    const existing = await prisma.opportunityMilestone.findFirst({
+      where: { OR: [{ id }, { milestoneBusinessId: id }] },
+    });
     if (!existing) throw new HttpError(404, 'Milestone not found.');
 
-    await prisma.opportunityMilestone.delete({ where: { id } });
+    await prisma.opportunityMilestone.delete({ where: { id: existing.id } });
 
     await recordAgentAction({
       agentName: 'system',

@@ -13,6 +13,9 @@ RUN apt-get update \
 
 # Install dependencies (npm workspaces). node_modules is .dockerignore'd so the
 # Linux-native Prisma engine and binaries are installed fresh in the image.
+# CACHEBUST forces the source COPY (and everything after) to rebuild when passed
+# a new value via --build-arg, avoiding stale cached source layers.
+ARG CACHEBUST=0
 COPY . .
 RUN npm ci
 
@@ -21,7 +24,8 @@ RUN npx prisma generate
 
 ENV NODE_ENV=production
 ENV PORT=4000
-ENV DATABASE_URL=file:/data/dev.db
+# DATABASE_URL is supplied at runtime by the Container App (Postgres connection
+# string, stored as the "database-url" secret).
 
 EXPOSE 4000
 

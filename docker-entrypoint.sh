@@ -1,10 +1,8 @@
 #!/bin/sh
-# Container entrypoint: ensure the SQLite schema exists on the mounted volume,
+# Container entrypoint: ensure the Postgres schema exists (prisma db push),
 # seed it from the workbook only when empty (so runtime data survives restarts),
-# then start the API.
+# then start the API. DATABASE_URL points at the Azure Postgres Flexible Server.
 set -e
-
-mkdir -p /data
 
 echo "[entrypoint] Applying database schema (prisma db push)..."
 npx prisma db push --skip-generate

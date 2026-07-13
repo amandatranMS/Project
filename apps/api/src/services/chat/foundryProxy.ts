@@ -193,10 +193,15 @@ export async function runFoundryAgent(messages: ChatMessage[], onToken?: TokenSi
     const retryable = result.status >= 500 || result.status === 429;
     lastError = `Foundry agent responded ${result.status}: ${result.text.slice(0, 300)}`;
     if (!retryable || attempt === MAX_ATTEMPTS) {
+      const hint =
+        result.status === 401 || result.status === 403
+          ? 'This is a permissions problem: the API identity is not authorized to invoke the Foundry hosted agent. Check its Azure role assignments (e.g. Cognitive Services User / Foundry User).'
+          : result.status === 404
+            ? 'The Foundry agent endpoint or agent id could not be found — check FOUNDRY_AGENT_ENDPOINT.'
+            : 'This is usually a transient cloud issue — try again, or switch to the in-app engine.';
       throw new HttpError(
         502,
-        `The Foundry hosted agent returned an error (${result.status}) after ${attempt} attempt(s). ` +
-          'This is usually a transient cloud issue — try again, or switch to the in-app engine.',
+        `The Foundry hosted agent returned an error (${result.status}) after ${attempt} attempt(s). ${hint}`,
       );
     }
     await sleep(600 * 2 ** (attempt - 1)); // 600ms, 1200ms, …
