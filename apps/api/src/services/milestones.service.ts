@@ -43,6 +43,7 @@ export const milestonesService = {
         estDate: estDate ? new Date(estDate) : null,
         opportunity: { connect: { opportunityName } },
       },
+      include: { opportunity: { select: { id: true, opportunityName: true, customerName: true } } },
     });
     await recordAgentAction({
       agentName: input.createdBy ?? 'system',
@@ -62,6 +63,7 @@ export const milestonesService = {
     const milestone = await prisma.opportunityMilestone.update({
       where: { id },
       data: { ...rest, estDate: estDate ? new Date(estDate) : undefined },
+      include: { opportunity: { select: { id: true, opportunityName: true, customerName: true } } },
     });
 
     const changedFields = Object.keys(input).filter(

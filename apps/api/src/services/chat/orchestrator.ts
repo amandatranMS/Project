@@ -1,5 +1,5 @@
 import { getAiClient } from '../../lib/aiClient.js';
-import { runToolLoop, type ChatMessage } from './toolLoop.js';
+import { runToolLoop, type ChatMessage, type TokenSink } from './toolLoop.js';
 import { milestoneTools, dashboardTools, opportunityTools } from './msxTools.js';
 
 // Single flat agent: the assistant calls the MSX tools directly instead of
@@ -21,7 +21,7 @@ const ASSISTANT_INSTRUCTIONS =
 const ALL_TOOLS = [...milestoneTools, ...dashboardTools, ...opportunityTools];
 
 /** Runs one assistant turn over the supplied conversation history. */
-export async function runOrchestrator(messages: ChatMessage[]): Promise<string> {
+export async function runOrchestrator(messages: ChatMessage[], onToken?: TokenSink): Promise<string> {
   const { client, deployment } = getAiClient();
-  return runToolLoop(client, deployment, ASSISTANT_INSTRUCTIONS, messages, ALL_TOOLS);
+  return runToolLoop(client, deployment, ASSISTANT_INSTRUCTIONS, messages, ALL_TOOLS, 8, onToken);
 }

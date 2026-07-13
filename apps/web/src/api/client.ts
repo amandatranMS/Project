@@ -55,6 +55,68 @@ export function sendChat(messages: ChatTurn[], engine: ChatEngine) {
   return api.post<ChatResult>('/chat', { messages, engine });
 }
 
+/**
+ * Streaming variant: posts the transcript and invokes `onDelta` with each text
+ * chunk as it arrives (live "typing"). Resolves with the full reply, or throws
+ * with the server's error message.
+ */
+export async function sendChatStream(
+  messages: ChatTurn[],
+  engine: ChatEngine,
+  onDelta: (delta: string) => void,
+): Promise<string> {
+  const res = await fetch(`${BASE}/chat/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messages, engine }),
+  });
+  if (!res.ok || !res.body) {
+    let message = `Request failed (${res.status})`;
+    try {
+      const body = (await res.json()) as Envelope<unknown>;
+      if (body?.error) message = body.error;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(message);
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let full = '';
+
+  const handleLine = (line: string) => {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+    let evt: { delta?: string; done?: boolean; error?: string };
+    try {
+      evt = JSON.parse(trimmed);
+    } catch {
+      return;
+    }
+    if (evt.error) throw new Error(evt.error);
+    if (typeof evt.delta === 'string') {
+      full += evt.delta;
+      onDelta(evt.delta);
+    }
+  };
+
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let idx: number;
+    while ((idx = buffer.indexOf('\n')) >= 0) {
+      const line = buffer.slice(0, idx);
+      buffer = buffer.slice(idx + 1);
+      handleLine(line);
+    }
+  }
+  if (buffer) handleLine(buffer);
+  return full;
+}
+
 // ---- Response shapes (subset of Prisma models / workbook columns) ----
 export interface Opportunity {
   id: string;
