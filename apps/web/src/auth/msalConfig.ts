@@ -45,3 +45,17 @@ export const loginRequest = {
 export const apiTokenRequest = {
   scopes: apiScope ? [apiScope] : ['User.Read'],
 };
+
+/**
+ * Delegated Microsoft Graph scopes the user consents to (once) so the API can
+ * act on their behalf via On-Behalf-Of. These are all user-consentable — no
+ * admin needed. (Org hierarchy also needs User.Read.All, which IS admin-only.)
+ */
+export const graphConsentRequest = {
+  scopes: [
+    'User.Read',
+    'Mail.Read',
+    'Mail.Send',
+    'Chat.Read',
+  ],
+};

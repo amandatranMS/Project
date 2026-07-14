@@ -7,6 +7,7 @@ import Milestones from './pages/Milestones';
 import MilestoneDetail from './pages/MilestoneDetail';
 import Approvals from './pages/Approvals';
 import AuditLog from './pages/AuditLog';
+import Microsoft365 from './pages/Microsoft365';
 import ChatWidget from './components/ChatWidget';
 import { AuthMenu } from './auth/AuthMenu';
 import { authEnabled } from './auth/msalConfig';
@@ -24,6 +25,7 @@ const navItems: { to: string; label: string; end?: boolean; icon: ReactNode }[] 
   { to: '/milestones', label: 'Milestones', icon: icon(<><path d="M5 21V4" /><path d="M5 4h11l-2 3 2 3H5" /></>) },
   { to: '/approvals', label: 'Approvals', icon: icon(<><path d="M9 12l2 2 4-4" /><circle cx="12" cy="12" r="9" /></>) },
   { to: '/audit', label: 'Agent Audit Log', icon: icon(<><rect x="4" y="3" width="16" height="18" rx="2" /><path d="M8 8h8M8 12h8M8 16h5" /></>) },
+  { to: '/m365', label: 'Microsoft 365', icon: icon(<><rect x="3" y="3" width="8" height="8" rx="1" /><rect x="13" y="3" width="8" height="8" rx="1" /><rect x="3" y="13" width="8" height="8" rx="1" /><rect x="13" y="13" width="8" height="8" rx="1" /></>) },
 ];
 
 export default function App() {
@@ -77,6 +79,7 @@ export default function App() {
               <Route path="/milestones/:id" element={<MilestoneDetail />} />
               <Route path="/approvals" element={<Approvals />} />
               <Route path="/audit" element={<AuditLog />} />
+              <Route path="/m365" element={<Microsoft365 />} />
             </Routes>
           </div>
         </main>
