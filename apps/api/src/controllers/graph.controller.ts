@@ -4,7 +4,7 @@ import { HttpError } from '../lib/httpError.js';
 import type { AuthUser } from '../lib/entraAuth.js';
 import { getUserSession } from '../lib/userSessions.js';
 import { graphService } from '../services/graph.service.js';
-import { sendMailSchema } from '../validators/schemas.js';
+import { sendMailSchema, notifyTeamsSchema } from '../validators/schemas.js';
 
 /** Ensure the caller is a signed-in Microsoft user (not the service key). */
 function requireUser(req: Request) {
@@ -61,5 +61,11 @@ export const graphController = {
     const user = resolveActingUser(req);
     const input = sendMailSchema.parse(req.body);
     sendOk(res, await graphService.sendMail(user, input));
+  }),
+
+  notifyTeams: asyncHandler(async (req, res) => {
+    const user = resolveActingUser(req);
+    const input = notifyTeamsSchema.parse(req.body);
+    sendOk(res, await graphService.notifyTeams(user, input));
   }),
 };

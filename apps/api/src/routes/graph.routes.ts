@@ -11,4 +11,5 @@ router.get('/hierarchy', c.hierarchy);
 router.get('/outlook/messages', c.messages);
 router.get('/teams/chats', c.chats);
 router.post('/outlook/send', c.sendMail);
+router.post('/teams/notify', c.notifyTeams);
 export default router;

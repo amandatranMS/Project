@@ -41,6 +41,11 @@ interface GraphChat {
 
 const USER_SELECT = 'id,displayName,mail,userPrincipalName,jobTitle,department';
 
+/** 'live' delivers via Microsoft Graph; anything else simulates (no admin needed). */
+function sendMode(): 'live' | 'simulate' {
+  return process.env.GRAPH_SEND_MODE === 'live' ? 'live' : 'simulate';
+}
+
 function assertion(user: AuthUser): string {
   if (user.kind !== 'user' || !user.bearer) {
     throw new HttpError(401, 'A signed-in Microsoft user is required for this action.');
@@ -153,6 +158,8 @@ export const graphService = {
    * Send an Outlook email AS the signed-in user (delegated Mail.Send).
    * Confirm gate: without `confirm: true`, nothing is sent — we return a preview
    * so the agent must restate the email and get an explicit go-ahead first.
+   * Honors GRAPH_SEND_MODE: 'simulate' (default, no admin — records but does not
+   * deliver) or 'live' (real Graph send, needs admin-consented Mail.Send).
    */
   async sendMail(
     user: AuthUser,
@@ -164,27 +171,91 @@ export const graphService = {
       return {
         sent: false,
         requiresConfirmation: true,
+        mode: sendMode(),
         preview: { to: input.to, subject: input.subject, body: input.body },
         note: 'Not sent. Re-submit the same request with confirm=true to send this email as you.',
       };
     }
 
-    return audited(
+    const mode = sendMode();
+    return audited<{ sent: boolean; simulated: boolean; to: string; subject: string; note?: string }>(
       user,
       'SendOutlookMail',
-      `sendMail to=${input.to} subject="${input.subject}"`,
+      `sendMail to=${input.to} subject="${input.subject}" mode=${mode}`,
       async () => {
-        await graphPost(token, '/me/sendMail', {
-          message: {
-            subject: input.subject,
-            body: { contentType: 'Text', content: input.body },
-            toRecipients: [{ emailAddress: { address: input.to } }],
-          },
-          saveToSentItems: true,
-        });
+        if (mode === 'live') {
+          await graphPost(token, '/me/sendMail', {
+            message: {
+              subject: input.subject,
+              body: { contentType: 'Text', content: input.body },
+              toRecipients: [{ emailAddress: { address: input.to } }],
+            },
+            saveToSentItems: true,
+          });
+          return {
+            data: { sent: true, simulated: false, to: input.to, subject: input.subject },
+            outputSummary: `sent email to ${input.to}`,
+          };
+        }
+        // Simulate: record the action but don't deliver.
         return {
-          data: { sent: true, to: input.to, subject: input.subject },
-          outputSummary: `sent email to ${input.to}`,
+          data: {
+            sent: true,
+            simulated: true,
+            to: input.to,
+            subject: input.subject,
+            note: 'Simulated — not delivered. Set GRAPH_SEND_MODE=live (after admin consent) to send for real.',
+          },
+          outputSummary: `SIMULATED email to ${input.to} (not delivered)`,
+        };
+      },
+    );
+  },
+
+  /**
+   * Post a Teams notification. Confirm-gated like email. In 'simulate' mode
+   * (default) it records the action without delivering — no admin needed. 'live'
+   * Teams delivery is intentionally not wired: app-only Teams messaging needs
+   * Microsoft's protected-API approval + a Teams app, so live returns a clear
+   * "not configured" error rather than pretending.
+   */
+  async notifyTeams(
+    user: AuthUser,
+    input: { message: string; to?: string; confirm?: boolean },
+  ) {
+    assertion(user);
+
+    if (!input.confirm) {
+      return {
+        sent: false,
+        requiresConfirmation: true,
+        mode: sendMode(),
+        preview: { to: input.to ?? '(self)', message: input.message },
+        note: 'Not sent. Re-submit with confirm=true to post this Teams notification.',
+      };
+    }
+
+    const mode = sendMode();
+    return audited(
+      user,
+      'NotifyTeams',
+      `notifyTeams to=${input.to ?? '(self)'} mode=${mode}`,
+      async () => {
+        if (mode === 'live') {
+          throw new HttpError(
+            501,
+            'Live Teams delivery is not configured. App-only Teams messaging requires Microsoft protected-API approval and a Teams app. Use simulate mode, or complete that setup first.',
+          );
+        }
+        return {
+          data: {
+            sent: true,
+            simulated: true,
+            to: input.to ?? '(self)',
+            message: input.message,
+            note: 'Simulated Teams notification — not delivered.',
+          },
+          outputSummary: `SIMULATED Teams notification to ${input.to ?? '(self)'}`,
         };
       },
     );

@@ -18,6 +18,9 @@ export default function Microsoft365() {
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
 
+  const [teamsTo, setTeamsTo] = useState('');
+  const [teamsMsg, setTeamsMsg] = useState('');
+
   const run = async (label: string, fn: () => Promise<unknown>) => {
     setBusy(true);
     setOutput(`${label}…`);
@@ -31,18 +34,25 @@ export default function Microsoft365() {
     }
   };
 
-  const connect = () =>
-    run('Connect Microsoft 365 (consent)', async () => {
-      const result = await instance.acquireTokenPopup({
-        ...graphConsentRequest,
-        account: accounts[0],
-      });
-      return { consentedScopes: result.scopes };
-    });
+  const connect = () => {
+    // Full-page redirect (not popup): reliable in embedded/popup-blocked
+    // browsers. Returns to the app after consent; main.tsx handles the redirect.
+    setOutput('Redirecting to Microsoft for consent…');
+    void instance.acquireTokenRedirect({ ...graphConsentRequest, account: accounts[0] });
+  };
 
   const sendEmail = (confirm: boolean) =>
     run(confirm ? 'Send email (as me)' : 'Preview email', () =>
       api.post('/graph/outlook/send', { to, subject, body, confirm }),
+    );
+
+  const notifyTeams = (confirm: boolean) =>
+    run(confirm ? 'Send Teams notification' : 'Preview Teams notification', () =>
+      api.post('/graph/teams/notify', {
+        message: teamsMsg,
+        to: teamsTo || undefined,
+        confirm,
+      }),
     );
 
   return (
@@ -50,7 +60,9 @@ export default function Microsoft365() {
       <h2>Microsoft 365 (acts as you)</h2>
       <p className="muted">
         Real Microsoft Graph, on your behalf. Reads use your login; the org chart also
-        needs a one-time admin consent. Sending is gated: Preview first, then Send.
+        needs a one-time admin consent. Sending is gated: Preview first, then Send. Email
+        and Teams run in <strong>simulate</strong> mode by default (recorded &amp; audited,
+        not delivered) — switch to live delivery later once an admin consents.
       </p>
 
       <section className="m365-section">
@@ -90,6 +102,22 @@ export default function Microsoft365() {
             </button>
             <button className="btn btn-primary" disabled={busy || !to || !subject || !body} onClick={() => sendEmail(true)}>
               Send as me
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section className="m365-section">
+        <h3>4 · Notify a teammate on Teams</h3>
+        <div className="m365-form">
+          <input placeholder="To (email, optional)" value={teamsTo} onChange={(e) => setTeamsTo(e.target.value)} />
+          <textarea placeholder="Message" rows={3} value={teamsMsg} onChange={(e) => setTeamsMsg(e.target.value)} />
+          <div className="m365-actions">
+            <button className="btn" disabled={busy || !teamsMsg} onClick={() => notifyTeams(false)}>
+              Preview
+            </button>
+            <button className="btn btn-primary" disabled={busy || !teamsMsg} onClick={() => notifyTeams(true)}>
+              Send notification
             </button>
           </div>
         </div>

@@ -248,3 +248,9 @@ export const sendMailSchema = z.object({
   body: z.string().min(1),
   confirm: z.boolean().optional(),
 });
+
+export const notifyTeamsSchema = z.object({
+  message: z.string().min(1),
+  to: z.string().email().optional(),
+  confirm: z.boolean().optional(),
+});
