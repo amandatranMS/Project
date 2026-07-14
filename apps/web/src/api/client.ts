@@ -2,6 +2,8 @@
 // Requests go through the Vite dev proxy to the Express backend.
 // Every endpoint returns { success, data } | { success, error }; we unwrap it here.
 
+import { apiTokenRequest, authEnabled, msalInstance } from '../auth/msalConfig';
+
 const BASE = '/api';
 
 interface Envelope<T> {
@@ -10,9 +12,28 @@ interface Envelope<T> {
   error?: string;
 }
 
+/**
+ * Returns an `Authorization: Bearer` header for the signed-in user, or {} when
+ * auth is disabled (local dev before the Phase 0 app registration exists).
+ */
+async function authHeader(): Promise<Record<string, string>> {
+  if (!authEnabled || !msalInstance) return {};
+  const account = msalInstance.getActiveAccount() ?? msalInstance.getAllAccounts()[0];
+  if (!account) return {};
+  try {
+    const result = await msalInstance.acquireTokenSilent({ ...apiTokenRequest, account });
+    return { Authorization: `Bearer ${result.accessToken}` };
+  } catch {
+    // Silent acquisition failed (e.g. consent/expiry) → force an interactive flow.
+    await msalInstance.acquireTokenRedirect(apiTokenRequest);
+    return {};
+  }
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const auth = await authHeader();
   const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...auth },
     ...options,
   });
   if (res.status === 204) return undefined as T;
@@ -67,7 +88,7 @@ export async function sendChatStream(
 ): Promise<string> {
   const res = await fetch(`${BASE}/chat/stream`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
     body: JSON.stringify({ messages, engine }),
   });
   if (!res.ok || !res.body) {

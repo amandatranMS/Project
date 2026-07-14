@@ -8,6 +8,8 @@ import MilestoneDetail from './pages/MilestoneDetail';
 import Approvals from './pages/Approvals';
 import AuditLog from './pages/AuditLog';
 import ChatWidget from './components/ChatWidget';
+import { AuthMenu } from './auth/AuthMenu';
+import { authEnabled } from './auth/msalConfig';
 
 // Crisp Fluent-style line icons (stroke = currentColor so they inherit nav colors).
 const icon = (paths: ReactNode): ReactNode => (
@@ -59,7 +61,7 @@ export default function App() {
           <div className="topbar-title">Solution Engineering Workspace</div>
           <div className="topbar-actions">
             <span className="chip">Synthetic · no real data</span>
-            <span className="avatar" aria-hidden="true">SE</span>
+            {authEnabled ? <AuthMenu /> : <span className="avatar" aria-hidden="true">SE</span>}
           </div>
         </header>
         <main className="content">

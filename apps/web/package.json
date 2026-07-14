@@ -10,6 +10,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@azure/msal-browser": "^5.16.0",
+    "@azure/msal-react": "^5.5.1",
     "@msx/shared": "*",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

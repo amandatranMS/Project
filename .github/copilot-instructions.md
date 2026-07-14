@@ -8,7 +8,14 @@ React + Express + SQLite + Prisma app.
 
 ## Hard rules — do not violate
 - **Never** connect to or reference real MSX, real customer data, Dataverse, Power
-  Apps, Power Automate, or any production Microsoft system. This is a mock only.
+  Apps, or Power Automate. The business records (opportunities, milestones, etc.)
+  stay synthetic and mock-only.
+- **Authorized real integration (Option B):** Microsoft **Entra ID sign-in** (MSAL)
+  and **Microsoft Graph** (Teams, Outlook, user hierarchy) ARE allowed against the
+  team's Foundry tenant. Identity and Graph are real; the MSX business data remains
+  mock. Real Graph reads must be audited via `recordAgentAction` and gated behind an
+  authenticated user. Do not persist real Graph data into the 11 mock tables.
+
 - **Exactly 11 tables.** Do not add tables. Never introduce `Account`, `Partner`,
   `Competitor`, `Milestone Blocker`, or `Milestone Risk Assessment`. Risk, blocker,
   competitor, and partner data is embedded directly on `Opportunity` /

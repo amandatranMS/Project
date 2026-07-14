@@ -15,6 +15,16 @@ import chat from './chat.routes.js';
 /** Aggregates every route group under /api. */
 const api = Router();
 
+// Current authenticated principal (from the Entra bearer token, or the service
+// key). Foundation for Phase 2 (Graph: Teams / Outlook / org hierarchy).
+api.get('/me', (req, res) => {
+  if (!req.user || req.user.kind !== 'user') {
+    return res.status(401).json({ success: false, error: 'No signed-in user.' });
+  }
+  const { kind, oid, name, email } = req.user;
+  res.json({ success: true, data: { kind, oid, name, email } });
+});
+
 api.use('/opportunities', opportunities);
 api.use('/milestones', milestones);
 api.use('/status-history', statusHistory);
