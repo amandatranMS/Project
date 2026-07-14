@@ -6,6 +6,7 @@ so adding a new capability is just adding tools + one sub-agent here.
 """
 from __future__ import annotations
 
+import difflib
 from typing import Annotated, Any
 
 from agent_framework import Agent
@@ -22,6 +23,8 @@ MILESTONE_STATUSES = [
 MILESTONE_CATEGORIES = ["Production", "Pilot", "Workshop", "Assessment", "Deployment", "Adoption"]
 SALES_STAGES = ["Listen & Consult", "Inspire & Design", "Empower & Achieve", "Realize Value", "Manage & Optimize"]
 OPPORTUNITY_STATUSES = ["Active", "On Hold", "Won", "Lost", "Closed"]
+PRIORITIES = ["High", "Medium", "Low"]
+CONFIDENCE_LEVELS = ["High", "Medium", "Low"]
 
 _mc = MsxClient()
 
@@ -51,6 +54,80 @@ def _trim_opportunity(o: dict) -> dict:
     }
 
 
+def _trim_recommendation(r: dict) -> dict:
+    return {
+        "id": r.get("id"),
+        "recommendationBusinessId": r.get("recommendationBusinessId"),
+        "recommendedMilestoneTitle": r.get("recommendedMilestoneTitle"),
+        "priority": r.get("priority"),
+        "confidence": r.get("confidence"),
+        "reviewStatus": r.get("reviewStatus"),
+        "opportunity": (r.get("opportunity") or {}).get("opportunityName"),
+    }
+
+
+def _trim_approval(a: dict) -> dict:
+    return {
+        "id": a.get("id"),
+        "approvalRequestBusinessId": a.get("approvalRequestBusinessId"),
+        "requestName": a.get("requestName"),
+        "approvalStatus": a.get("approvalStatus"),
+        "requestStatus": a.get("requestStatus"),
+        "opportunity": (a.get("opportunity") or {}).get("opportunityName"),
+        "relatedRecommendation": (a.get("relatedRecommendation") or {}).get("recommendationBusinessId"),
+    }
+
+
+def _resolve_opportunity(identifier: str) -> tuple[str | None, dict | None]:
+    """Resolve a user/agent-supplied opportunity identifier to its EXACT name.
+
+    Accepts an exact name, a business id (e.g. OPP-003), a combined label
+    ("OPP-003 - Northwind AI Agent Pilot"), or a near-match, so writes don't fail
+    on small differences. Returns (exactName, None) on success, or
+    (None, errorDict) with candidate suggestions the agent can act on.
+    """
+    ident = (identifier or "").strip()
+    data = _mc.get("/api/opportunities") or []
+    if not ident:
+        return None, {
+            "error": "No opportunity was provided.",
+            "hint": "Pass an opportunityName or opportunityBusinessId (e.g. OPP-003).",
+            "candidates": [f"{o.get('opportunityBusinessId')} - {o.get('opportunityName')}" for o in data][:10],
+        }
+    low = ident.lower()
+    # 1. exact business id
+    for o in data:
+        if (o.get("opportunityBusinessId") or "").lower() == low:
+            return o.get("opportunityName"), None
+    # 2. exact name
+    for o in data:
+        if (o.get("opportunityName") or "").lower() == low:
+            return o.get("opportunityName"), None
+    # 3. business id appears inside a label like "OPP-003 - Northwind..."
+    for o in data:
+        bid = (o.get("opportunityBusinessId") or "").lower()
+        if bid and bid in low:
+            return o.get("opportunityName"), None
+    # 4. name contained either way (handles labels and partial names) - must be unique
+    contains = [
+        o for o in data
+        if (o.get("opportunityName") or "").lower() in low
+        or low in (o.get("opportunityName") or "").lower()
+    ]
+    if len(contains) == 1:
+        return contains[0].get("opportunityName"), None
+    # 5. fuzzy close match on names - must be unique
+    names = [o.get("opportunityName") for o in data if o.get("opportunityName")]
+    close = difflib.get_close_matches(ident, names, n=5, cutoff=0.6)
+    if len(close) == 1:
+        return close[0], None
+    return None, {
+        "error": f"Could not uniquely match an opportunity for '{identifier}'.",
+        "hint": "Ask the user which one, or pass the exact opportunityName or opportunityBusinessId.",
+        "candidates": [f"{o.get('opportunityBusinessId')} - {o.get('opportunityName')}" for o in data][:10],
+    }
+
+
 # ---- Milestone tools -----------------------------------------------------
 def list_milestones(
     milestoneStatus: Annotated[
@@ -67,27 +144,6 @@ def list_milestones(
 def get_milestone(id: Annotated[str, Field(description="The milestone id.")]) -> Any:
     """Get one milestone's full detail by its id."""
     return _mc.get(f"/api/milestones/{id}")
-
-
-def create_milestone(
-    milestoneName: Annotated[str, Field(description="Name of the new milestone.")],
-    opportunityName: Annotated[str, Field(description="Must match an existing opportunity name.")],
-    milestoneStatus: Annotated[str | None, Field(description=f"One of: {MILESTONE_STATUSES}.")] = None,
-    milestoneCategory: Annotated[str | None, Field(description=f"One of: {MILESTONE_CATEGORIES}.")] = None,
-    owner: Annotated[str | None, Field(description="Owner name.")] = None,
-    riskDescription: Annotated[str | None, Field(description="Optional risk note.")] = None,
-) -> Any:
-    """Create a milestone under an existing opportunity (by opportunity name)."""
-    payload = {
-        "milestoneName": milestoneName,
-        "opportunityName": opportunityName,
-        "milestoneStatus": milestoneStatus,
-        "milestoneCategory": milestoneCategory,
-        "owner": owner,
-        "riskDescription": riskDescription,
-    }
-    payload = {k: v for k, v in payload.items() if v is not None}
-    return _trim_milestone(_mc.post("/api/milestones", json=payload))
 
 
 def update_milestone(
@@ -152,6 +208,69 @@ def create_opportunity(
     return _trim_opportunity(_mc.post("/api/opportunities", json=payload))
 
 
+# ---- Governance tools (recommend -> request approval -> human approves) --
+# A milestone can ONLY be created by a human approving an approval request.
+# These tools let the agent propose and request; they never create a milestone
+# and never approve/reject (those are human-only, done in the web UI).
+def create_recommendation(
+    recommendedMilestoneTitle: Annotated[str, Field(description="Title of the milestone being recommended.")],
+    opportunityName: Annotated[str, Field(description="The opportunity's exact name OR its business id (e.g. OPP-003) OR a label; it is resolved automatically.")],
+    suggestedDescription: Annotated[str | None, Field(description="Why this milestone is recommended / what it covers.")] = None,
+    suggestedOwnerRole: Annotated[str | None, Field(description="Suggested owner or role.")] = None,
+    priority: Annotated[str | None, Field(description=f"One of: {PRIORITIES}.")] = None,
+    confidence: Annotated[str | None, Field(description=f"One of: {CONFIDENCE_LEVELS}.")] = None,
+) -> Any:
+    """Create an AI milestone recommendation under an opportunity. This does NOT create a milestone; it records a suggestion for human review."""
+    resolved_name, err = _resolve_opportunity(opportunityName)
+    if err:
+        return err
+    payload = {
+        "recommendedMilestoneTitle": recommendedMilestoneTitle,
+        "opportunityName": resolved_name,
+        "suggestedDescription": suggestedDescription,
+        "suggestedOwnerRole": suggestedOwnerRole,
+        "priority": priority,
+        "confidence": confidence,
+        "reviewStatus": "Pending",
+        "createdByAgent": True,
+    }
+    payload = {k: v for k, v in payload.items() if v is not None}
+    try:
+        return _trim_recommendation(_mc.post("/api/recommendations", json=payload))
+    except Exception as e:  # surface a recoverable message instead of a hard failure
+        return {"error": f"Failed to create recommendation: {e}", "opportunityUsed": resolved_name}
+
+
+def submit_approval_request(
+    requestName: Annotated[str, Field(description="Short name for the approval request.")],
+    opportunityName: Annotated[str, Field(description="The opportunity's exact name OR its business id (e.g. OPP-003) OR a label; it is resolved automatically. Use the same opportunity as the recommendation.")],
+    relatedRecommendationBusinessId: Annotated[str, Field(description="The recommendationBusinessId returned by create_recommendation.")],
+    requestedBy: Annotated[str | None, Field(description="Who is requesting (defaults to the agent).")] = None,
+) -> Any:
+    """Submit an approval request for a recommendation. A human must approve it in the web UI before any milestone is created. This tool never creates a milestone."""
+    resolved_name, err = _resolve_opportunity(opportunityName)
+    if err:
+        return err
+    payload = {
+        "requestName": requestName,
+        "opportunityName": resolved_name,
+        "relatedRecommendationBusinessId": relatedRecommendationBusinessId,
+        "requestStatus": "Submitted",
+        "requestedBy": requestedBy or "HostedAgent",
+    }
+    payload = {k: v for k, v in payload.items() if v is not None}
+    try:
+        return _trim_approval(_mc.post("/api/approval-requests", json=payload))
+    except Exception as e:  # surface a recoverable message instead of a hard failure
+        return {"error": f"Failed to submit approval request: {e}", "opportunityUsed": resolved_name}
+
+
+def list_pending_approvals() -> Any:
+    """List approval requests still awaiting a human decision (approvalStatus = Pending)."""
+    data = _mc.get("/api/approval-requests", params={"approvalStatus": "Pending"}) or []
+    return [_trim_approval(a) for a in data]
+
+
 # ---- Sub-agent factory ---------------------------------------------------
 _CONFIRM_RULE = (
     " Before creating, updating, or deleting anything, restate the exact action and "
@@ -159,16 +278,14 @@ _CONFIRM_RULE = (
     "Never invent data — rely on your tools."
 )
 
-# When creating a milestone, these fields are optional. Ask about any that are
-# missing exactly once, then respect the user's answer (including "leave empty").
-_MILESTONE_EMPTY_FIELDS_RULE = (
-    " When creating a milestone, the optional fields are milestoneStatus, "
-    "milestoneCategory, owner, and riskDescription. If the user has not provided one "
-    "or more of these, ask the user ONE time whether they'd like to fill in the "
-    "missing field(s), listing exactly which are empty. If the user provides values, "
-    "use them; if the user says to leave them empty (or declines), proceed with "
-    "creating the milestone and leave those fields empty. Do not ask about the same "
-    "empty fields more than once."
+# Governance rule: a milestone is created ONLY when a human approves an approval
+# request. The agent may recommend and request approval, but must then stop.
+_GOVERNANCE_RULE = (
+    " You cannot create milestones directly. To propose a new milestone, first call "
+    "create_recommendation, then submit_approval_request referencing that "
+    "recommendation's recommendationBusinessId. After submitting, STOP and tell the "
+    "user the request is Pending and a human must approve it in the web UI. Never "
+    "claim a milestone was created — you cannot approve or reject requests yourself."
 )
 
 
@@ -178,14 +295,30 @@ def build_subagents(client) -> list[Agent]:
         Agent(
             client=client,
             name="milestone_specialist",
-            description="Handles milestones: list, look up, create, update, or delete milestones.",
+            description="Handles existing milestones: list, look up, update, or delete milestones. Cannot create milestones.",
             instructions=(
                 "You are the Milestone specialist for a SYNTHETIC MOCK MSX workspace. Use your "
-                "tools to read and modify milestones. Creating a milestone requires an existing "
-                "opportunity name — if unsure, say so. Report ids and names clearly."
-                + _MILESTONE_EMPTY_FIELDS_RULE + _CONFIRM_RULE
+                "tools to read, update, and delete EXISTING milestones. You cannot create "
+                "milestones — if the user wants a new milestone, tell them it must go through "
+                "the governance flow (the governance specialist recommends it and requests "
+                "approval; a human approves). Report ids and names clearly." + _CONFIRM_RULE
             ),
-            tools=[list_milestones, get_milestone, create_milestone, update_milestone, delete_milestone],
+            tools=[list_milestones, get_milestone, update_milestone, delete_milestone],
+        ),
+        Agent(
+            client=client,
+            name="governance_specialist",
+            description="Proposes new milestones the governed way: create a recommendation, submit an approval request, and list pending approvals. Never creates or approves milestones.",
+            instructions=(
+                "You are the Governance specialist for a SYNTHETIC MOCK MSX workspace. New "
+                "milestones are created ONLY after a human approves an approval request, so you "
+                "drive the recommend -> request-approval handoff. Use create_recommendation to "
+                "record a suggestion, then submit_approval_request with the returned "
+                "recommendationBusinessId. Use list_pending_approvals to report what is awaiting "
+                "a human. Report the recommendationBusinessId and approvalRequestBusinessId "
+                "clearly." + _GOVERNANCE_RULE + _CONFIRM_RULE
+            ),
+            tools=[create_recommendation, submit_approval_request, list_pending_approvals],
         ),
         Agent(
             client=client,
