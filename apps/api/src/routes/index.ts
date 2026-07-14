@@ -11,6 +11,7 @@ import agentNotifications from './agentNotifications.routes.js';
 import agentRunLogs from './agentRunLogs.routes.js';
 import agentActionAuditLogs from './agentActionAuditLogs.routes.js';
 import chat from './chat.routes.js';
+import graph from './graph.routes.js';
 
 /** Aggregates every route group under /api. */
 const api = Router();
@@ -36,6 +37,7 @@ api.use('/agent-notifications', agentNotifications);
 api.use('/agent-run-logs', agentRunLogs);
 api.use('/agent-action-audit-logs', agentActionAuditLogs);
 api.use('/chat', chat);
+api.use('/graph', graph);
 
 // Dashboard (two base paths per the spec).
 api.get('/dashboard/summary', dashboardController.summary);
