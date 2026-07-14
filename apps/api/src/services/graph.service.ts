@@ -1,5 +1,5 @@
 import type { AuthUser } from '../lib/entraAuth.js';
-import { graphGet } from '../lib/graph.js';
+import { graphGet, graphPost } from '../lib/graph.js';
 import { recordAgentAction } from '../lib/audit.js';
 import { HttpError } from '../lib/httpError.js';
 
@@ -147,5 +147,46 @@ export const graphService = {
       );
       return { data: list.value, outputSummary: `returned ${list.value.length} chats` };
     });
+  },
+
+  /**
+   * Send an Outlook email AS the signed-in user (delegated Mail.Send).
+   * Confirm gate: without `confirm: true`, nothing is sent — we return a preview
+   * so the agent must restate the email and get an explicit go-ahead first.
+   */
+  async sendMail(
+    user: AuthUser,
+    input: { to: string; subject: string; body: string; confirm?: boolean },
+  ) {
+    const token = assertion(user);
+
+    if (!input.confirm) {
+      return {
+        sent: false,
+        requiresConfirmation: true,
+        preview: { to: input.to, subject: input.subject, body: input.body },
+        note: 'Not sent. Re-submit the same request with confirm=true to send this email as you.',
+      };
+    }
+
+    return audited(
+      user,
+      'SendOutlookMail',
+      `sendMail to=${input.to} subject="${input.subject}"`,
+      async () => {
+        await graphPost(token, '/me/sendMail', {
+          message: {
+            subject: input.subject,
+            body: { contentType: 'Text', content: input.body },
+            toRecipients: [{ emailAddress: { address: input.to } }],
+          },
+          saveToSentItems: true,
+        });
+        return {
+          data: { sent: true, to: input.to, subject: input.subject },
+          outputSummary: `sent email to ${input.to}`,
+        };
+      },
+    );
   },
 };

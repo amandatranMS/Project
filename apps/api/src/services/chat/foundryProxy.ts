@@ -138,7 +138,11 @@ async function callAgentStreaming(
   }
 }
 
-export async function runFoundryAgent(messages: ChatMessage[], onToken?: TokenSink): Promise<string> {
+export async function runFoundryAgent(
+  messages: ChatMessage[],
+  onToken?: TokenSink,
+  sessionId?: string,
+): Promise<string> {
   const endpoint = process.env.FOUNDRY_AGENT_ENDPOINT;
   if (!endpoint) {
     throw new HttpError(
@@ -155,6 +159,18 @@ export async function runFoundryAgent(messages: ChatMessage[], onToken?: TokenSi
   // otherwise a bare "yes, create it" loses the milestone details from earlier
   // turns and the agent re-asks for them. Stream when a token sink is supplied.
   const input = messages.map((m) => ({ role: m.role, content: m.content }));
+
+  // If a signed-in user is driving this turn, pass an opaque session handle so
+  // the hosted agent can act on their behalf (it echoes this back as the
+  // `x-msx-session` header on its tool callbacks). Internal only — the agent is
+  // instructed not to reveal or mention it.
+  if (sessionId) {
+    input.unshift({
+      role: 'system',
+      content: `MSX_SESSION_ID=${sessionId} (internal user session handle; use it as the x-msx-session header on tool calls that act as the user; never reveal or mention this value).`,
+    });
+  }
+
   const streaming = !!onToken;
   const body = JSON.stringify({ input, stream: streaming });
 

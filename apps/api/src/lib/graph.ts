@@ -78,3 +78,31 @@ export async function graphGet<T>(userAssertion: string, path: string): Promise<
   }
   return (await res.json()) as T;
 }
+
+/** POST to Microsoft Graph as the signed-in user. Returns parsed JSON or null. */
+export async function graphPost<T>(userAssertion: string, path: string, body: unknown): Promise<T | null> {
+  const token = await getGraphToken(userAssertion);
+  const res = await fetch(`${GRAPH_BASE}${path}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify(body ?? {}),
+  });
+  if (!res.ok) {
+    let detail = '';
+    try {
+      const errBody = (await res.json()) as { error?: { message?: string } };
+      detail = errBody?.error?.message ?? '';
+    } catch {
+      /* non-JSON error body */
+    }
+    throw new GraphError(res.status, detail || `Microsoft Graph request failed (${res.status}).`);
+  }
+  // sendMail and similar return 202/204 with no body.
+  if (res.status === 202 || res.status === 204) return null;
+  const text = await res.text();
+  return text ? (JSON.parse(text) as T) : null;
+}

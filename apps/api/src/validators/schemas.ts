@@ -240,3 +240,11 @@ export const chatSchema = z.object({
     .min(1),
   engine: z.enum(['in-app', 'foundry']).optional().default('in-app'),
 });
+
+// ---- Microsoft Graph (send as user) ----
+export const sendMailSchema = z.object({
+  to: z.string().email(),
+  subject: z.string().min(1),
+  body: z.string().min(1),
+  confirm: z.boolean().optional(),
+});

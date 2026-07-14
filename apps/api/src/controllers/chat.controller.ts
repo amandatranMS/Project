@@ -6,7 +6,7 @@ import { chatSchema } from '../validators/schemas.js';
 export const chatController = {
   send: asyncHandler(async (req, res) => {
     const { messages, engine } = chatSchema.parse(req.body);
-    const data = await chatService.send(messages, engine);
+    const data = await chatService.send(messages, engine, req.user);
     sendOk(res, data);
   }),
 
@@ -22,7 +22,7 @@ export const chatController = {
 
     let streamed = false;
     try {
-      const { reply } = await chatService.send(messages, engine, (delta) => {
+      const { reply } = await chatService.send(messages, engine, req.user, (delta) => {
         streamed = true;
         res.write(`${JSON.stringify({ delta })}\n`);
       });

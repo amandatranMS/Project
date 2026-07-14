@@ -3,6 +3,8 @@ import { runFoundryAgent } from './chat/foundryProxy.js';
 import type { ChatMessage, TokenSink } from './chat/toolLoop.js';
 import { prisma } from '../lib/prisma.js';
 import { runWithAgentContext, type AgentTurnContext } from '../lib/agentContext.js';
+import type { AuthUser } from '../lib/entraAuth.js';
+import { createUserSession } from '../lib/userSessions.js';
 
 export type ChatEngine = 'in-app' | 'foundry';
 
@@ -20,10 +22,15 @@ export const chatService = {
    * rows created during the turn so investigators can review what led to each
    * governed action.
    */
-  async send(messages: ChatMessage[], engine: ChatEngine, onToken?: TokenSink) {
+  async send(messages: ChatMessage[], engine: ChatEngine, user?: AuthUser, onToken?: TokenSink) {
     if (engine === 'foundry') {
+      // If a real user is signed in, stash their token and give the hosted agent
+      // an opaque session handle so it can act on their behalf (Graph OBO).
+      const sessionId =
+        user?.kind === 'user' && user.bearer ? createUserSession(user.bearer, user.email) : undefined;
+
       const startedAt = new Date();
-      const reply = await runFoundryAgent(messages, onToken);
+      const reply = await runFoundryAgent(messages, onToken, sessionId);
       const fullConversation = JSON.stringify([...messages, { role: 'assistant', content: reply }]);
       await prisma.agentActionAuditLog.updateMany({
         where: { createdAt: { gte: startedAt }, conversation: null },

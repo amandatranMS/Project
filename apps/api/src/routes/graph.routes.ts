@@ -10,4 +10,5 @@ router.get('/me', c.me);
 router.get('/hierarchy', c.hierarchy);
 router.get('/outlook/messages', c.messages);
 router.get('/teams/chats', c.chats);
+router.post('/outlook/send', c.sendMail);
 export default router;
