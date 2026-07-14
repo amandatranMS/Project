@@ -1,15 +1,20 @@
-"""MSX domain tools and the specialist sub-agents that own them.
+"""MSX domain capability functions — the reusable "tool" layer.
 
-Each tool wraps one or more MSX API calls. Sub-agents group related tools and
-are exposed to the orchestrator as callable tools (the "agent-as-tool" pattern),
-so adding a new capability is just adding tools + one sub-agent here.
+Each function wraps one or more MSX REST API calls and returns trimmed JSON.
+This module has NO agent-framework dependency on purpose, so the exact same
+capabilities can be reused by more than one consumer:
+  - the hosted multi-agent app (see ``subagents.py``), and
+  - the standalone MCP server (see ``msx_mcp_server.py``), which exposes these
+    functions to any MCP-compatible client (other apps, IDEs, or agents).
+
+Adding a new capability = adding one function here; it then becomes available
+to both the agents and every MCP consumer at once.
 """
 from __future__ import annotations
 
 import difflib
 from typing import Annotated, Any
 
-from agent_framework import Agent
 from pydantic import Field
 
 from msx_client import MsxClient
@@ -269,76 +274,3 @@ def list_pending_approvals() -> Any:
     """List approval requests still awaiting a human decision (approvalStatus = Pending)."""
     data = _mc.get("/api/approval-requests", params={"approvalStatus": "Pending"}) or []
     return [_trim_approval(a) for a in data]
-
-
-# ---- Sub-agent factory ---------------------------------------------------
-_CONFIRM_RULE = (
-    " Before creating, updating, or deleting anything, restate the exact action and "
-    "values and ask the user to confirm; only proceed after they clearly agree. "
-    "Never invent data — rely on your tools."
-)
-
-# Governance rule: a milestone is created ONLY when a human approves an approval
-# request. The agent may recommend and request approval, but must then stop.
-_GOVERNANCE_RULE = (
-    " You cannot create milestones directly. To propose a new milestone, first call "
-    "create_recommendation, then submit_approval_request referencing that "
-    "recommendation's recommendationBusinessId. After submitting, STOP and tell the "
-    "user the request is Pending and a human must approve it in the web UI. Never "
-    "claim a milestone was created — you cannot approve or reject requests yourself."
-)
-
-
-def build_subagents(client) -> list[Agent]:
-    """Create the specialist sub-agents, each owning a focused set of MSX tools."""
-    return [
-        Agent(
-            client=client,
-            name="milestone_specialist",
-            description="Handles existing milestones: list, look up, update, or delete milestones. Cannot create milestones.",
-            instructions=(
-                "You are the Milestone specialist for a SYNTHETIC MOCK MSX workspace. Use your "
-                "tools to read, update, and delete EXISTING milestones. You cannot create "
-                "milestones — if the user wants a new milestone, tell them it must go through "
-                "the governance flow (the governance specialist recommends it and requests "
-                "approval; a human approves). Report ids and names clearly." + _CONFIRM_RULE
-            ),
-            tools=[list_milestones, get_milestone, update_milestone, delete_milestone],
-        ),
-        Agent(
-            client=client,
-            name="governance_specialist",
-            description="Proposes new milestones the governed way: create a recommendation, submit an approval request, and list pending approvals. Never creates or approves milestones.",
-            instructions=(
-                "You are the Governance specialist for a SYNTHETIC MOCK MSX workspace. New "
-                "milestones are created ONLY after a human approves an approval request, so you "
-                "drive the recommend -> request-approval handoff. Use create_recommendation to "
-                "record a suggestion, then submit_approval_request with the returned "
-                "recommendationBusinessId. Use list_pending_approvals to report what is awaiting "
-                "a human. Report the recommendationBusinessId and approvalRequestBusinessId "
-                "clearly." + _GOVERNANCE_RULE + _CONFIRM_RULE
-            ),
-            tools=[create_recommendation, submit_approval_request, list_pending_approvals],
-        ),
-        Agent(
-            client=client,
-            name="dashboard_specialist",
-            description="Answers questions about aggregate metrics and pipeline health.",
-            instructions=(
-                "You are the Dashboard specialist for a SYNTHETIC MOCK MSX workspace. Use "
-                "get_dashboard_summary to answer questions about counts (active opportunities, "
-                "at-risk/blocked milestones, pending approvals) and pipeline value. Summarize plainly."
-            ),
-            tools=[get_dashboard_summary],
-        ),
-        Agent(
-            client=client,
-            name="opportunity_specialist",
-            description="Handles opportunities: list, look up, or create opportunities.",
-            instructions=(
-                "You are the Opportunity specialist for a SYNTHETIC MOCK MSX workspace. Use your "
-                "tools to read and create opportunities. Report ids and names clearly." + _CONFIRM_RULE
-            ),
-            tools=[list_opportunities, get_opportunity, create_opportunity],
-        ),
-    ]
