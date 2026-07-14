@@ -1,0 +1,18 @@
+# Keep the build context small and force fresh, Linux-native installs.
+node_modules
+**/node_modules
+**/dist
+.git
+.github
+.azure
+**/.venv
+apps/agent
+apps/foundry-agent
+docs
+openapi
+*.md
+prisma/dev.db
+prisma/*.db
+.env
+**/.env
+.vscode

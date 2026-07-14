@@ -108,8 +108,8 @@ export default function AuditLog() {
                 </div>
               ) : (
                 <p className="muted">
-                  No conversation was captured for this action (it came from a direct UI/API action or the
-                  Foundry hosted agent).
+                  No conversation was captured for this action (it came from a direct UI or API action,
+                  not the assistant).
                 </p>
               )}
             </div>

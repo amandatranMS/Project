@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { sendChat, type ChatEngine, type ChatTurn } from '../api/client';
+import { sendChatStream, type ChatEngine, type ChatTurn } from '../api/client';
 
 const WELCOME: ChatTurn = {
   role: 'assistant',
@@ -159,15 +159,16 @@ export default function ChatWidget() {
     if (!text || busy || !active) return;
     const convoId = active.id;
     const engine = active.engine;
-    const nextMsgs: ChatTurn[] = [...active.messages, { role: 'user', content: text }];
+    const sentMsgs: ChatTurn[] = [...active.messages, { role: 'user', content: text }];
 
+    // Add the user turn plus an empty assistant placeholder that fills as tokens stream in.
     setConversations((prev) =>
       prev.map((c) =>
         c.id === convoId
           ? {
               ...c,
-              messages: nextMsgs,
-              title: c.messages.length === 0 ? deriveTitle(nextMsgs) : c.title,
+              messages: [...sentMsgs, { role: 'assistant', content: '' }],
+              title: c.messages.length === 0 ? deriveTitle(sentMsgs) : c.title,
               updatedAt: Date.now(),
             }
           : c,
@@ -176,22 +177,42 @@ export default function ChatWidget() {
     setInput('');
     setError(null);
     setBusy(true);
+
+    const appendToAssistant = (delta: string) =>
+      setConversations((prev) =>
+        prev.map((c) => {
+          if (c.id !== convoId) return c;
+          const msgs = c.messages.slice();
+          const last = msgs[msgs.length - 1];
+          if (last && last.role === 'assistant') {
+            msgs[msgs.length - 1] = { ...last, content: last.content + delta };
+          }
+          return { ...c, messages: msgs, updatedAt: Date.now() };
+        }),
+      );
+
     try {
       // Send the full running transcript so the agent keeps context across turns.
-      const { reply } = await sendChat(nextMsgs, engine);
-      setConversations((prev) =>
-        prev.map((c) =>
-          c.id === convoId
-            ? { ...c, messages: [...nextMsgs, { role: 'assistant', content: reply }], updatedAt: Date.now() }
-            : c,
-        ),
-      );
+      await sendChatStream(sentMsgs, engine, appendToAssistant);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.');
+      // Drop the empty placeholder if the turn failed before any text arrived.
+      setConversations((prev) =>
+        prev.map((c) => {
+          if (c.id !== convoId) return c;
+          const msgs = c.messages.slice();
+          const last = msgs[msgs.length - 1];
+          if (last && last.role === 'assistant' && last.content === '') msgs.pop();
+          return { ...c, messages: msgs };
+        }),
+      );
     } finally {
       setBusy(false);
     }
   }
+
+  const lastMsg = active?.messages[active.messages.length - 1];
+  const lastIsEmptyAssistant = !!lastMsg && lastMsg.role === 'assistant' && lastMsg.content === '';
 
   if (!open) {
     return (
@@ -278,12 +299,14 @@ export default function ChatWidget() {
 
           <div className="chat-messages" ref={listRef}>
             <div className="chat-msg assistant">{WELCOME.content}</div>
-            {active?.messages.map((m, i) => (
-              <div key={i} className={`chat-msg ${m.role}`}>
-                {m.content}
-              </div>
-            ))}
-            {busy && <div className="chat-msg assistant muted">Thinking…</div>}
+            {active?.messages.map((m, i) =>
+              m.role === 'assistant' && m.content === '' ? null : (
+                <div key={i} className={`chat-msg ${m.role}`}>
+                  {m.content}
+                </div>
+              ),
+            )}
+            {busy && lastIsEmptyAssistant && <div className="chat-msg assistant muted">Thinking…</div>}
             {error && <div className="chat-msg error">{error}</div>}
           </div>
 

@@ -1,6 +1,6 @@
 import { runOrchestrator } from './chat/orchestrator.js';
 import { runFoundryAgent } from './chat/foundryProxy.js';
-import type { ChatMessage } from './chat/toolLoop.js';
+import type { ChatMessage, TokenSink } from './chat/toolLoop.js';
 import { prisma } from '../lib/prisma.js';
 import { runWithAgentContext, type AgentTurnContext } from '../lib/agentContext.js';
 
@@ -12,19 +12,28 @@ export const chatService = {
    * - 'in-app'  → orchestrator + specialists run in this process (default).
    * - 'foundry' → forwards to the deployed Foundry hosted agent (demo).
    *
-   * For the in-app engine we run the turn inside an AgentTurnContext so any
-   * governed action recorded during it captures the conversation. Once the turn
-   * finishes we stamp the final answer onto those audit rows so investigators
-   * can read the full prompt/answer transcript from the audit log.
+   * If `onToken` is supplied, the in-app engine streams the answer token-by-token
+   * for a live "typing" experience; the Foundry engine emits its answer in one
+   * chunk (its tool calls arrive as separate requests, so we can't stream them).
+   *
+   * Either way, the conversation (prompts + answers) is captured onto the audit
+   * rows created during the turn so investigators can review what led to each
+   * governed action.
    */
-  async send(messages: ChatMessage[], engine: ChatEngine) {
+  async send(messages: ChatMessage[], engine: ChatEngine, onToken?: TokenSink) {
     if (engine === 'foundry') {
-      const reply = await runFoundryAgent(messages);
+      const startedAt = new Date();
+      const reply = await runFoundryAgent(messages, onToken);
+      const fullConversation = JSON.stringify([...messages, { role: 'assistant', content: reply }]);
+      await prisma.agentActionAuditLog.updateMany({
+        where: { createdAt: { gte: startedAt }, conversation: null },
+        data: { conversation: fullConversation },
+      });
       return { reply, engine };
     }
 
     const ctx: AgentTurnContext = { conversation: messages, createdAuditIds: [] };
-    const reply = await runWithAgentContext(ctx, () => runOrchestrator(messages));
+    const reply = await runWithAgentContext(ctx, () => runOrchestrator(messages, onToken));
 
     if (ctx.createdAuditIds.length) {
       const fullConversation = JSON.stringify([...messages, { role: 'assistant', content: reply }]);
