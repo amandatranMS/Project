@@ -46,6 +46,16 @@ function sendMode(): 'live' | 'simulate' {
   return process.env.GRAPH_SEND_MODE === 'live' ? 'live' : 'simulate';
 }
 
+/**
+ * When true, sends proceed WITHOUT the Preview/confirm gate (agent acts
+ * autonomously). Deliberately allowed ONLY in simulate mode — live (real)
+ * delivery always requires an explicit confirm, so a real email/Teams message
+ * can never go out without a human.
+ */
+function autoConfirmEnabled(): boolean {
+  return process.env.SEND_AUTO_CONFIRM === 'true' && sendMode() === 'simulate';
+}
+
 function assertion(user: AuthUser): string {
   if (user.kind !== 'user' || !user.bearer) {
     throw new HttpError(401, 'A signed-in Microsoft user is required for this action.');
@@ -167,7 +177,7 @@ export const graphService = {
   ) {
     const token = assertion(user);
 
-    if (!input.confirm) {
+    if (!input.confirm && !autoConfirmEnabled()) {
       return {
         sent: false,
         requiresConfirmation: true,
@@ -225,7 +235,7 @@ export const graphService = {
   ) {
     assertion(user);
 
-    if (!input.confirm) {
+    if (!input.confirm && !autoConfirmEnabled()) {
       return {
         sent: false,
         requiresConfirmation: true,
