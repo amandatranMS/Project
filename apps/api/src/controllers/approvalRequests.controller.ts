@@ -31,19 +31,19 @@ export const approvalRequestsController = {
 
   approve: asyncHandler(async (req, res) => {
     const input = approvalDecisionSchema.parse(req.body);
-    const data = await approvalRequestsService.decide(req.params.id, 'Approved', input);
+    const data = await approvalRequestsService.decide(req.params.id, 'Approved', input, req.user);
     sendOk(res, data);
   }),
 
   reject: asyncHandler(async (req, res) => {
     const input = approvalDecisionSchema.parse(req.body);
-    const data = await approvalRequestsService.decide(req.params.id, 'Rejected', input);
+    const data = await approvalRequestsService.decide(req.params.id, 'Rejected', input, req.user);
     sendOk(res, data);
   }),
 
   needsChanges: asyncHandler(async (req, res) => {
     const input = approvalDecisionSchema.parse(req.body);
-    const data = await approvalRequestsService.decide(req.params.id, 'Needs Changes', input);
+    const data = await approvalRequestsService.decide(req.params.id, 'Needs Changes', input, req.user);
     sendOk(res, data);
   }),
 };

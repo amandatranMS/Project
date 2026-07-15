@@ -113,6 +113,38 @@ export const updateRecommendationSchema = z.object({
 });
 
 // ---- Approval requests ----
+/**
+ * A deferred action attached to an approval request. Agents never mutate data or
+ * send messages directly — they submit one of these, and the API executes it
+ * ONLY when a human approves the request (see approvalRequestsService.decide).
+ */
+export const pendingActionSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('SendOutlookMail'),
+    to: z.string().email(),
+    subject: z.string().min(1),
+    body: z.string().min(1),
+  }),
+  z.object({
+    kind: z.literal('NotifyTeams'),
+    message: z.string().min(1),
+    to: z.string().email().optional(),
+  }),
+  z.object({
+    kind: z.literal('UpdateMilestone'),
+    milestoneId: z.string().min(1),
+    milestoneName: z.string().min(1).optional(),
+    milestoneStatus: z.enum(MILESTONE_STATUSES).optional(),
+    milestoneCategory: z.enum(MILESTONE_CATEGORIES).optional(),
+    owner: z.string().min(1).optional(),
+  }),
+  z.object({
+    kind: z.literal('DeleteMilestone'),
+    milestoneId: z.string().min(1),
+  }),
+]);
+export type PendingAction = z.infer<typeof pendingActionSchema>;
+
 export const createApprovalSchema = z.object({
   approvalRequestBusinessId: z.string().optional(),
   requestName: z.string().min(1),
@@ -122,6 +154,8 @@ export const createApprovalSchema = z.object({
   requestStatus: z.enum(REQUEST_STATUSES).optional().nullable(),
   approvalStatus: z.enum(APPROVAL_STATUSES).optional().nullable(),
   requestedBy: nstr,
+  /** Optional deferred action executed on approval (send email, notify Teams, milestone update/delete). */
+  action: pendingActionSchema.optional(),
 });
 export const updateApprovalSchema = z.object({
   requestName: nstr,

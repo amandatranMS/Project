@@ -133,6 +133,28 @@ def _resolve_opportunity(identifier: str) -> tuple[str | None, dict | None]:
     }
 
 
+def _submit_action_approval(
+    request_name: str,
+    action: dict,
+    requested_by: str | None = None,
+    opportunity_name: str | None = None,
+) -> dict:
+    """Submit an approval request carrying a deferred action.
+
+    The API executes the action ONLY after a human approves the request in the
+    Approvals log. This is how every agent write/send is gated: the agent never
+    mutates data or sends messages directly — it submits one of these.
+    """
+    payload: dict = {
+        "requestName": request_name,
+        "action": action,
+        "requestedBy": requested_by or "HostedAgent",
+    }
+    if opportunity_name:
+        payload["opportunityName"] = opportunity_name
+    return _mc.post("/api/approval-requests", json=payload) or {}
+
+
 # ---- Milestone tools -----------------------------------------------------
 def list_milestones(
     milestoneStatus: Annotated[
@@ -158,20 +180,57 @@ def update_milestone(
     milestoneCategory: Annotated[str | None, Field(description=f"One of: {MILESTONE_CATEGORIES}.")] = None,
     owner: Annotated[str | None, Field(description="New owner name.")] = None,
 ) -> Any:
-    """Update fields on an existing milestone by id."""
-    payload = {
+    """Request an update to an existing milestone. This does NOT change anything —
+    it submits an approval request that a human must approve in the Approvals log
+    before the update is applied."""
+    fields = {
         "milestoneName": milestoneName,
         "milestoneStatus": milestoneStatus,
         "milestoneCategory": milestoneCategory,
         "owner": owner,
     }
-    payload = {k: v for k, v in payload.items() if v is not None}
-    return _trim_milestone(_mc.patch(f"/api/milestones/{id}", json=payload))
+    fields = {k: v for k, v in fields.items() if v is not None}
+    if not fields:
+        return {"error": "Provide at least one field to update."}
+    changes = ", ".join(f"{k}={v}" for k, v in fields.items())
+    action = {"kind": "UpdateMilestone", "milestoneId": id, **fields}
+    try:
+        opp = None
+        try:
+            m = _mc.get(f"/api/milestones/{id}")
+            opp = (m.get("opportunity") or {}).get("opportunityName") if isinstance(m, dict) else None
+        except Exception:
+            opp = None
+        appr = _submit_action_approval(f"Update milestone {id}: {changes}", action, opportunity_name=opp)
+        return {
+            "submittedForApproval": True,
+            "approvalRequestBusinessId": (appr or {}).get("approvalRequestBusinessId"),
+            "note": "Pending human approval in the Approvals log. The milestone is NOT changed until a human approves.",
+        }
+    except Exception as e:
+        return {"error": f"Failed to submit milestone update for approval: {e}"}
 
 
 def delete_milestone(id: Annotated[str, Field(description="The milestone id to delete.")]) -> Any:
-    """Delete a milestone by id (its status history is also removed)."""
-    return _mc.delete(f"/api/milestones/{id}")
+    """Request deletion of a milestone. This does NOT delete anything — it submits an
+    approval request that a human must approve in the Approvals log before the
+    milestone is deleted."""
+    action = {"kind": "DeleteMilestone", "milestoneId": id}
+    try:
+        opp = None
+        try:
+            m = _mc.get(f"/api/milestones/{id}")
+            opp = (m.get("opportunity") or {}).get("opportunityName") if isinstance(m, dict) else None
+        except Exception:
+            opp = None
+        appr = _submit_action_approval(f"Delete milestone {id}", action, opportunity_name=opp)
+        return {
+            "submittedForApproval": True,
+            "approvalRequestBusinessId": (appr or {}).get("approvalRequestBusinessId"),
+            "note": "Pending human approval in the Approvals log. The milestone is NOT deleted until a human approves.",
+        }
+    except Exception as e:
+        return {"error": f"Failed to submit milestone deletion for approval: {e}"}
 
 
 # ---- Dashboard tools -----------------------------------------------------
@@ -276,32 +335,45 @@ def list_pending_approvals() -> Any:
     return [_trim_approval(a) for a in data]
 
 
-# ---- Communications tools (Outlook / Teams, via the API's Graph endpoints) ----
-# These act on the signed-in user's behalf. In simulate mode the API records the
-# action (with audit) but does NOT actually deliver — so the hosted agent can
-# demonstrate the full draft -> preview -> send flow with no admin consent.
+# ---- Communications tools (Outlook / Teams — draft, then approval-gated) ----
+# Two-step by design so the user can review/edit before anything is created:
+#   1. confirm=False (default) -> returns a DRAFT PREVIEW only. Nothing is created.
+#   2. confirm=True -> submits an approval request. A human still approves it in the
+#      Approvals log before the API actually sends (simulated in simulate mode).
 def send_email(
     to: Annotated[str, Field(description="Recipient email address.")],
     subject: Annotated[str, Field(description="Email subject line.")],
     body: Annotated[str, Field(description="Email body text.")],
     confirm: Annotated[
         bool,
-        Field(description="False (default) returns a DRAFT PREVIEW without sending; True sends. Always preview first, then send."),
+        Field(
+            description="False (default) returns a DRAFT PREVIEW only — nothing is created, so the user can review/edit. True submits the email as an approval request. Always draft first, then confirm."
+        ),
     ] = False,
 ) -> Any:
-    """Draft/preview or send an Outlook email on the user's behalf.
+    """Draft (preview) or submit an Outlook email for approval.
 
-    Call with confirm=false to get a preview (nothing sent), show it to the user,
-    then call again with confirm=true to send. In simulate mode nothing is
-    actually delivered; the response says simulated=true.
-    """
+    Call with confirm=false FIRST to return a draft the user can review and edit —
+    nothing is created. Only after the user approves the wording, call again with
+    confirm=true to submit it as an approval request (a human then approves it in
+    the Approvals log before it is actually sent)."""
+    if not confirm:
+        return {
+            "draft": {"to": to, "subject": subject, "body": body},
+            "submitted": False,
+            "note": "DRAFT ONLY — nothing submitted yet. Show this to the user to review/edit. When they approve the wording, call send_email again with confirm=true to submit it for approval.",
+        }
+    action = {"kind": "SendOutlookMail", "to": to, "subject": subject, "body": body}
     try:
-        return _mc.post(
-            "/api/graph/outlook/send",
-            json={"to": to, "subject": subject, "body": body, "confirm": confirm},
-        )
+        appr = _submit_action_approval(f'Send email to {to}: "{subject}"', action)
+        return {
+            "submittedForApproval": True,
+            "approvalRequestBusinessId": appr.get("approvalRequestBusinessId"),
+            "preview": {"to": to, "subject": subject, "body": body},
+            "note": "Pending human approval in the Approvals log. Nothing is sent until a human approves.",
+        }
     except Exception as e:
-        return {"error": f"Failed to send email: {e}"}
+        return {"error": f"Failed to submit email for approval: {e}"}
 
 
 def notify_teams(
@@ -309,18 +381,35 @@ def notify_teams(
     to: Annotated[str | None, Field(description="Recipient email address (optional).")] = None,
     confirm: Annotated[
         bool,
-        Field(description="False (default) previews without posting; True posts. Preview first, then post."),
+        Field(
+            description="False (default) returns a DRAFT PREVIEW only — nothing is created, so the user can review/edit. True submits the message as an approval request. Always draft first, then confirm."
+        ),
     ] = False,
 ) -> Any:
-    """Draft/preview or post a Teams notification on the user's behalf.
+    """Draft (preview) or submit a Teams notification for approval.
 
-    Call with confirm=false to preview, then confirm=true to post. In simulate
-    mode nothing is delivered; the response says simulated=true.
-    """
+    Call with confirm=false FIRST to return a draft the user can review and edit —
+    nothing is created. Only after the user approves the wording, call again with
+    confirm=true to submit it as an approval request (a human then approves it in
+    the Approvals log before it is actually posted)."""
+    if not confirm:
+        return {
+            "draft": {"to": to, "message": message},
+            "submitted": False,
+            "note": "DRAFT ONLY — nothing submitted yet. Show this to the user to review/edit. When they approve the wording, call notify_teams again with confirm=true to submit it for approval.",
+        }
+    action: dict = {"kind": "NotifyTeams", "message": message}
+    if to:
+        action["to"] = to
     try:
-        payload: dict = {"message": message, "confirm": confirm}
-        if to:
-            payload["to"] = to
-        return _mc.post("/api/graph/teams/notify", json=payload)
+        appr = _submit_action_approval(
+            f"Post Teams message{f' to {to}' if to else ''}", action
+        )
+        return {
+            "submittedForApproval": True,
+            "approvalRequestBusinessId": appr.get("approvalRequestBusinessId"),
+            "preview": {"to": to, "message": message},
+            "note": "Pending human approval in the Approvals log. Nothing is posted until a human approves.",
+        }
     except Exception as e:
-        return {"error": f"Failed to post Teams notification: {e}"}
+        return {"error": f"Failed to submit Teams notification for approval: {e}"}

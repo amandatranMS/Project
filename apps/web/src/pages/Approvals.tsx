@@ -22,12 +22,18 @@ export default function Approvals() {
     setBusyId(id);
     setMessage(null);
     try {
-      const result = await api.patch<{ milestone?: { milestoneBusinessId: string; milestoneName: string } }>(
-        `/approval-requests/${id}/${action}`,
-        { reviewedBy: 'Demo Approver' },
-      );
-      if (action === 'approve' && result?.milestone) {
-        setMessage(`Approved — milestone created: ${result.milestone.milestoneBusinessId} — ${result.milestone.milestoneName}`);
+      const result = await api.patch<{
+        milestone?: { milestoneBusinessId: string; milestoneName: string };
+        action?: string;
+      }>(`/approval-requests/${id}/${action}`, { reviewedBy: 'Demo Approver' });
+      if (action === 'approve') {
+        if (result?.milestone) {
+          setMessage(`Approved — milestone created: ${result.milestone.milestoneBusinessId} — ${result.milestone.milestoneName}`);
+        } else if (result?.action) {
+          setMessage(`Approved — action executed: ${result.action} (simulated where applicable, recorded in the audit log).`);
+        } else {
+          setMessage('Approved.');
+        }
       }
       load();
     } catch (e) {
@@ -43,7 +49,9 @@ export default function Approvals() {
         <h1>Approval Requests</h1>
       </div>
       <p className="muted">
-        Human-in-the-loop gate. Approving a request creates the real milestone and records it in the audit log.
+        Human-in-the-loop gate. The agent only submits requests — approving one here executes the
+        action (create milestone, update/delete milestone, send email, or post Teams) and records it
+        in the audit log. Nothing the agent proposes happens until a human approves.
       </p>
       {error && <p className="error">{error}</p>}
       {message && <p style={{ color: 'var(--success)' }}>{message}</p>}
@@ -77,7 +85,7 @@ export default function Approvals() {
                       <button className="secondary" disabled={busyId === a.id} onClick={() => decide(a.id, 'needs-changes')}>Needs changes</button>
                     </>
                   )}
-                  {a.approvalStatus === 'Approved' && <span className="muted">Milestone created</span>}
+                  {a.approvalStatus === 'Approved' && <span className="muted">Executed</span>}
                   {a.approvalStatus === 'Rejected' && <span className="muted">Rejected</span>}
                 </div>
               </td>

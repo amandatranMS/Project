@@ -39,10 +39,18 @@ React + Express + SQLite + Prisma app.
 ## Agent governance (must be preserved)
 - Agents may read context (`GET /api/opportunities/:id/context`), create
   recommendations, and submit approval requests.
-- A real milestone is created **only** when a human decides an approval request via
-  `PATCH /api/approval-requests/:id/approve`. Approving performs the mock milestone
-  writeback and audits it as `CreateMilestone`. `reject` / `needs-changes` never
-  create a milestone.
+- **Every agent action that changes data or sends a message is approval-gated.**
+  The agent never mutates/sends directly — it submits an `ApprovalRequest` carrying
+  a deferred `action` (`SendOutlookMail`, `NotifyTeams`, `UpdateMilestone`,
+  `DeleteMilestone`; milestone *creation* still goes via recommendation). The action
+  is stored on the existing `ApprovalRequest.errorMessage` column, tagged
+  `MSX_ACTION::` + JSON (no new columns/tables).
+- A real change happens **only** when a human decides an approval request via
+  `PATCH /api/approval-requests/:id/approve`. Approving either executes the deferred
+  action (send/update/delete, audited by its kind) or, for a recommendation-backed
+  request, performs the mock milestone writeback and audits it as `CreateMilestone`.
+  `reject` / `needs-changes` never execute anything (`needs-changes` preserves the
+  encoded action for a later approval).
 - **Every** governed action is written to `AgentActionAuditLog` via
   `recordAgentAction` (`apps/api/src/lib/audit.ts`).
 

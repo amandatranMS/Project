@@ -177,7 +177,38 @@ paths:
       responses: { '200': { description: Approval requests } }
     post:
       tags: [Approval Requests]
-      summary: Create an approval request
+      summary: >
+        Create an approval request. May carry a deferred `action` (SendOutlookMail,
+        NotifyTeams, UpdateMilestone, or DeleteMilestone) that the API executes ONLY
+        when a human approves the request. This is how agent writes/sends are gated.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [requestName]
+              properties:
+                requestName: { type: string }
+                opportunityName: { type: string, nullable: true }
+                relatedRecommendationBusinessId: { type: string, nullable: true }
+                requestedBy: { type: string, nullable: true }
+                action:
+                  type: object
+                  description: Optional deferred action executed on approval.
+                  required: [kind]
+                  properties:
+                    kind:
+                      type: string
+                      enum: [SendOutlookMail, NotifyTeams, UpdateMilestone, DeleteMilestone]
+                    to: { type: string }
+                    subject: { type: string }
+                    body: { type: string }
+                    message: { type: string }
+                    milestoneId: { type: string }
+                    milestoneName: { type: string }
+                    milestoneStatus: { type: string }
+                    milestoneCategory: { type: string }
+                    owner: { type: string }
       responses: { '201': { description: Created } }
   /api/approval-requests/{id}:
     get:
@@ -194,12 +225,14 @@ paths:
     patch:
       tags: [Approval Requests]
       summary: >
-        Approve — performs the mock milestone writeback (creates the milestone from
-        the related recommendation) and audits it as CreateMilestone.
+        Approve. If the request carries a deferred action, it is executed now (send
+        email / notify Teams / update or delete milestone) and audited. Otherwise it
+        performs the mock milestone writeback from the related recommendation
+        (audited as CreateMilestone).
       parameters: [{ $ref: '#/components/parameters/IdParam' }]
       requestBody:
         content: { application/json: { schema: { $ref: '#/components/schemas/DecisionInput' } } }
-      responses: { '200': { description: Approved (returns approval + created milestone) }, '409': { description: Already approved } }
+      responses: { '200': { description: Approved (returns approval + created milestone or executed action) }, '409': { description: Already approved } }
   /api/approval-requests/{id}/reject:
     patch:
       tags: [Approval Requests]
