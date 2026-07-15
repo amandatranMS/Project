@@ -63,6 +63,11 @@ function assertion(user: AuthUser): string {
   return user.bearer;
 }
 
+/** Who to record as the actor: the user's email, or the service principal. */
+function actorOf(user: AuthUser): string {
+  return user.email ?? (user.kind === 'service' ? 'foundry-agent (service)' : 'unknown');
+}
+
 /** Run a Graph read, auditing success/failure as a security event. */
 async function audited<T>(
   user: AuthUser,
@@ -75,7 +80,7 @@ async function audited<T>(
     await recordAgentAction({
       agentName: 'GraphConnector',
       actionType,
-      actor: user.email,
+      actor: actorOf(user),
       inputSummary,
       outputSummary,
       securityEvent: true,
@@ -86,7 +91,7 @@ async function audited<T>(
     await recordAgentAction({
       agentName: 'GraphConnector',
       actionType,
-      actor: user.email,
+      actor: actorOf(user),
       inputSummary,
       outputSummary: err instanceof Error ? err.message : String(err),
       securityEvent: true,
@@ -175,26 +180,29 @@ export const graphService = {
     user: AuthUser,
     input: { to: string; subject: string; body: string; confirm?: boolean },
   ) {
-    const token = assertion(user);
+    const mode = sendMode();
+    // Live delivery always needs a real signed-in user (their token + explicit
+    // confirm). Simulation may be driven by the service principal (the hosted
+    // agent) since nothing is actually delivered.
+    if (mode === 'live') assertion(user);
 
     if (!input.confirm && !autoConfirmEnabled()) {
       return {
         sent: false,
         requiresConfirmation: true,
-        mode: sendMode(),
+        mode,
         preview: { to: input.to, subject: input.subject, body: input.body },
-        note: 'Not sent. Re-submit the same request with confirm=true to send this email as you.',
+        note: 'Not sent. Re-submit the same request with confirm=true to send this email.',
       };
     }
 
-    const mode = sendMode();
     return audited<{ sent: boolean; simulated: boolean; to: string; subject: string; note?: string }>(
       user,
       'SendOutlookMail',
       `sendMail to=${input.to} subject="${input.subject}" mode=${mode}`,
       async () => {
         if (mode === 'live') {
-          await graphPost(token, '/me/sendMail', {
+          await graphPost(user.bearer!, '/me/sendMail', {
             message: {
               subject: input.subject,
               body: { contentType: 'Text', content: input.body },
@@ -233,19 +241,19 @@ export const graphService = {
     user: AuthUser,
     input: { message: string; to?: string; confirm?: boolean },
   ) {
-    assertion(user);
+    const mode = sendMode();
+    if (mode === 'live') assertion(user);
 
     if (!input.confirm && !autoConfirmEnabled()) {
       return {
         sent: false,
         requiresConfirmation: true,
-        mode: sendMode(),
+        mode,
         preview: { to: input.to ?? '(self)', message: input.message },
         note: 'Not sent. Re-submit with confirm=true to post this Teams notification.',
       };
     }
 
-    const mode = sendMode();
     return audited(
       user,
       'NotifyTeams',

@@ -274,3 +274,53 @@ def list_pending_approvals() -> Any:
     """List approval requests still awaiting a human decision (approvalStatus = Pending)."""
     data = _mc.get("/api/approval-requests", params={"approvalStatus": "Pending"}) or []
     return [_trim_approval(a) for a in data]
+
+
+# ---- Communications tools (Outlook / Teams, via the API's Graph endpoints) ----
+# These act on the signed-in user's behalf. In simulate mode the API records the
+# action (with audit) but does NOT actually deliver — so the hosted agent can
+# demonstrate the full draft -> preview -> send flow with no admin consent.
+def send_email(
+    to: Annotated[str, Field(description="Recipient email address.")],
+    subject: Annotated[str, Field(description="Email subject line.")],
+    body: Annotated[str, Field(description="Email body text.")],
+    confirm: Annotated[
+        bool,
+        Field(description="False (default) returns a DRAFT PREVIEW without sending; True sends. Always preview first, then send."),
+    ] = False,
+) -> Any:
+    """Draft/preview or send an Outlook email on the user's behalf.
+
+    Call with confirm=false to get a preview (nothing sent), show it to the user,
+    then call again with confirm=true to send. In simulate mode nothing is
+    actually delivered; the response says simulated=true.
+    """
+    try:
+        return _mc.post(
+            "/api/graph/outlook/send",
+            json={"to": to, "subject": subject, "body": body, "confirm": confirm},
+        )
+    except Exception as e:
+        return {"error": f"Failed to send email: {e}"}
+
+
+def notify_teams(
+    message: Annotated[str, Field(description="The Teams message text.")],
+    to: Annotated[str | None, Field(description="Recipient email address (optional).")] = None,
+    confirm: Annotated[
+        bool,
+        Field(description="False (default) previews without posting; True posts. Preview first, then post."),
+    ] = False,
+) -> Any:
+    """Draft/preview or post a Teams notification on the user's behalf.
+
+    Call with confirm=false to preview, then confirm=true to post. In simulate
+    mode nothing is delivered; the response says simulated=true.
+    """
+    try:
+        payload: dict = {"message": message, "confirm": confirm}
+        if to:
+            payload["to"] = to
+        return _mc.post("/api/graph/teams/notify", json=payload)
+    except Exception as e:
+        return {"error": f"Failed to post Teams notification: {e}"}

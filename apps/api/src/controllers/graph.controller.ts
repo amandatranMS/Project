@@ -15,9 +15,10 @@ function requireUser(req: Request) {
 }
 
 /**
- * Resolve the user to act AS. Either the caller is a signed-in user (web app),
- * or it's the hosted agent calling with the service key + an `x-msx-session`
- * handle that maps back to a signed-in user's token.
+ * Resolve the principal for a send/notify action. A signed-in user (web app) or
+ * a user session handle acts as that user. The service principal (the hosted
+ * agent's x-api-key) is allowed too — the service layer only lets it perform
+ * SIMULATED sends; live delivery still requires a real user.
  */
 function resolveActingUser(req: Request): AuthUser {
   if (req.user?.kind === 'user' && req.user.bearer) return req.user;
@@ -26,6 +27,7 @@ function resolveActingUser(req: Request): AuthUser {
     const s = getUserSession(sessionId);
     if (s) return { kind: 'user', bearer: s.bearer, email: s.email };
   }
+  if (req.user?.kind === 'service') return { kind: 'service' };
   throw new HttpError(401, 'Sign in (or provide a valid session handle) to act as a user.');
 }
 

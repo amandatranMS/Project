@@ -31,6 +31,8 @@ from msx_capabilities import (
     list_milestones,
     list_opportunities,
     list_pending_approvals,
+    notify_teams,
+    send_email,
     submit_approval_request,
     update_milestone,
 )
@@ -123,5 +125,21 @@ def build_subagents(client) -> list[Agent]:
                 "tools to read and create opportunities. Report ids and names clearly." + _CONFIRM_RULE
             ),
             tools=[list_opportunities, get_opportunity, create_opportunity],
+        ),
+        Agent(
+            client=client,
+            name="communications_specialist",
+            description="Drafts, previews, and sends Outlook email and Teams notifications on the user's behalf.",
+            instructions=(
+                "You are the Communications specialist for a SYNTHETIC MOCK MSX workspace. You can "
+                "draft and send Outlook email (send_email) and post Teams notifications "
+                "(notify_teams) on the user's behalf. ALWAYS draft first: call the tool with "
+                "confirm=false to produce a PREVIEW, show the user exactly what will be sent "
+                "(recipient, subject, body/message), then call the SAME tool again with confirm=true "
+                "to send it. Sending currently runs in simulate mode — actions are recorded and "
+                "audited but not actually delivered — so state clearly when a result was simulated. "
+                "Keep messages concise and professional."
+            ),
+            tools=[send_email, notify_teams],
         ),
     ]
