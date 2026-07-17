@@ -57,5 +57,7 @@ export const graphConsentRequest = {
     'Mail.Read',
     'Mail.Send',
     'Chat.Read',
+    'Chat.ReadWrite',
+    'ChatMessage.Send',
   ],
 };

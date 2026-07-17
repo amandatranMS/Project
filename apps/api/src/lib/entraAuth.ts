@@ -52,8 +52,15 @@ const clientId = process.env.AAD_CLIENT_ID;
 /** True once the app registration values are configured. */
 export const entraAuthEnabled = Boolean(tenantId && clientId);
 
-const issuer = `https://login.microsoftonline.com/${tenantId}/v2.0`;
-// A v2 access token for a custom API carries aud = the client id (or api://<clientId>).
+// Accept BOTH token versions. A custom "Expose an API" scope issues v1 access
+// tokens (iss = https://sts.windows.net/<tenant>/) unless the app registration
+// sets requestedAccessTokenVersion=2 (iss = .../v2.0). Allow either so the login
+// works regardless of that manifest setting.
+const issuer = [
+  `https://login.microsoftonline.com/${tenantId}/v2.0`,
+  `https://sts.windows.net/${tenantId}/`,
+];
+// A v2 token carries aud = the client id; a v1 token carries aud = api://<clientId>.
 const audiences = [clientId ?? '', `api://${clientId ?? ''}`];
 
 const jwks = entraAuthEnabled
@@ -87,16 +94,10 @@ async function verifyBearer(token: string): Promise<AuthUser> {
 export function authenticate(req: Request, res: Response, next: NextFunction) {
   const apiKey = process.env.API_KEY;
 
-  // 1. Service principal via shared key (agent / machine-to-machine).
-  if (apiKey) {
-    const provided = req.header('x-api-key');
-    if (provided && provided === apiKey) {
-      req.user = { kind: 'service' };
-      return next();
-    }
-  }
-
-  // 2. User principal via Entra bearer token.
+  // 1. User principal via Entra bearer token. Checked FIRST so a real signed-in
+  //    user always wins over the shared service key — the Vite dev proxy injects
+  //    x-api-key on every /api call, so the browser sends both; the delegated
+  //    user identity is more specific and is required for Graph (on-behalf-of).
   const authz = req.header('authorization');
   if (entraAuthEnabled && authz?.toLowerCase().startsWith('bearer ')) {
     const token = authz.slice(7).trim();
@@ -109,6 +110,15 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
         res.status(401).json({ success: false, error: 'Unauthorized — invalid or expired token.' });
       });
     return;
+  }
+
+  // 2. Service principal via shared key (agent / machine-to-machine).
+  if (apiKey) {
+    const provided = req.header('x-api-key');
+    if (provided && provided === apiKey) {
+      req.user = { kind: 'service' };
+      return next();
+    }
   }
 
   // 3. Nothing configured → open for local development.
