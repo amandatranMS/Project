@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma.js';
 import { runWithAgentContext, type AgentTurnContext } from '../lib/agentContext.js';
 import type { AuthUser } from '../lib/entraAuth.js';
 import { createUserSession } from '../lib/userSessions.js';
+import { HttpError } from '../lib/httpError.js';
 
 export type ChatEngine = 'in-app' | 'foundry';
 
@@ -23,6 +24,10 @@ export const chatService = {
    * governed action.
    */
   async send(messages: ChatMessage[], engine: ChatEngine, user?: AuthUser, onToken?: TokenSink) {
+    // The in-app engine is disabled — all chat turns go to the Foundry hosted agent.
+    if (engine === 'in-app') {
+      throw new HttpError(403, 'The in-app engine is disabled. Use the Foundry hosted agent.');
+    }
     if (engine === 'foundry') {
       // If a real user is signed in, stash their token and give the hosted agent
       // an opaque session handle so it can act on their behalf (Graph OBO).
