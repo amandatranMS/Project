@@ -29,5 +29,8 @@ ENV PORT=4000
 
 EXPOSE 4000
 
-RUN chmod +x /app/docker-entrypoint.sh
+# Normalize line endings (a Windows checkout may give the script CRLF, which makes
+# the kernel look for interpreter "/bin/sh\r" -> "no such file or directory") and
+# mark it executable.
+RUN sed -i 's/\r$//' /app/docker-entrypoint.sh && chmod +x /app/docker-entrypoint.sh
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
