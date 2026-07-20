@@ -37,6 +37,20 @@ function decodeAction(errorMessage?: string | null): PendingAction | null {
   }
 }
 
+/**
+ * Detects a legacy "send" approval (email/Teams) whose title looks like a send
+ * request but that carries NO stored action payload. The real message body was
+ * never captured on these rows, so we must never fabricate content and deliver
+ * it to real people — approving one fails with a clear, actionable error.
+ */
+function legacySendKind(name?: string | null): 'email' | 'teams' | null {
+  const n = name?.trim();
+  if (!n) return null;
+  if (/^Send email to\s+[^:]+:\s*".*"$/i.test(n)) return 'email';
+  if (/^Post Teams message(?:\s+to\s+.+)?$/i.test(n)) return 'teams';
+  return null;
+}
+
 function summarizeAction(action: PendingAction): string {
   switch (action.kind) {
     case 'SendOutlookMail':
@@ -176,6 +190,7 @@ export const approvalRequestsService = {
     }
 
     // Approved + a deferred action attached → execute it (send / update / delete).
+    // The stored payload is sent verbatim — the exact body the agent drafted.
     if (pendingAction) {
       const result = await executeAction(pendingAction, actor ?? { kind: 'service' }, agentName);
       const updated = await prisma.approvalRequest.update({
@@ -201,8 +216,24 @@ export const approvalRequestsService = {
       return { approval: updated, action: pendingAction.kind, result };
     }
 
+    // Approved but no stored action. If the title looks like a legacy send
+    // request, its real drafted message was never captured — refuse rather than
+    // send fabricated placeholder content to real people.
+    const legacyKind = legacySendKind(approval.requestName);
+    if (legacyKind) {
+      throw new HttpError(
+        422,
+        `This ${legacyKind === 'email' ? 'email' : 'Teams'} request has no saved message content, so there is nothing to send. Recreate it through the assistant (draft, then confirm) so the exact drafted message is captured, then approve that request.`,
+      );
+    }
+
     // Approved (no action): create the milestone (writeback) from the recommendation.
-    if (!approval.opportunityId) throw new HttpError(400, 'Approval has no linked opportunity to create a milestone under.');
+    if (!approval.opportunityId) {
+      throw new HttpError(
+        400,
+        'Approval has no executable action and no linked opportunity for milestone writeback.',
+      );
+    }
     const rec = approval.relatedRecommendation;
 
     const milestone = await prisma.opportunityMilestone.create({

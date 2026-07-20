@@ -254,21 +254,25 @@ export const graphService = {
       };
     }
 
-    return audited(
+    return audited<{ sent: boolean; simulated: boolean; to: string; message: string; note?: string }>(
       user,
       'NotifyTeams',
       `notifyTeams to=${input.to ?? '(self)'} mode=${mode}`,
       async () => {
         if (mode === 'live') {
           const token = user.bearer!;
-          if (!input.to) {
-            throw new HttpError(400, 'A recipient email (to) is required to send a live Teams message.');
+          const recipientEmail = input.to ?? user.email;
+          if (!recipientEmail) {
+            throw new HttpError(
+              400,
+              'A recipient email is required for a live Teams message when the signed-in account has no email claim.',
+            );
           }
           // Send AS the signed-in user (delegated). Resolve both parties to their
           // Entra object ids, open (or reuse) a 1:1 chat, then post the message.
           const recipient = await graphGet<{ id: string }>(
             token,
-            `/users/${encodeURIComponent(input.to)}?$select=id`,
+            `/users/${encodeURIComponent(recipientEmail)}?$select=id`,
           );
           const meUser = await graphGet<{ id: string }>(token, '/me?$select=id');
           const chat = await graphPost<{ id: string }>(token, '/chats', {
@@ -293,8 +297,8 @@ export const graphService = {
             body: { content: input.message },
           });
           return {
-            data: { sent: true, simulated: false, to: input.to, message: input.message },
-            outputSummary: `sent Teams message to ${input.to}`,
+            data: { sent: true, simulated: false, to: recipientEmail, message: input.message },
+            outputSummary: `sent Teams message to ${recipientEmail}`,
           };
         }
         return {
