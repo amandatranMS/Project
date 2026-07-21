@@ -112,9 +112,15 @@ export default function Microsoft365() {
   const connect = () => {
     // Full-page redirect (not popup): reliable in embedded/popup-blocked
     // browsers. Returns to the app after consent; main.tsx handles the redirect.
+    // prompt:'consent' forces a fresh consent + token so newly granted scopes
+    // (e.g. Chat.ReadWrite for Teams) are picked up instead of a cached token.
     setError(null);
     setResult(null);
-    void instance.acquireTokenRedirect({ ...graphConsentRequest, account: accounts[0] });
+    void instance.acquireTokenRedirect({
+      ...graphConsentRequest,
+      account: accounts[0],
+      prompt: 'consent',
+    });
   };
 
   const sendEmail = (confirm: boolean) =>

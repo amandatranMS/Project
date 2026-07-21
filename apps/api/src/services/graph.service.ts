@@ -1,5 +1,5 @@
 import type { AuthUser } from '../lib/entraAuth.js';
-import { graphGet, graphPost } from '../lib/graph.js';
+import { graphGet, graphPost, GraphError } from '../lib/graph.js';
 import { recordAgentAction } from '../lib/audit.js';
 import { HttpError } from '../lib/httpError.js';
 
@@ -275,21 +275,44 @@ export const graphService = {
             `/users/${encodeURIComponent(recipientEmail)}?$select=id`,
           );
           const meUser = await graphGet<{ id: string }>(token, '/me?$select=id');
-          const chat = await graphPost<{ id: string }>(token, '/chats', {
-            chatType: 'oneOnOne',
-            members: [
-              {
-                '@odata.type': '#microsoft.graph.aadUserConversationMember',
-                roles: ['owner'],
-                'user@odata.bind': `https://graph.microsoft.com/v1.0/users('${meUser.id}')`,
-              },
-              {
-                '@odata.type': '#microsoft.graph.aadUserConversationMember',
-                roles: ['owner'],
-                'user@odata.bind': `https://graph.microsoft.com/v1.0/users('${recipient.id}')`,
-              },
-            ],
-          });
+          if (recipient.id === meUser.id) {
+            throw new HttpError(
+              400,
+              'You cannot open a 1:1 Teams chat with yourself. Enter a different recipient (e.g. a teammate) and try again.',
+            );
+          }
+          let chat: { id: string } | null;
+          try {
+            chat = await graphPost<{ id: string }>(token, '/chats', {
+              chatType: 'oneOnOne',
+              members: [
+                {
+                  '@odata.type': '#microsoft.graph.aadUserConversationMember',
+                  roles: ['owner'],
+                  'user@odata.bind': `https://graph.microsoft.com/v1.0/users('${meUser.id}')`,
+                },
+                {
+                  '@odata.type': '#microsoft.graph.aadUserConversationMember',
+                  roles: ['owner'],
+                  'user@odata.bind': `https://graph.microsoft.com/v1.0/users('${recipient.id}')`,
+                },
+              ],
+            });
+          } catch (err) {
+            // Creating a 1:1 chat needs the delegated Chat.ReadWrite (or Chat.Create)
+            // scope. If the signed-in user's token predates that consent, Graph
+            // returns a 403 scope error — surface an actionable message.
+            if (
+              err instanceof GraphError &&
+              (err.status === 403 || /scope|permission/i.test(err.message))
+            ) {
+              throw new HttpError(
+                403,
+                'Teams send needs the Chat.ReadWrite permission, which your current sign-in token does not carry yet. Click "Connect Microsoft 365" on this page to refresh consent, then try again.',
+              );
+            }
+            throw err;
+          }
           if (!chat?.id) {
             throw new HttpError(502, 'Could not open a Teams chat with the recipient.');
           }
