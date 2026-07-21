@@ -1,7 +1,7 @@
 import { asyncHandler, sendOk } from '../lib/responses.js';
 import { HttpError } from '../lib/httpError.js';
 import { dealTeamMembersService } from '../services/dealTeamMembers.service.js';
-import { createDealTeamMemberSchema } from '../validators/schemas.js';
+import { createDealTeamMemberSchema, updateDealTeamMemberSchema } from '../validators/schemas.js';
 
 const q = (v: unknown) => (typeof v === 'string' && v ? v : undefined);
 
@@ -17,5 +17,11 @@ export const dealTeamMembersController = {
     const input = createDealTeamMemberSchema.parse(req.body);
     const data = await dealTeamMembersService.create(input);
     sendOk(res, data, 201);
+  }),
+
+  update: asyncHandler(async (req, res) => {
+    const input = updateDealTeamMemberSchema.parse(req.body);
+    const data = await dealTeamMembersService.update(req.params.id, input);
+    sendOk(res, data);
   }),
 };

@@ -1,14 +1,13 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { MILESTONE_STATUSES, choiceLabel } from '@msx/shared';
 import { api, type Milestone } from '../api/client';
-import { statusBadgeClass, formatDate } from '../ui';
+import { statusBadgeClass, formatDate, formatBool, formatCurrency } from '../ui';
 import MilestoneForm from '../components/form/MilestoneForm';
 import Modal from '../components/Modal';
 
 interface MilestoneDetailData extends Milestone {
   statusHistories: { id: string; oldStatus?: string | null; newStatus?: string | null; changedBy?: string | null; reason?: string | null; statusDate?: string | null }[];
-  mitigationPlan?: string | null;
 }
 
 const STATUSES = MILESTONE_STATUSES;
@@ -104,17 +103,40 @@ export default function MilestoneDetail() {
       <div className="card">
         <div className="grid cols-3">
           <div><div className="muted">Milestone ID</div>{data.milestoneBusinessId}</div>
+          <div><div className="muted">Opportunity</div>{data.opportunity ? <Link to={`/opportunities/${data.opportunityId}`}>{data.opportunity.opportunityName}</Link> : '—'}</div>
           <div><div className="muted">Category</div>{choiceLabel(data.milestoneCategory)}</div>
           <div><div className="muted">Owner</div>{data.owner ?? '—'}</div>
+          <div><div className="muted">Created By</div>{data.createdBy ?? '—'}</div>
           <div><div className="muted">Workload</div>{choiceLabel(data.workload)}</div>
           <div><div className="muted">Partner</div>{data.partnerName ?? '—'}</div>
+          <div><div className="muted">Delivered By</div>{choiceLabel(data.deliveredBy)}</div>
+          <div><div className="muted">Customer Commitment</div>{choiceLabel(data.customerCommitment)}</div>
           <div><div className="muted">Est Date</div>{formatDate(data.estDate)}</div>
-          <div><div className="muted">Risk Impact</div>{choiceLabel(data.riskImpact)}</div>
+          <div><div className="muted">Fit Charge</div>{formatCurrency(data.fitCharge)}</div>
+          <div><div className="muted">Non-Recurring</div>{formatBool(data.nonRecurring)}</div>
+          <div><div className="muted">Azure Capacity Type</div>{choiceLabel(data.azureCapacityType)}</div>
+          <div><div className="muted">Preferred Azure Region</div>{choiceLabel(data.preferredAzureRegion)}</div>
           <div><div className="muted">Competitor</div>{data.competitorName ?? '—'}</div>
+          <div><div className="muted">Risk Impact</div>{choiceLabel(data.riskImpact)}</div>
+          <div><div className="muted">Status Reason</div>{data.statusReason ?? '—'}</div>
+          <div><div className="muted">Last Updated</div>{formatDate(data.lastUpdated)}</div>
         </div>
         {data.riskDescription && <p className="section muted">Risk: {data.riskDescription}</p>}
         {data.mitigationPlan && <p className="muted">Mitigation: {data.mitigationPlan}</p>}
-        {data.blockedReason && <p className="muted">Blocked: {data.blockedReason}</p>}
+        {data.comments && <p className="muted">Comments: {data.comments}</p>}
+      </div>
+
+      <div className="card">
+        <h2>Blocker</h2>
+        <div className="grid cols-3">
+          <div><div className="muted">Blocked Owner</div>{data.blockedOwner ?? '—'}</div>
+          <div><div className="muted">Blocked Since</div>{formatDate(data.blockedSince)}</div>
+          <div><div className="muted">Expected Resolution</div>{formatDate(data.expectedResolutionDate)}</div>
+          <div><div className="muted">Escalated</div>{formatBool(data.escalated)}</div>
+        </div>
+        {data.blockedReason
+          ? <p className="section muted">Reason: {data.blockedReason}</p>
+          : <p className="section muted">Not blocked.</p>}
       </div>
 
       <div className="card">

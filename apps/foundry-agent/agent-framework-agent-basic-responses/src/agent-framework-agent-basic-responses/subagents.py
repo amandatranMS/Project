@@ -28,13 +28,16 @@ from msx_capabilities import (
     get_dashboard_summary,
     get_milestone,
     get_opportunity,
+    list_deal_team,
     list_milestones,
     list_opportunities,
     list_pending_approvals,
     notify_teams,
     send_email,
     submit_approval_request,
+    update_deal_team_member,
     update_milestone,
+    update_opportunity,
 )
 
 _CONFIRM_RULE = (
@@ -47,12 +50,13 @@ _CONFIRM_RULE = (
 # directly. Every such action is submitted as an approval request and a human must
 # approve it in the Approvals log before it executes.
 _APPROVAL_RULE = (
-    " IMPORTANT: You cannot change data or send messages directly. Milestone "
-    "updates/deletes, emails, and Teams messages are all SUBMITTED as approval "
-    "requests. After you call one of these tools, it returns "
-    "submittedForApproval=true and an approvalRequestBusinessId. STOP and tell the "
-    "user it is Pending and a human must approve it in the Approvals log before "
-    "anything happens. Never claim the action was done — you cannot approve requests."
+    " IMPORTANT: You cannot change data or send messages directly. Record "
+    "updates and deletions (milestones, opportunities, deal team members), emails, "
+    "and Teams messages are all SUBMITTED as approval requests. After you call one "
+    "of these tools, it returns submittedForApproval=true and an "
+    "approvalRequestBusinessId. STOP and tell the user it is Pending and a human "
+    "must approve it in the Approvals log before anything happens. Never claim the "
+    "action was done — you cannot approve requests."
 )
 
 # Governance rule: a milestone is created ONLY when a human approves an approval
@@ -133,12 +137,25 @@ def build_subagents(client) -> list[Agent]:
         Agent(
             client=client,
             name="opportunity_specialist",
-            description="Handles opportunities: list, look up, or create opportunities.",
+            description="Handles opportunities and their deal team: list, look up, create opportunities, and request updates to opportunity or deal-team fields (updates go through human approval).",
             instructions=(
                 "You are the Opportunity specialist for a SYNTHETIC MOCK MSX workspace. Use your "
-                "tools to read and create opportunities. Report ids and names clearly." + _CONFIRM_RULE
+                "tools to read and create opportunities, and to REQUEST updates to ANY field of "
+                "an opportunity (update_opportunity) or of a deal team member "
+                "(update_deal_team_member). Updates are NOT applied directly — they submit an "
+                "approval request that a human must approve in the Approvals log. To update a "
+                "deal team member, first call list_deal_team (or get_opportunity) to find the "
+                "member's id, then call update_deal_team_member with only the fields to change. "
+                "Report ids and names clearly." + _APPROVAL_RULE + _CONFIRM_RULE
             ),
-            tools=[list_opportunities, get_opportunity, create_opportunity],
+            tools=[
+                list_opportunities,
+                get_opportunity,
+                create_opportunity,
+                update_opportunity,
+                list_deal_team,
+                update_deal_team_member,
+            ],
         ),
         Agent(
             client=client,

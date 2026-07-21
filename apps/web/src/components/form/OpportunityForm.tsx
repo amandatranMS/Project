@@ -28,6 +28,8 @@ export default function OpportunityForm({ initial, onClose, onSaved }: Props) {
     aeOwner: initial?.aeOwner ?? '',
     assignedSE: initial?.assignedSE ?? '',
     industry: initial?.industry ?? '',
+    consumptionPhase: initial?.consumptionPhase ?? '',
+    lastUpdated: isoToDateInput(initial?.lastUpdated),
     businessProblem: initial?.businessProblem ?? '',
     nextStep: initial?.nextStep ?? '',
   });
@@ -52,6 +54,8 @@ export default function OpportunityForm({ initial, onClose, onSaved }: Props) {
       aeOwner: clean(form.aeOwner),
       assignedSE: clean(form.assignedSE),
       industry: clean(form.industry),
+      consumptionPhase: clean(form.consumptionPhase),
+      lastUpdated: clean(form.lastUpdated),
       businessProblem: clean(form.businessProblem),
       nextStep: clean(form.nextStep),
     };
@@ -94,6 +98,8 @@ export default function OpportunityForm({ initial, onClose, onSaved }: Props) {
         <DateField label="Estimated close date" value={form.closeDate} onChange={set('closeDate')} />
         <TextField label="Competitor" value={form.competitorName} onChange={set('competitorName')} />
         <TextField label="Industry" value={form.industry} onChange={set('industry')} />
+        <TextField label="Consumption phase" value={form.consumptionPhase} onChange={set('consumptionPhase')} />
+        <DateField label="Last updated" value={form.lastUpdated} onChange={set('lastUpdated')} />
         <TextField label="AE owner" value={form.aeOwner} onChange={set('aeOwner')} />
         <TextField label="Assigned SE" value={form.assignedSE} onChange={set('assignedSE')} />
         <TextAreaField label="Business problem" value={form.businessProblem} onChange={set('businessProblem')} full />

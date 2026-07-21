@@ -154,8 +154,10 @@ export interface Opportunity {
   aeOwner?: string | null;
   assignedSE?: string | null;
   competitorName?: string | null;
+  consumptionPhase?: string | null;
   businessProblem?: string | null;
   nextStep?: string | null;
+  lastUpdated?: string | null;
   _count?: { milestones: number };
 }
 
@@ -165,17 +167,43 @@ export interface Milestone {
   milestoneName: string;
   opportunityId: string;
   workload?: string | null;
+  customerCommitment?: string | null;
+  deliveredBy?: string | null;
   milestoneCategory?: string | null;
   milestoneStatus?: string | null;
+  statusReason?: string | null;
   partnerName?: string | null;
   estDate?: string | null;
   fitCharge?: number | null;
+  nonRecurring?: boolean | null;
+  comments?: string | null;
   riskDescription?: string | null;
   riskImpact?: string | null;
+  mitigationPlan?: string | null;
   blockedReason?: string | null;
+  blockedOwner?: string | null;
+  blockedSince?: string | null;
+  expectedResolutionDate?: string | null;
+  escalated?: boolean | null;
   competitorName?: string | null;
+  azureCapacityType?: string | null;
+  preferredAzureRegion?: string | null;
   owner?: string | null;
+  createdBy?: string | null;
+  lastUpdated?: string | null;
   opportunity?: { id: string; opportunityName: string; customerName?: string | null };
+}
+
+export interface DealTeamMember {
+  id: string;
+  dealTeamMemberBusinessId?: string;
+  personName?: string | null;
+  role?: string | null;
+  teamArea?: string | null;
+  addedDate?: string | null;
+  active?: boolean | null;
+  handoffRequired?: boolean | null;
+  handoffNotes?: string | null;
 }
 
 export interface Recommendation {

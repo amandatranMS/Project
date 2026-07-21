@@ -30,6 +30,19 @@ SALES_STAGES = ["Listen & Consult", "Inspire & Design", "Empower & Achieve", "Re
 OPPORTUNITY_STATUSES = ["Active", "On Hold", "Won", "Lost", "Closed"]
 PRIORITIES = ["High", "Medium", "Low"]
 CONFIDENCE_LEVELS = ["High", "Medium", "Low"]
+# Extra controlled lists needed for full-parity field updates (mirror packages/shared).
+SOLUTION_AREAS = ["Modern Work", "Security", "Azure", "AI Apps"]
+WORKLOADS = [
+    "M365 Copilot for Microsoft 365", "Microsoft Sentinel", "Microsoft Purview",
+    "Azure Migration", "Copilot Studio", "Defender XDR", "Teams Premium",
+]
+CUSTOMER_COMMITMENTS = ["Uncommitted", "Verbal", "Committed", "Contracted"]
+DELIVERED_BY = ["Microsoft", "Partner", "Customer", "Joint"]
+AZURE_CAPACITY_TYPES = ["---", "Azure Commit", "MACC", "Open", "CSP", "EA"]
+PREFERRED_AZURE_REGIONS = [
+    "Canada Central", "Canada East", "East US", "West US", "West Europe", "North Europe",
+]
+RISK_IMPACTS = ["High", "Medium", "Low"]
 
 _mc = MsxClient()
 
@@ -179,15 +192,55 @@ def update_milestone(
     milestoneStatus: Annotated[str | None, Field(description=f"One of: {MILESTONE_STATUSES}.")] = None,
     milestoneCategory: Annotated[str | None, Field(description=f"One of: {MILESTONE_CATEGORIES}.")] = None,
     owner: Annotated[str | None, Field(description="New owner name.")] = None,
+    workload: Annotated[str | None, Field(description=f"One of: {WORKLOADS}.")] = None,
+    customerCommitment: Annotated[str | None, Field(description=f"One of: {CUSTOMER_COMMITMENTS}.")] = None,
+    deliveredBy: Annotated[str | None, Field(description=f"One of: {DELIVERED_BY}.")] = None,
+    partnerName: Annotated[str | None, Field(description="Partner name.")] = None,
+    statusReason: Annotated[str | None, Field(description="Reason for the current status.")] = None,
+    estDate: Annotated[str | None, Field(description="Estimated date (ISO, e.g. 2026-07-21).")] = None,
+    fitCharge: Annotated[float | None, Field(description="Fit charge amount (number).")] = None,
+    nonRecurring: Annotated[bool | None, Field(description="Whether the charge is non-recurring.")] = None,
+    comments: Annotated[str | None, Field(description="Free-text comments.")] = None,
+    riskDescription: Annotated[str | None, Field(description="Risk description.")] = None,
+    riskImpact: Annotated[str | None, Field(description=f"One of: {RISK_IMPACTS}.")] = None,
+    mitigationPlan: Annotated[str | None, Field(description="Risk mitigation plan.")] = None,
+    blockedReason: Annotated[str | None, Field(description="Why the milestone is blocked.")] = None,
+    blockedOwner: Annotated[str | None, Field(description="Who owns unblocking it.")] = None,
+    blockedSince: Annotated[str | None, Field(description="Blocked since (ISO date).")] = None,
+    expectedResolutionDate: Annotated[str | None, Field(description="Expected resolution date (ISO date).")] = None,
+    escalated: Annotated[bool | None, Field(description="Whether the blocker is escalated.")] = None,
+    azureCapacityType: Annotated[str | None, Field(description=f"One of: {AZURE_CAPACITY_TYPES}.")] = None,
+    preferredAzureRegion: Annotated[str | None, Field(description=f"One of: {PREFERRED_AZURE_REGIONS}.")] = None,
+    lastUpdated: Annotated[str | None, Field(description="Last-updated date (ISO date).")] = None,
 ) -> Any:
-    """Request an update to an existing milestone. This does NOT change anything —
-    it submits an approval request that a human must approve in the Approvals log
-    before the update is applied."""
+    """Request an update to any field(s) of an existing milestone. This does NOT
+    change anything — it submits an approval request that a human must approve in
+    the Approvals log before the update is applied."""
     fields = {
         "milestoneName": milestoneName,
         "milestoneStatus": milestoneStatus,
         "milestoneCategory": milestoneCategory,
         "owner": owner,
+        "workload": workload,
+        "customerCommitment": customerCommitment,
+        "deliveredBy": deliveredBy,
+        "partnerName": partnerName,
+        "statusReason": statusReason,
+        "estDate": estDate,
+        "fitCharge": fitCharge,
+        "nonRecurring": nonRecurring,
+        "comments": comments,
+        "riskDescription": riskDescription,
+        "riskImpact": riskImpact,
+        "mitigationPlan": mitigationPlan,
+        "blockedReason": blockedReason,
+        "blockedOwner": blockedOwner,
+        "blockedSince": blockedSince,
+        "expectedResolutionDate": expectedResolutionDate,
+        "escalated": escalated,
+        "azureCapacityType": azureCapacityType,
+        "preferredAzureRegion": preferredAzureRegion,
+        "lastUpdated": lastUpdated,
     }
     fields = {k: v for k, v in fields.items() if v is not None}
     if not fields:
@@ -270,6 +323,136 @@ def create_opportunity(
     }
     payload = {k: v for k, v in payload.items() if v is not None}
     return _trim_opportunity(_mc.post("/api/opportunities", json=payload))
+
+
+def update_opportunity(
+    id: Annotated[str, Field(description="The opportunity id OR business id (e.g. OPP-003).")],
+    opportunityName: Annotated[str | None, Field(description="New opportunity name.")] = None,
+    tpid: Annotated[str | None, Field(description="TPID.")] = None,
+    customerName: Annotated[str | None, Field(description="Customer name.")] = None,
+    industry: Annotated[str | None, Field(description="Industry.")] = None,
+    solutionArea: Annotated[str | None, Field(description=f"One of: {SOLUTION_AREAS}.")] = None,
+    salesStage: Annotated[str | None, Field(description=f"One of: {SALES_STAGES}.")] = None,
+    status: Annotated[str | None, Field(description=f"One of: {OPPORTUNITY_STATUSES}.")] = None,
+    estimatedRevenue: Annotated[float | None, Field(description="Estimated revenue (number).")] = None,
+    closeDate: Annotated[str | None, Field(description="Close date (ISO, e.g. 2026-07-21).")] = None,
+    aeOwner: Annotated[str | None, Field(description="Account executive owner.")] = None,
+    assignedSE: Annotated[str | None, Field(description="Assigned solution engineer.")] = None,
+    competitorName: Annotated[str | None, Field(description="Competitor name.")] = None,
+    consumptionPhase: Annotated[str | None, Field(description="Consumption phase.")] = None,
+    businessProblem: Annotated[str | None, Field(description="Business problem.")] = None,
+    nextStep: Annotated[str | None, Field(description="Next step.")] = None,
+    lastUpdated: Annotated[str | None, Field(description="Last-updated date (ISO date).")] = None,
+) -> Any:
+    """Request an update to any field(s) of an existing opportunity. This does NOT
+    change anything — it submits an approval request that a human must approve in
+    the Approvals log before the update is applied."""
+    fields = {
+        "opportunityName": opportunityName,
+        "tpid": tpid,
+        "customerName": customerName,
+        "industry": industry,
+        "solutionArea": solutionArea,
+        "salesStage": salesStage,
+        "status": status,
+        "estimatedRevenue": estimatedRevenue,
+        "closeDate": closeDate,
+        "aeOwner": aeOwner,
+        "assignedSE": assignedSE,
+        "competitorName": competitorName,
+        "consumptionPhase": consumptionPhase,
+        "businessProblem": businessProblem,
+        "nextStep": nextStep,
+        "lastUpdated": lastUpdated,
+    }
+    fields = {k: v for k, v in fields.items() if v is not None}
+    if not fields:
+        return {"error": "Provide at least one field to update."}
+    changes = ", ".join(f"{k}={v}" for k, v in fields.items())
+    action = {"kind": "UpdateOpportunity", "opportunityId": id, **fields}
+    try:
+        opp_name = None
+        try:
+            o = _mc.get(f"/api/opportunities/{id}")
+            opp_name = o.get("opportunityName") if isinstance(o, dict) else None
+        except Exception:
+            opp_name = None
+        appr = _submit_action_approval(f"Update opportunity {id}: {changes}", action, opportunity_name=opp_name)
+        return {
+            "submittedForApproval": True,
+            "approvalRequestBusinessId": (appr or {}).get("approvalRequestBusinessId"),
+            "note": "Pending human approval in the Approvals log. The opportunity is NOT changed until a human approves.",
+        }
+    except Exception as e:
+        return {"error": f"Failed to submit opportunity update for approval: {e}"}
+
+
+def list_deal_team(
+    opportunityId: Annotated[str, Field(description="The opportunity id OR business id (e.g. OPP-003) whose deal team to list.")],
+) -> Any:
+    """List the deal team members on an opportunity, returning each member's id so
+    they can be targeted by update_deal_team_member."""
+    try:
+        o = _mc.get(f"/api/opportunities/{opportunityId}")
+    except Exception as e:
+        return {"error": f"Could not load opportunity {opportunityId}: {e}"}
+    members = (o or {}).get("dealTeamMembers") or [] if isinstance(o, dict) else []
+    return [
+        {
+            "id": m.get("id"),
+            "dealTeamMemberBusinessId": m.get("dealTeamMemberBusinessId"),
+            "personName": m.get("personName"),
+            "role": m.get("role"),
+            "teamArea": m.get("teamArea"),
+            "active": m.get("active"),
+            "handoffRequired": m.get("handoffRequired"),
+        }
+        for m in members
+    ]
+
+
+def update_deal_team_member(
+    id: Annotated[str, Field(description="The deal team member id OR business id (e.g. DT-003). Use list_deal_team to find it.")],
+    personName: Annotated[str | None, Field(description="Person's name.")] = None,
+    role: Annotated[str | None, Field(description="Role on the deal.")] = None,
+    teamArea: Annotated[str | None, Field(description="Team area.")] = None,
+    addedDate: Annotated[str | None, Field(description="Date added (ISO, e.g. 2026-07-21).")] = None,
+    active: Annotated[bool | None, Field(description="Whether the member is active.")] = None,
+    handoffRequired: Annotated[bool | None, Field(description="Whether a handoff is required.")] = None,
+    handoffNotes: Annotated[str | None, Field(description="Handoff notes.")] = None,
+    opportunityName: Annotated[str | None, Field(description="Optional parent opportunity name/id, to link the approval request.")] = None,
+) -> Any:
+    """Request an update to any field(s) of a deal team member. This does NOT
+    change anything — it submits an approval request that a human must approve in
+    the Approvals log before the update is applied."""
+    fields = {
+        "personName": personName,
+        "role": role,
+        "teamArea": teamArea,
+        "addedDate": addedDate,
+        "active": active,
+        "handoffRequired": handoffRequired,
+        "handoffNotes": handoffNotes,
+    }
+    fields = {k: v for k, v in fields.items() if v is not None}
+    if not fields:
+        return {"error": "Provide at least one field to update."}
+    changes = ", ".join(f"{k}={v}" for k, v in fields.items())
+    action = {"kind": "UpdateDealTeamMember", "dealTeamMemberId": id, **fields}
+    try:
+        opp_name = None
+        if opportunityName:
+            opp_name, _ = _resolve_opportunity(opportunityName)
+        appr = _submit_action_approval(
+            f"Update deal team member {id}: {changes}", action, opportunity_name=opp_name
+        )
+        return {
+            "submittedForApproval": True,
+            "approvalRequestBusinessId": (appr or {}).get("approvalRequestBusinessId"),
+            "note": "Pending human approval in the Approvals log. The deal team member is NOT changed until a human approves.",
+        }
+    except Exception as e:
+        return {"error": f"Failed to submit deal team member update for approval: {e}"}
 
 
 # ---- Governance tools (recommend -> request approval -> human approves) --

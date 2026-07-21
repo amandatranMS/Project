@@ -79,3 +79,20 @@ export function SelectField({ label, value, onChange, options, required, full, p
     </div>
   );
 }
+
+/** Nullable boolean as a select: '' (unset) / 'true' (Yes) / 'false' (No). */
+export function BoolSelectField({ label, value, onChange, full }: BaseProps & {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className={`form-field${full ? ' full' : ''}`}>
+      <label>{label}</label>
+      <select value={value} onChange={(e) => onChange(e.target.value)}>
+        <option value="">—</option>
+        <option value="true">Yes</option>
+        <option value="false">No</option>
+      </select>
+    </div>
+  );
+}

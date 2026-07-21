@@ -4,4 +4,5 @@ import { dealTeamMembersController as c } from '../controllers/dealTeamMembers.c
 const router = Router();
 router.get('/', c.list);
 router.post('/', c.create);
+router.patch('/:id', c.update);
 export default router;

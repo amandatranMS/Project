@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { choiceLabel } from '@msx/shared';
-import { api, type Milestone, type Opportunity, type Recommendation } from '../api/client';
-import { statusBadgeClass, formatCurrency, formatDate } from '../ui';
+import { api, type Milestone, type Opportunity, type Recommendation, type DealTeamMember } from '../api/client';
+import { statusBadgeClass, formatCurrency, formatDate, formatBool } from '../ui';
 import OpportunityForm from '../components/form/OpportunityForm';
 import MilestoneForm from '../components/form/MilestoneForm';
+import DealTeamForm from '../components/form/DealTeamForm';
 import Modal from '../components/Modal';
 
 interface OpportunityDetailData extends Opportunity {
   milestones: Milestone[];
-  dealTeamMembers: { id: string; personName?: string | null; role?: string | null; active?: boolean | null }[];
+  dealTeamMembers: DealTeamMember[];
   collaborationNotes: { id: string; createdBy?: string | null; noteSummary?: string | null }[];
   recommendations: Recommendation[];
 }
@@ -21,6 +22,8 @@ export default function OpportunityDetail() {
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [addingMilestone, setAddingMilestone] = useState(false);
+  const [addingMember, setAddingMember] = useState(false);
+  const [editingMember, setEditingMember] = useState<DealTeamMember | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [cascade, setCascade] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
@@ -75,6 +78,21 @@ export default function OpportunityDetail() {
           onSaved={load}
         />
       )}
+      {addingMember && (
+        <DealTeamForm
+          opportunityName={data.opportunityName}
+          onClose={() => setAddingMember(false)}
+          onSaved={load}
+        />
+      )}
+      {editingMember && (
+        <DealTeamForm
+          initial={editingMember}
+          opportunityName={data.opportunityName}
+          onClose={() => setEditingMember(null)}
+          onSaved={load}
+        />
+      )}
 
       {confirmingDelete && (
         <Modal
@@ -109,6 +127,7 @@ export default function OpportunityDetail() {
       <div className="card">
         <div className="grid cols-3">
           <div><div className="muted">Opportunity ID</div>{data.opportunityBusinessId}</div>
+          <div><div className="muted">TPID</div>{data.tpid ?? '—'}</div>
           <div><div className="muted">Customer</div>{data.customerName ?? '—'}</div>
           <div><div className="muted">Industry</div>{data.industry ?? '—'}</div>
           <div><div className="muted">Solution Area</div>{choiceLabel(data.solutionArea)}</div>
@@ -118,6 +137,8 @@ export default function OpportunityDetail() {
           <div><div className="muted">Assigned SE</div>{data.assignedSE ?? '—'}</div>
           <div><div className="muted">Competitor</div>{data.competitorName ?? '—'}</div>
           <div><div className="muted">Close Date</div>{formatDate(data.closeDate)}</div>
+          <div><div className="muted">Consumption Phase</div>{data.consumptionPhase ?? '—'}</div>
+          <div><div className="muted">Last Updated</div>{formatDate(data.lastUpdated)}</div>
         </div>
         {data.businessProblem && <p className="section muted">Business problem: {data.businessProblem}</p>}
         {data.nextStep && <p className="muted">Next step: {data.nextStep}</p>}
@@ -159,16 +180,45 @@ export default function OpportunityDetail() {
         </table>
       </div>
 
-      <div className="grid cols-3">
-        <div className="card">
+      <div className="card">
+        <div className="spread">
           <h2>Deal Team</h2>
-          <ul>
-            {data.dealTeamMembers.map((d) => (
-              <li key={d.id}>{d.personName} — {d.role}{d.active ? '' : ' (inactive)'}</li>
-            ))}
-            {data.dealTeamMembers.length === 0 && <li className="muted">No members.</li>}
-          </ul>
+          <button className="secondary" onClick={() => setAddingMember(true)}>+ Add member</button>
         </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Role</th>
+              <th>Team Area</th>
+              <th>Added</th>
+              <th>Active</th>
+              <th>Handoff</th>
+              <th>Handoff Notes</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.dealTeamMembers.map((d) => (
+              <tr key={d.id}>
+                <td>{d.personName ?? '—'}</td>
+                <td>{d.role ?? '—'}</td>
+                <td>{d.teamArea ?? '—'}</td>
+                <td>{formatDate(d.addedDate)}</td>
+                <td>{formatBool(d.active)}</td>
+                <td>{formatBool(d.handoffRequired)}</td>
+                <td>{d.handoffNotes ?? '—'}</td>
+                <td><button className="secondary" onClick={() => setEditingMember(d)}>Edit</button></td>
+              </tr>
+            ))}
+            {data.dealTeamMembers.length === 0 && (
+              <tr><td colSpan={8} className="muted">No members.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="grid cols-3">
         <div className="card">
           <h2>Recommendations</h2>
           <ul>

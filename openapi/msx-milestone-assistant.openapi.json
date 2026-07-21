@@ -498,7 +498,7 @@
         "tags": [
           "Approval Requests"
         ],
-        "summary": "Create an approval request. May carry a deferred `action` (SendOutlookMail, NotifyTeams, UpdateMilestone, or DeleteMilestone) that the API executes ONLY when a human approves the request. This is how agent writes/sends are gated.\n",
+        "summary": "Create an approval request. May carry a deferred `action` (SendOutlookMail, NotifyTeams, UpdateMilestone, UpdateOpportunity, UpdateDealTeamMember, or DeleteMilestone) that the API executes ONLY when a human approves the request. This is how agent writes/sends are gated.\n",
         "requestBody": {
           "content": {
             "application/json": {
@@ -525,7 +525,7 @@
                   },
                   "action": {
                     "type": "object",
-                    "description": "Optional deferred action executed on approval.",
+                    "description": "Optional deferred action executed on approval. The carried fields depend on `kind`: send actions use to/subject/body/message; UpdateMilestone uses milestoneId + any MilestoneInput fields; UpdateOpportunity uses opportunityId + any OpportunityInput fields; UpdateDealTeamMember uses dealTeamMemberId + any DealTeamMemberInput fields; DeleteMilestone uses milestoneId.\n",
                     "required": [
                       "kind"
                     ],
@@ -536,6 +536,8 @@
                           "SendOutlookMail",
                           "NotifyTeams",
                           "UpdateMilestone",
+                          "UpdateOpportunity",
+                          "UpdateDealTeamMember",
                           "DeleteMilestone"
                         ]
                       },
@@ -554,6 +556,12 @@
                       "milestoneId": {
                         "type": "string"
                       },
+                      "opportunityId": {
+                        "type": "string"
+                      },
+                      "dealTeamMemberId": {
+                        "type": "string"
+                      },
                       "milestoneName": {
                         "type": "string"
                       },
@@ -564,6 +572,138 @@
                         "type": "string"
                       },
                       "owner": {
+                        "type": "string"
+                      },
+                      "workload": {
+                        "type": "string"
+                      },
+                      "customerCommitment": {
+                        "type": "string"
+                      },
+                      "deliveredBy": {
+                        "type": "string"
+                      },
+                      "partnerName": {
+                        "type": "string"
+                      },
+                      "statusReason": {
+                        "type": "string"
+                      },
+                      "estDate": {
+                        "type": "string",
+                        "format": "date"
+                      },
+                      "fitCharge": {
+                        "type": "number"
+                      },
+                      "nonRecurring": {
+                        "type": "boolean"
+                      },
+                      "riskDescription": {
+                        "type": "string"
+                      },
+                      "riskImpact": {
+                        "type": "string"
+                      },
+                      "mitigationPlan": {
+                        "type": "string"
+                      },
+                      "blockedReason": {
+                        "type": "string"
+                      },
+                      "blockedOwner": {
+                        "type": "string"
+                      },
+                      "blockedSince": {
+                        "type": "string",
+                        "format": "date"
+                      },
+                      "expectedResolutionDate": {
+                        "type": "string",
+                        "format": "date"
+                      },
+                      "escalated": {
+                        "type": "boolean"
+                      },
+                      "azureCapacityType": {
+                        "type": "string"
+                      },
+                      "preferredAzureRegion": {
+                        "type": "string"
+                      },
+                      "comments": {
+                        "type": "string"
+                      },
+                      "lastUpdated": {
+                        "type": "string",
+                        "format": "date"
+                      },
+                      "opportunityName": {
+                        "type": "string"
+                      },
+                      "tpid": {
+                        "type": "string"
+                      },
+                      "customerName": {
+                        "type": "string"
+                      },
+                      "industry": {
+                        "type": "string"
+                      },
+                      "solutionArea": {
+                        "type": "string"
+                      },
+                      "salesStage": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string"
+                      },
+                      "estimatedRevenue": {
+                        "type": "number"
+                      },
+                      "closeDate": {
+                        "type": "string",
+                        "format": "date"
+                      },
+                      "aeOwner": {
+                        "type": "string"
+                      },
+                      "assignedSE": {
+                        "type": "string"
+                      },
+                      "competitorName": {
+                        "type": "string"
+                      },
+                      "consumptionPhase": {
+                        "type": "string"
+                      },
+                      "businessProblem": {
+                        "type": "string"
+                      },
+                      "nextStep": {
+                        "type": "string"
+                      },
+                      "personName": {
+                        "type": "string"
+                      },
+                      "role": {
+                        "type": "string"
+                      },
+                      "teamArea": {
+                        "type": "string"
+                      },
+                      "addedDate": {
+                        "type": "string",
+                        "format": "date"
+                      },
+                      "active": {
+                        "type": "boolean"
+                      },
+                      "handoffRequired": {
+                        "type": "boolean"
+                      },
+                      "handoffNotes": {
                         "type": "string"
                       }
                     }
@@ -622,7 +762,7 @@
         "tags": [
           "Approval Requests"
         ],
-        "summary": "Approve. If the request carries a deferred action, it is executed now (send email / notify Teams / update or delete milestone) and audited. Otherwise it performs the mock milestone writeback from the related recommendation (audited as CreateMilestone).\n",
+        "summary": "Approve. If the request carries a deferred action, it is executed now (send email / notify Teams / update a milestone, opportunity, or deal team member / delete milestone) and audited. Otherwise it performs the mock milestone writeback from the related recommendation (audited as CreateMilestone).\n",
         "parameters": [
           {
             "$ref": "#/components/parameters/IdParam"
@@ -768,9 +908,47 @@
           "Deal Team Members"
         ],
         "summary": "Add a deal team member",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DealTeamMemberInput"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/deal-team-members/{id}": {
+      "patch": {
+        "tags": [
+          "Deal Team Members"
+        ],
+        "summary": "Update a deal team member",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdParam"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DealTeamMemberInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated"
           }
         }
       }
@@ -1031,11 +1209,18 @@
           "competitorName": {
             "type": "string"
           },
+          "consumptionPhase": {
+            "type": "string"
+          },
           "businessProblem": {
             "type": "string"
           },
           "nextStep": {
             "type": "string"
+          },
+          "lastUpdated": {
+            "type": "string",
+            "format": "date"
           }
         }
       },
@@ -1111,12 +1296,18 @@
               "Hygiene/Duplicate"
             ]
           },
+          "statusReason": {
+            "type": "string"
+          },
           "estDate": {
             "type": "string",
             "format": "date"
           },
           "fitCharge": {
             "type": "number"
+          },
+          "nonRecurring": {
+            "type": "boolean"
           },
           "riskImpact": {
             "type": "string",
@@ -1149,6 +1340,79 @@
             ]
           },
           "owner": {
+            "type": "string"
+          },
+          "createdBy": {
+            "type": "string"
+          },
+          "riskDescription": {
+            "type": "string"
+          },
+          "mitigationPlan": {
+            "type": "string"
+          },
+          "blockedReason": {
+            "type": "string"
+          },
+          "blockedOwner": {
+            "type": "string"
+          },
+          "blockedSince": {
+            "type": "string",
+            "format": "date"
+          },
+          "expectedResolutionDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "escalated": {
+            "type": "boolean"
+          },
+          "comments": {
+            "type": "string"
+          },
+          "lastUpdated": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "DealTeamMemberInput": {
+        "type": "object",
+        "required": [
+          "opportunityName",
+          "personName",
+          "role"
+        ],
+        "properties": {
+          "dealTeamMemberBusinessId": {
+            "type": "string",
+            "description": "Auto-generated if omitted"
+          },
+          "opportunityName": {
+            "type": "string",
+            "description": "Connects to Opportunity.opportunityName (create only)"
+          },
+          "personName": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "teamArea": {
+            "type": "string"
+          },
+          "addedDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "handoffRequired": {
+            "type": "boolean"
+          },
+          "handoffNotes": {
             "type": "string"
           }
         }

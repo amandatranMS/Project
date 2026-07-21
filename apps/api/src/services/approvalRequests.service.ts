@@ -6,6 +6,8 @@ import { recordAgentAction } from '../lib/audit.js';
 import type { AuthUser } from '../lib/entraAuth.js';
 import { graphService } from './graph.service.js';
 import { milestonesService } from './milestones.service.js';
+import { opportunitiesService } from './opportunities.service.js';
+import { dealTeamMembersService } from './dealTeamMembers.service.js';
 import type { z } from 'zod';
 import type {
   createApprovalSchema,
@@ -59,6 +61,10 @@ function summarizeAction(action: PendingAction): string {
       return `Post Teams message${action.to ? ` to ${action.to}` : ''}`;
     case 'UpdateMilestone':
       return `Update milestone ${action.milestoneId}`;
+    case 'UpdateOpportunity':
+      return `Update opportunity ${action.opportunityId}`;
+    case 'UpdateDealTeamMember':
+      return `Update deal team member ${action.dealTeamMemberId}`;
     case 'DeleteMilestone':
       return `Delete milestone ${action.milestoneId}`;
   }
@@ -76,14 +82,19 @@ async function executeAction(action: PendingAction, actor: AuthUser, agentName: 
       });
     case 'NotifyTeams':
       return graphService.notifyTeams(actor, { message: action.message, to: action.to, confirm: true });
-    case 'UpdateMilestone':
-      return milestonesService.update(action.milestoneId, {
-        milestoneName: action.milestoneName,
-        milestoneStatus: action.milestoneStatus,
-        milestoneCategory: action.milestoneCategory,
-        owner: action.owner,
-        createdBy: agentName,
-      });
+    case 'UpdateMilestone': {
+      // Pass through every proposed milestone field; stamp the agent as author.
+      const { kind, milestoneId, ...fields } = action;
+      return milestonesService.update(milestoneId, { ...fields, createdBy: agentName });
+    }
+    case 'UpdateOpportunity': {
+      const { kind, opportunityId, ...fields } = action;
+      return opportunitiesService.update(opportunityId, fields, agentName);
+    }
+    case 'UpdateDealTeamMember': {
+      const { kind, dealTeamMemberId, ...fields } = action;
+      return dealTeamMembersService.update(dealTeamMemberId, fields, agentName);
+    }
     case 'DeleteMilestone':
       return milestonesService.remove(action.milestoneId);
   }

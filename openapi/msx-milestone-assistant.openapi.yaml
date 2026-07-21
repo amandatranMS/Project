@@ -179,8 +179,9 @@ paths:
       tags: [Approval Requests]
       summary: >
         Create an approval request. May carry a deferred `action` (SendOutlookMail,
-        NotifyTeams, UpdateMilestone, or DeleteMilestone) that the API executes ONLY
-        when a human approves the request. This is how agent writes/sends are gated.
+        NotifyTeams, UpdateMilestone, UpdateOpportunity, UpdateDealTeamMember, or
+        DeleteMilestone) that the API executes ONLY when a human approves the
+        request. This is how agent writes/sends are gated.
       requestBody:
         content:
           application/json:
@@ -194,21 +195,76 @@ paths:
                 requestedBy: { type: string, nullable: true }
                 action:
                   type: object
-                  description: Optional deferred action executed on approval.
+                  description: >
+                    Optional deferred action executed on approval. The carried fields
+                    depend on `kind`: send actions use to/subject/body/message;
+                    UpdateMilestone uses milestoneId + any MilestoneInput fields;
+                    UpdateOpportunity uses opportunityId + any OpportunityInput fields;
+                    UpdateDealTeamMember uses dealTeamMemberId + any DealTeamMemberInput
+                    fields; DeleteMilestone uses milestoneId.
                   required: [kind]
                   properties:
                     kind:
                       type: string
-                      enum: [SendOutlookMail, NotifyTeams, UpdateMilestone, DeleteMilestone]
+                      enum: [SendOutlookMail, NotifyTeams, UpdateMilestone, UpdateOpportunity, UpdateDealTeamMember, DeleteMilestone]
+                    # Send actions
                     to: { type: string }
                     subject: { type: string }
                     body: { type: string }
                     message: { type: string }
+                    # Target identifiers
                     milestoneId: { type: string }
+                    opportunityId: { type: string }
+                    dealTeamMemberId: { type: string }
+                    # Milestone fields (UpdateMilestone)
                     milestoneName: { type: string }
                     milestoneStatus: { type: string }
                     milestoneCategory: { type: string }
                     owner: { type: string }
+                    workload: { type: string }
+                    customerCommitment: { type: string }
+                    deliveredBy: { type: string }
+                    partnerName: { type: string }
+                    statusReason: { type: string }
+                    estDate: { type: string, format: date }
+                    fitCharge: { type: number }
+                    nonRecurring: { type: boolean }
+                    riskDescription: { type: string }
+                    riskImpact: { type: string }
+                    mitigationPlan: { type: string }
+                    blockedReason: { type: string }
+                    blockedOwner: { type: string }
+                    blockedSince: { type: string, format: date }
+                    expectedResolutionDate: { type: string, format: date }
+                    escalated: { type: boolean }
+                    azureCapacityType: { type: string }
+                    preferredAzureRegion: { type: string }
+                    comments: { type: string }
+                    lastUpdated: { type: string, format: date }
+                    # Opportunity fields (UpdateOpportunity)
+                    opportunityName: { type: string }
+                    tpid: { type: string }
+                    customerName: { type: string }
+                    industry: { type: string }
+                    solutionArea: { type: string }
+                    salesStage: { type: string }
+                    status: { type: string }
+                    estimatedRevenue: { type: number }
+                    closeDate: { type: string, format: date }
+                    aeOwner: { type: string }
+                    assignedSE: { type: string }
+                    competitorName: { type: string }
+                    consumptionPhase: { type: string }
+                    businessProblem: { type: string }
+                    nextStep: { type: string }
+                    # Deal team member fields (UpdateDealTeamMember)
+                    personName: { type: string }
+                    role: { type: string }
+                    teamArea: { type: string }
+                    addedDate: { type: string, format: date }
+                    active: { type: boolean }
+                    handoffRequired: { type: boolean }
+                    handoffNotes: { type: string }
       responses: { '201': { description: Created } }
   /api/approval-requests/{id}:
     get:
@@ -226,9 +282,9 @@ paths:
       tags: [Approval Requests]
       summary: >
         Approve. If the request carries a deferred action, it is executed now (send
-        email / notify Teams / update or delete milestone) and audited. Otherwise it
-        performs the mock milestone writeback from the related recommendation
-        (audited as CreateMilestone).
+        email / notify Teams / update a milestone, opportunity, or deal team member /
+        delete milestone) and audited. Otherwise it performs the mock milestone
+        writeback from the related recommendation (audited as CreateMilestone).
       parameters: [{ $ref: '#/components/parameters/IdParam' }]
       requestBody:
         content: { application/json: { schema: { $ref: '#/components/schemas/DecisionInput' } } }
@@ -272,7 +328,19 @@ paths:
     post:
       tags: [Deal Team Members]
       summary: Add a deal team member
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/DealTeamMemberInput' } } }
       responses: { '201': { description: Created } }
+  /api/deal-team-members/{id}:
+    patch:
+      tags: [Deal Team Members]
+      summary: Update a deal team member
+      parameters: [{ $ref: '#/components/parameters/IdParam' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/DealTeamMemberInput' } } }
+      responses: { '200': { description: Updated } }
 
   /api/agent-notifications:
     get:
@@ -362,8 +430,10 @@ components:
         aeOwner: { type: string }
         assignedSE: { type: string }
         competitorName: { type: string }
+        consumptionPhase: { type: string }
         businessProblem: { type: string }
         nextStep: { type: string }
+        lastUpdated: { type: string, format: date }
     MilestoneInput:
       type: object
       required: [milestoneName, opportunityName]
@@ -376,9 +446,34 @@ components:
         deliveredBy: { type: string, enum: [Microsoft, Partner, Customer, Joint] }
         milestoneCategory: { type: string, enum: [Production, Pilot, Workshop, Assessment, Deployment, Adoption] }
         milestoneStatus: { type: string, enum: ['---', On Track, At Risk, Blocked, Completed, Cancelled, Lost To Competitor, Hygiene/Duplicate] }
+        statusReason: { type: string }
         estDate: { type: string, format: date }
         fitCharge: { type: number }
+        nonRecurring: { type: boolean }
         riskImpact: { type: string, enum: [High, Medium, Low] }
         azureCapacityType: { type: string, enum: ['---', Azure Commit, MACC, Open, CSP, EA] }
         preferredAzureRegion: { type: string, enum: [Canada Central, Canada East, East US, West US, West Europe, North Europe] }
         owner: { type: string }
+        createdBy: { type: string }
+        riskDescription: { type: string }
+        mitigationPlan: { type: string }
+        blockedReason: { type: string }
+        blockedOwner: { type: string }
+        blockedSince: { type: string, format: date }
+        expectedResolutionDate: { type: string, format: date }
+        escalated: { type: boolean }
+        comments: { type: string }
+        lastUpdated: { type: string, format: date }
+    DealTeamMemberInput:
+      type: object
+      required: [opportunityName, personName, role]
+      properties:
+        dealTeamMemberBusinessId: { type: string, description: Auto-generated if omitted }
+        opportunityName: { type: string, description: Connects to Opportunity.opportunityName (create only) }
+        personName: { type: string }
+        role: { type: string }
+        teamArea: { type: string }
+        addedDate: { type: string, format: date }
+        active: { type: boolean }
+        handoffRequired: { type: boolean }
+        handoffNotes: { type: string }

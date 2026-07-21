@@ -11,7 +11,7 @@ import {
 } from '@msx/shared';
 import { api, type Milestone, type Opportunity } from '../../api/client';
 import Modal from '../Modal';
-import { TextField, NumberField, DateField, TextAreaField, SelectField } from './Fields';
+import { TextField, NumberField, DateField, TextAreaField, SelectField, BoolSelectField } from './Fields';
 
 interface Props {
   initial?: Milestone & { opportunity?: { opportunityName: string } };
@@ -23,6 +23,8 @@ interface Props {
 
 const isoToDateInput = (v?: string | null) => (v ? new Date(v).toISOString().slice(0, 10) : '');
 const clean = (v: string) => (v.trim() === '' ? undefined : v.trim());
+const boolToInput = (v?: boolean | null) => (v == null ? '' : String(v));
+const boolFrom = (v: string) => (v === '' ? undefined : v === 'true');
 
 export default function MilestoneForm({ initial, defaultOpportunityName, onClose, onSaved }: Props) {
   const editing = Boolean(initial);
@@ -33,17 +35,27 @@ export default function MilestoneForm({ initial, defaultOpportunityName, onClose
     workload: initial?.workload ?? '',
     milestoneCategory: initial?.milestoneCategory ?? '',
     milestoneStatus: initial?.milestoneStatus ?? '',
-    customerCommitment: '',
-    deliveredBy: '',
+    statusReason: initial?.statusReason ?? '',
+    customerCommitment: initial?.customerCommitment ?? '',
+    deliveredBy: initial?.deliveredBy ?? '',
     riskImpact: initial?.riskImpact ?? '',
-    azureCapacityType: '',
-    preferredAzureRegion: '',
+    azureCapacityType: initial?.azureCapacityType ?? '',
+    preferredAzureRegion: initial?.preferredAzureRegion ?? '',
     partnerName: initial?.partnerName ?? '',
     owner: initial?.owner ?? '',
+    createdBy: initial?.createdBy ?? '',
     estDate: isoToDateInput(initial?.estDate),
     fitCharge: initial?.fitCharge != null ? String(initial.fitCharge) : '',
+    nonRecurring: boolToInput(initial?.nonRecurring),
     riskDescription: initial?.riskDescription ?? '',
+    mitigationPlan: initial?.mitigationPlan ?? '',
     blockedReason: initial?.blockedReason ?? '',
+    blockedOwner: initial?.blockedOwner ?? '',
+    blockedSince: isoToDateInput(initial?.blockedSince),
+    expectedResolutionDate: isoToDateInput(initial?.expectedResolutionDate),
+    escalated: boolToInput(initial?.escalated),
+    comments: initial?.comments ?? '',
+    lastUpdated: isoToDateInput(initial?.lastUpdated),
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,6 +74,7 @@ export default function MilestoneForm({ initial, defaultOpportunityName, onClose
       workload: clean(form.workload),
       milestoneCategory: clean(form.milestoneCategory),
       milestoneStatus: clean(form.milestoneStatus),
+      statusReason: clean(form.statusReason),
       customerCommitment: clean(form.customerCommitment),
       deliveredBy: clean(form.deliveredBy),
       riskImpact: clean(form.riskImpact),
@@ -69,10 +82,19 @@ export default function MilestoneForm({ initial, defaultOpportunityName, onClose
       preferredAzureRegion: clean(form.preferredAzureRegion),
       partnerName: clean(form.partnerName),
       owner: clean(form.owner),
+      createdBy: clean(form.createdBy),
       estDate: clean(form.estDate),
       fitCharge: form.fitCharge.trim() === '' ? undefined : Number(form.fitCharge),
+      nonRecurring: boolFrom(form.nonRecurring),
       riskDescription: clean(form.riskDescription),
+      mitigationPlan: clean(form.mitigationPlan),
       blockedReason: clean(form.blockedReason),
+      blockedOwner: clean(form.blockedOwner),
+      blockedSince: clean(form.blockedSince),
+      expectedResolutionDate: clean(form.expectedResolutionDate),
+      escalated: boolFrom(form.escalated),
+      comments: clean(form.comments),
+      lastUpdated: clean(form.lastUpdated),
     };
     try {
       if (editing && initial) {
@@ -130,10 +152,20 @@ export default function MilestoneForm({ initial, defaultOpportunityName, onClose
         <SelectField label="Preferred Azure region" value={form.preferredAzureRegion} onChange={set('preferredAzureRegion')} options={PREFERRED_AZURE_REGIONS} />
         <TextField label="Partner" value={form.partnerName} onChange={set('partnerName')} />
         <TextField label="Owner" value={form.owner} onChange={set('owner')} />
+        <TextField label="Created by" value={form.createdBy} onChange={set('createdBy')} />
         <DateField label="Estimated date" value={form.estDate} onChange={set('estDate')} />
         <NumberField label="Fit charge" value={form.fitCharge} onChange={set('fitCharge')} />
+        <BoolSelectField label="Non-recurring" value={form.nonRecurring} onChange={set('nonRecurring')} />
+        <TextField label="Status reason" value={form.statusReason} onChange={set('statusReason')} />
+        <DateField label="Last updated" value={form.lastUpdated} onChange={set('lastUpdated')} />
         <TextAreaField label="Risk description" value={form.riskDescription} onChange={set('riskDescription')} full />
+        <TextAreaField label="Mitigation plan" value={form.mitigationPlan} onChange={set('mitigationPlan')} full />
         <TextAreaField label="Blocked reason" value={form.blockedReason} onChange={set('blockedReason')} full />
+        <TextField label="Blocked owner" value={form.blockedOwner} onChange={set('blockedOwner')} />
+        <DateField label="Blocked since" value={form.blockedSince} onChange={set('blockedSince')} />
+        <DateField label="Expected resolution" value={form.expectedResolutionDate} onChange={set('expectedResolutionDate')} />
+        <BoolSelectField label="Escalated" value={form.escalated} onChange={set('escalated')} />
+        <TextAreaField label="Comments" value={form.comments} onChange={set('comments')} full />
       </div>
     </Modal>
   );

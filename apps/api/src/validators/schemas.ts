@@ -43,6 +43,7 @@ export const createOpportunitySchema = z.object({
   consumptionPhase: nstr,
   businessProblem: nstr,
   nextStep: nstr,
+  lastUpdated: dateish,
 });
 export const updateOpportunitySchema = createOpportunitySchema.partial().omit({ opportunityBusinessId: true });
 
@@ -57,16 +58,24 @@ export const createMilestoneSchema = z.object({
   partnerName: nstr,
   milestoneCategory: z.enum(MILESTONE_CATEGORIES).optional().nullable(),
   milestoneStatus: z.enum(MILESTONE_STATUSES).optional().nullable(),
+  statusReason: nstr,
   estDate: dateish,
   fitCharge: z.number().optional().nullable(),
+  nonRecurring: z.boolean().optional().nullable(),
+  comments: nstr,
   riskDescription: nstr,
   riskImpact: z.enum(RISK_IMPACTS).optional().nullable(),
   mitigationPlan: nstr,
   blockedReason: nstr,
+  blockedOwner: nstr,
+  blockedSince: dateish,
+  expectedResolutionDate: dateish,
+  escalated: z.boolean().optional().nullable(),
   azureCapacityType: z.enum(AZURE_CAPACITY_TYPES).optional().nullable(),
   preferredAzureRegion: z.enum(PREFERRED_AZURE_REGIONS).optional().nullable(),
   owner: nstr,
   createdBy: nstr,
+  lastUpdated: dateish,
 });
 export const updateMilestoneSchema = createMilestoneSchema.partial().omit({ opportunityName: true });
 
@@ -112,6 +121,23 @@ export const updateRecommendationSchema = z.object({
   readyForMockCreation: z.boolean().optional(),
 });
 
+// ---- Deal team members ----
+export const createDealTeamMemberSchema = z.object({
+  dealTeamMemberBusinessId: z.string().optional(),
+  opportunityName: z.string().min(1),
+  personName: z.string().min(1),
+  role: z.string().min(1),
+  teamArea: nstr,
+  addedDate: dateish,
+  active: z.boolean().optional().nullable(),
+  handoffRequired: z.boolean().optional().nullable(),
+  handoffNotes: nstr,
+});
+export const updateDealTeamMemberSchema = createDealTeamMemberSchema.partial().omit({
+  dealTeamMemberBusinessId: true,
+  opportunityName: true,
+});
+
 // ---- Approval requests ----
 /**
  * A deferred action attached to an approval request. Agents never mutate data or
@@ -130,14 +156,19 @@ export const pendingActionSchema = z.discriminatedUnion('kind', [
     message: z.string().min(1),
     to: z.string().email().optional(),
   }),
-  z.object({
-    kind: z.literal('UpdateMilestone'),
-    milestoneId: z.string().min(1),
-    milestoneName: z.string().min(1).optional(),
-    milestoneStatus: z.enum(MILESTONE_STATUSES).optional(),
-    milestoneCategory: z.enum(MILESTONE_CATEGORIES).optional(),
-    owner: z.string().min(1).optional(),
-  }),
+  // Full-parity updates: the agent may propose changes to EVERY editable field on
+  // the three business entities (composed from the update schemas below so this
+  // stays in sync automatically). `createdBy` is omitted — it is stamped with the
+  // agent name by executeAction, never chosen by the agent.
+  z
+    .object({ kind: z.literal('UpdateMilestone'), milestoneId: z.string().min(1) })
+    .merge(updateMilestoneSchema.omit({ createdBy: true })),
+  z
+    .object({ kind: z.literal('UpdateOpportunity'), opportunityId: z.string().min(1) })
+    .merge(updateOpportunitySchema),
+  z
+    .object({ kind: z.literal('UpdateDealTeamMember'), dealTeamMemberId: z.string().min(1) })
+    .merge(updateDealTeamMemberSchema),
   z.object({
     kind: z.literal('DeleteMilestone'),
     milestoneId: z.string().min(1),
@@ -186,18 +217,6 @@ export const createNoteSchema = z
   .refine((d) => d.opportunityName || d.relatedMilestoneBusinessId, {
     message: 'Provide opportunityName or relatedMilestoneBusinessId',
   });
-
-// ---- Deal team members ----
-export const createDealTeamMemberSchema = z.object({
-  dealTeamMemberBusinessId: z.string().optional(),
-  opportunityName: z.string().min(1),
-  personName: z.string().min(1),
-  role: z.string().min(1),
-  teamArea: nstr,
-  active: z.boolean().optional(),
-  handoffRequired: z.boolean().optional(),
-  handoffNotes: nstr,
-});
 
 // ---- Agent notifications ----
 export const createNotificationSchema = z.object({

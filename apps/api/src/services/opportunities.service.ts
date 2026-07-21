@@ -52,24 +52,48 @@ export const opportunitiesService = {
   },
 
   async create(input: CreateInput) {
-    const { opportunityBusinessId, closeDate, ...rest } = input;
+    const { opportunityBusinessId, closeDate, lastUpdated, ...rest } = input;
     return prisma.opportunity.create({
       data: {
         ...rest,
         opportunityBusinessId: opportunityBusinessId || genId('OPP'),
         closeDate: closeDate ? new Date(closeDate) : null,
+        lastUpdated: lastUpdated ? new Date(lastUpdated) : null,
       },
     });
   },
 
-  async update(id: string, input: UpdateInput) {
-    const existing = await prisma.opportunity.findUnique({ where: { id } });
-    if (!existing) throw new HttpError(404, 'Opportunity not found.');
-    const { closeDate, ...rest } = input;
-    return prisma.opportunity.update({
-      where: { id },
-      data: { ...rest, closeDate: closeDate ? new Date(closeDate) : undefined },
+  async update(id: string, input: UpdateInput, actor?: string) {
+    // Accept either the internal id or the business id (e.g. "OPP-002") so the
+    // agent can target an opportunity the same way a human does.
+    const existing = await prisma.opportunity.findFirst({
+      where: { OR: [{ id }, { opportunityBusinessId: id }] },
     });
+    if (!existing) throw new HttpError(404, 'Opportunity not found.');
+    const { closeDate, lastUpdated, ...rest } = input;
+    const opportunity = await prisma.opportunity.update({
+      where: { id: existing.id },
+      data: {
+        ...rest,
+        closeDate: closeDate ? new Date(closeDate) : undefined,
+        lastUpdated: lastUpdated ? new Date(lastUpdated) : undefined,
+      },
+    });
+
+    const changedFields = Object.keys(input).filter(
+      (k) => (input as Record<string, unknown>)[k] !== undefined,
+    );
+    await recordAgentAction({
+      agentName: actor ?? 'system',
+      actionType: 'Update',
+      actionName: 'Opportunity updated',
+      opportunityId: existing.id,
+      inputSummary: `Updated ${existing.opportunityBusinessId}${
+        changedFields.length ? ` (fields: ${changedFields.join(', ')})` : ''
+      }`,
+    });
+
+    return opportunity;
   },
 
   /**

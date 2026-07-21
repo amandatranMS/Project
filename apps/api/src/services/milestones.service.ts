@@ -32,7 +32,7 @@ export const milestonesService = {
   },
 
   async create(input: CreateInput) {
-    const { opportunityName, milestoneBusinessId, estDate, ...rest } = input;
+    const { opportunityName, milestoneBusinessId, estDate, blockedSince, expectedResolutionDate, lastUpdated, ...rest } = input;
     const opportunity = await prisma.opportunity.findUnique({ where: { opportunityName } });
     if (!opportunity) throw new HttpError(400, `Opportunity "${opportunityName}" was not found.`);
 
@@ -41,6 +41,9 @@ export const milestonesService = {
         ...rest,
         milestoneBusinessId: milestoneBusinessId || genId('MS'),
         estDate: estDate ? new Date(estDate) : null,
+        blockedSince: blockedSince ? new Date(blockedSince) : null,
+        expectedResolutionDate: expectedResolutionDate ? new Date(expectedResolutionDate) : null,
+        lastUpdated: lastUpdated ? new Date(lastUpdated) : null,
         opportunity: { connect: { opportunityName } },
       },
       include: { opportunity: { select: { id: true, opportunityName: true, customerName: true } } },
@@ -61,10 +64,16 @@ export const milestonesService = {
       where: { OR: [{ id }, { milestoneBusinessId: id }] },
     });
     if (!existing) throw new HttpError(404, 'Milestone not found.');
-    const { estDate, ...rest } = input;
+    const { estDate, blockedSince, expectedResolutionDate, lastUpdated, ...rest } = input;
     const milestone = await prisma.opportunityMilestone.update({
       where: { id: existing.id },
-      data: { ...rest, estDate: estDate ? new Date(estDate) : undefined },
+      data: {
+        ...rest,
+        estDate: estDate ? new Date(estDate) : undefined,
+        blockedSince: blockedSince ? new Date(blockedSince) : undefined,
+        expectedResolutionDate: expectedResolutionDate ? new Date(expectedResolutionDate) : undefined,
+        lastUpdated: lastUpdated ? new Date(lastUpdated) : undefined,
+      },
       include: { opportunity: { select: { id: true, opportunityName: true, customerName: true } } },
     });
 

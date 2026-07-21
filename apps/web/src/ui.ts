@@ -49,3 +49,8 @@ export function formatDate(value?: string | null): string {
   if (Number.isNaN(d.getTime())) return String(value);
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 }
+
+export function formatBool(value?: boolean | null): string {
+  if (value == null) return '—';
+  return value ? 'Yes' : 'No';
+}
