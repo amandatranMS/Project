@@ -148,7 +148,7 @@ approval + audit gate:
 - **Microsoft Defender** — _in progress_: runtime threat protection and monitoring for
   agent activity.
 
-## Why
+## Previous Approaches
 
 Originally planned on Power Apps + Dataverse, but DLP restrictions block that path.
 This rebuilds the same MSX mental model as a self-contained full-stack web app with
@@ -162,11 +162,10 @@ its own backend, database, and UI.
   create new mock milestone records **only after approval**.
 - **Every agent action is logged** for auditability and governance.
 
-## Data model — 11 tables only
+## Data model — 11 tables 
 
 Risk, blocker, competitor, and partner data is embedded directly into `Opportunity`
-/ `OpportunityMilestone` to keep the POC manageable. There are **no** separate
-Account, Partner, Competitor, Milestone Blocker, or Milestone Risk Assessment tables.
+/ `OpportunityMilestone` to keep the POC manageable. 
 
 1. Opportunity
 2. Opportunity Milestone
@@ -329,70 +328,6 @@ The whole point of the POC: agents are useful but **gated**.
 6. Agent **fulfills** the approved request → milestone created, audited as
    `CreateMilestone`.
 
-Walk through it with `docs/api-test.md`, or narrate it using `docs/demo-script.md`.
-
-## Foundry hosted agent architecture (high level)
-
-The multi-agent app runs as a **hosted agent on Microsoft Foundry**, built with the
-[Microsoft Agent Framework](https://github.com/microsoft/agent-framework). It lives in
-`apps/foundry-agent/agent-framework-agent-basic-responses/`.
-
-```
-                        Microsoft Foundry (hosted container, :8088)
- ┌──────────────────────────────────────────────────────────────────────────┐
- │  ResponsesHostServer  (OpenAI Responses protocol, store=False)             │
- │        │                                                                   │
- │        ▼                                                                   │
- │  ORCHESTRATOR agent  ── reasons, then delegates via ask_* tools ──┐        │
- │  (FoundryChatClient + DefaultAzureCredential + model deployment)  │        │
- │                                                                   ▼        │
- │   agent-as-tool delegation (each specialist is exposed as one tool)        │
- │   ┌───────────────┬───────────────┬───────────────┬──────────────┬──────┐ │
- │   │ milestone_    │ governance_   │ opportunity_  │ communications│ dash │ │
- │   │ specialist    │ specialist    │ specialist    │ _specialist   │board │ │
- │   └───────┬───────┴───────┬───────┴───────┬───────┴──────┬───────┴──┬───┘ │
- │           └───────────────┴───────────────┴──────────────┴──────────┘     │
- │                                   │  (shared MSX capability functions)     │
- │                                   ▼                                        │
- │                          msx_capabilities.py                               │
- │                        (pure Python tool funcs)                            │
- │                                   │                                        │
- │                            MsxClient (REST)                                │
- └───────────────────────────────────┼────────────────────────────────────── ┘
-                                      │  x-api-key, {success,data} envelope
-                                      │  API_BASE_URL (dev tunnel → localhost)
-                                      ▼
-                     MSX Milestone Assistant REST API (:4000)
-                        → Prisma → Azure PostgreSQL (11 mock tables)
-```
-
-**Key pieces:**
-
-- **Hosting** — `main.py` serves the orchestrator through `ResponsesHostServer`
-  (OpenAI Responses protocol) on port `8088`; conversation history is managed by the
-  hosting layer (`store=False`). It ships as a small `python:3.12-slim` **container**
-  deployed via `azd` / the Foundry Toolkit.
-- **Model access** — a single `FoundryChatClient` authenticates with
-  `DefaultAzureCredential` against `FOUNDRY_PROJECT_ENDPOINT` using the model in
-  `AZURE_AI_MODEL_DEPLOYMENT_NAME`; the orchestrator and all specialists share it.
-- **Orchestrator + specialists (agent-as-tool)** — one orchestrator coordinates five
-  focused specialists — **milestone**, **governance**, **opportunity**,
-  **communications**, and **dashboard** — each wrapped as an `ask_<name>` tool. The
-  orchestrator delegates with self-contained instructions (specialists are stateless
-  between turns) and combines the results.
-- **Shared capabilities** — every specialist's tools are pure functions in
-  `msx_capabilities.py`. The same functions are re-published by a standalone **MCP
-  server** (`msx_mcp_server.py`, FastMCP over stdio) so any MCP client can reuse them;
-  the dashboard specialist can be flipped to consume them via MCP with
-  `MSX_TOOLS_VIA_MCP`.
-- **Data reach** — capabilities call the MSX REST API through `MsxClient` (sends
-  `x-api-key`, unwraps the `{success, data}` envelope). Because the agent is hosted in
-  the cloud, it reaches the app through a public **dev-tunnel** URL (`API_BASE_URL`).
-- **Governance preserved** — the hosted agent obeys the same gate: it can read context,
-  recommend, and **submit approval requests**, but never mutates data or sends
-  messages directly, and every governed action is audited (see
-  [Agent governance flow](#agent-governance-flow)).
-
 ## Notify the team on a new opportunity (Teams)
 
 To boost visibility, creating an opportunity can broadcast the full opportunity
@@ -406,22 +341,6 @@ a real message never goes out without a human deciding:
   agent, the agent never sends. A **Pending** `ApprovalRequest` carrying a deferred
   `NotifyTeams` action is queued; the same consent popup appears when a human
   approves it on the **Approvals** page, and only then is it delivered.
-
-Every path is audited via `recordAgentAction`, and an in-app `AgentNotification` is
-always recorded for the "all users" feed regardless of Teams delivery.
-
-Configure it in `.env` (see `.env.example`):
-
-| Var | Purpose |
-| --- | --- |
-| `NOTIFY_ON_OPPORTUNITY_CREATE` | Master switch (default `true`). |
-| `TEAMS_BROADCAST_TO` | Email of the teammate who receives the 1:1 Teams DM. |
-| `GRAPH_SEND_MODE` | `simulate` (audit only, default) or `live` (real delivery). |
-
-> Teams sends are 1:1, so `TEAMS_BROADCAST_TO` must be someone **other** than the
-> person signing in — you can't open a chat with yourself. `live` mode needs the
-> admin-consented delegated scopes `Chat.ReadWrite` and `ChatMessage.Send`.
-
 ## API
 
 REST API served at `http://localhost:4000/api`. Full contract in
