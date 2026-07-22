@@ -1073,6 +1073,73 @@ select:focus, .filters input:focus {
   .chat-fab { right: 16px; bottom: 16px; }
 }
 
+/* ============================== Dashboard charts ============================== */
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--sp-5);
+}
+.chart-card { display: flex; flex-direction: column; }
+.chart-card.wide { grid-column: span 2; }
+@media (max-width: 900px) { .chart-card.wide { grid-column: auto; } }
+
+.chart-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-3);
+}
+.chart-head h3 { margin: 0; font-size: 15px; font-weight: 700; color: var(--text); }
+.chart-hint { font-size: 12px; color: var(--muted); font-weight: 600; }
+
+/* Filter chip button in the page header */
+button.chip {
+  background: var(--surface-alt);
+  color: var(--text-2);
+  border: 1px solid var(--border);
+  box-shadow: none;
+  padding: 5px 12px;
+}
+button.chip.filter-chip {
+  background: var(--accent-grad-soft);
+  border-color: var(--brand-40);
+  color: var(--brand-dark);
+}
+button.chip.filter-chip:hover { border-color: var(--brand-primary); }
+
+/* Radial gauge with centered percentage */
+.gauge { position: relative; }
+.gauge-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.gauge-pct {
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  background: var(--accent-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.gauge-sub { font-size: 12px; color: var(--muted); font-weight: 600; }
+
+/* Recharts polish to match the design system */
+.recharts-default-tooltip {
+  border-radius: var(--r-md) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: var(--shadow-8) !important;
+  font-size: 12px;
+}
+.recharts-legend-item-text { color: var(--text-2) !important; font-size: 12px; }
+.recharts-surface:focus { outline: none; }
+
 /* Respect reduced-motion preferences */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

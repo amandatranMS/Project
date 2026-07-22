@@ -1,44 +1,361 @@
-import { useEffect, useState } from 'react';
-import { api, type DashboardMetrics } from '../api/client';
-import { formatCurrency } from '../ui';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
+import {
+  PieChart,
+  Pie,
+  Cell,
+  RadialBarChart,
+  RadialBar,
+  PolarAngleAxis,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  Label,
+  ResponsiveContainer,
+} from 'recharts';
+import { choiceLabel } from '@msx/shared';
+import { api, type DashboardMetrics, type Milestone, type Opportunity } from '../api/client';
+import { statusBadgeClass, formatCurrency, formatDate } from '../ui';
+import { countBy, sumBy, colorFor, nameOf, compactCurrency } from '../chartUtils';
+
+// Dimensions the user can cross-filter on. Milestone dims filter milestones
+// directly; opportunity dims filter opportunities and, through them, the
+// milestones that belong to the matching opportunities.
+type MilestoneDim = 'milestoneStatus' | 'milestoneCategory' | 'riskImpact';
+type OpportunityDim = 'solutionArea' | 'salesStage';
+type Dim = MilestoneDim | OpportunityDim;
+interface Filter {
+  dim: Dim;
+  value: string;
+}
+
+const isOppDim = (d: Dim): d is OpportunityDim => d === 'solutionArea' || d === 'salesStage';
 
 export default function Dashboard() {
-  const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
+  const [miles, setMiles] = useState<Milestone[]>([]);
+  const [opps, setOpps] = useState<Opportunity[]>([]);
+  const [summary, setSummary] = useState<DashboardMetrics | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<Filter | null>(null);
 
   useEffect(() => {
-    api
-      .get<DashboardMetrics>('/dashboard/summary')
-      .then(setMetrics)
+    Promise.all([
+      api.get<Milestone[]>('/milestones'),
+      api.get<Opportunity[]>('/opportunities'),
+      api.get<DashboardMetrics>('/dashboard/summary'),
+    ])
+      .then(([m, o, s]) => {
+        setMiles(m);
+        setOpps(o);
+        setSummary(s);
+      })
       .catch((e) => setError(e.message));
   }, []);
 
-  const cards = metrics
-    ? [
-        { label: 'Active Opportunities', value: metrics.activeOpportunities },
-        { label: 'Pipeline Value', value: formatCurrency(metrics.pipelineValue) },
-        { label: 'Total Milestones', value: metrics.totalMilestones },
-        { label: 'Milestones At Risk', value: metrics.milestonesAtRisk },
-        { label: 'Blocked Milestones', value: metrics.blockedMilestones },
-        { label: 'Pending Approvals', value: metrics.pendingApprovals },
-      ]
-    : [];
+  const toggle = (dim: Dim, value: string) =>
+    setFilter((f) => (f && f.dim === dim && f.value === value ? null : { dim, value }));
+
+  // Opportunities that match the current filter.
+  const filteredOpps = useMemo(() => {
+    if (!filter) return opps;
+    const value = filter.value;
+    if (isOppDim(filter.dim)) {
+      const dim = filter.dim;
+      return opps.filter((o) => choiceLabel(o[dim]) === value);
+    }
+    // A milestone-dim filter narrows opportunities to those that own a matching milestone.
+    const dim = filter.dim;
+    const ok = new Set(
+      miles.filter((m) => choiceLabel(m[dim]) === value).map((m) => m.opportunityId),
+    );
+    return opps.filter((o) => ok.has(o.id));
+  }, [opps, miles, filter]);
+
+  // Milestones that match the current filter (the detail table + KPIs use this).
+  const filteredMiles = useMemo(() => {
+    if (!filter) return miles;
+    const value = filter.value;
+    if (isOppDim(filter.dim)) {
+      const dim = filter.dim;
+      const ok = new Set(opps.filter((o) => choiceLabel(o[dim]) === value).map((o) => o.id));
+      return miles.filter((m) => ok.has(m.opportunityId));
+    }
+    const dim = filter.dim;
+    return miles.filter((m) => choiceLabel(m[dim]) === value);
+  }, [miles, opps, filter]);
+
+  // Chart series are computed from the FULL sets so every category stays visible;
+  // the active slice stays lit and the rest dim (Power BI cross-highlight feel).
+  const byStatus = useMemo(() => countBy(miles, (m) => m.milestoneStatus), [miles]);
+  const byRisk = useMemo(() => countBy(miles.filter((m) => m.riskImpact), (m) => m.riskImpact), [miles]);
+  const bySolutionArea = useMemo(() => countBy(opps, (o) => o.solutionArea), [opps]);
+  const pipelineByStage = useMemo(
+    () => sumBy(opps, (o) => o.salesStage, (o) => o.estimatedRevenue),
+    [opps],
+  );
+
+  const completionPct = useMemo(() => {
+    if (!filteredMiles.length) return 0;
+    const done = filteredMiles.filter((m) => m.milestoneStatus === 'Completed').length;
+    return Math.round((done / filteredMiles.length) * 100);
+  }, [filteredMiles]);
+
+  const opacityFor = (dim: Dim, name: string) =>
+    !filter ? 1 : filter.dim === dim && filter.value === name ? 1 : 0.28;
+
+  const filteredPipeline = useMemo(
+    () => filteredOpps.reduce((sum, o) => sum + (o.estimatedRevenue ?? 0), 0),
+    [filteredOpps],
+  );
+
+  const kpis = [
+    { label: 'Opportunities', value: filteredOpps.length },
+    { label: 'Pipeline Value', value: formatCurrency(filteredPipeline) },
+    { label: 'Milestones', value: filteredMiles.length },
+    { label: 'At Risk', value: filteredMiles.filter((m) => m.milestoneStatus === 'At Risk').length },
+    { label: 'Blocked', value: filteredMiles.filter((m) => m.milestoneStatus === 'Blocked').length },
+    { label: 'Pending Approvals', value: summary?.pendingApprovals ?? 0 },
+  ];
+
+  const filterLabel = filter ? filter.value : null;
 
   return (
     <div>
       <div className="page-header">
         <h1>Dashboard</h1>
+        {filter && (
+          <button className="chip filter-chip" onClick={() => setFilter(null)}>
+            Filtered: {filterLabel} <span aria-hidden="true">✕</span>
+          </button>
+        )}
       </div>
+
       {error && <p className="error">{error}</p>}
-      <div className="grid cols-4">
-        {cards.map((c) => (
+      {!summary && !error && <p className="muted">Loading metrics…</p>}
+
+      {/* KPI strip — reacts to the active cross-filter */}
+      <div className="grid cols-4" style={{ marginBottom: 'var(--sp-6)' }}>
+        {kpis.map((c) => (
           <div key={c.label} className="card metric">
             <div className="value">{c.value}</div>
             <div className="label">{c.label}</div>
           </div>
         ))}
       </div>
-      {!metrics && !error && <p className="muted">Loading metrics…</p>}
+
+      {/* Charts */}
+      <div className="chart-grid">
+        <ChartCard title="Milestones by status" hint="Click a slice to filter">
+          <ResponsiveContainer width="100%" height={260}>
+            <PieChart>
+              <Pie
+                data={byStatus}
+                dataKey="value"
+                nameKey="name"
+                innerRadius={62}
+                outerRadius={92}
+                paddingAngle={2}
+                onClick={(e) => toggle('milestoneStatus', nameOf(e))}
+              >
+                {byStatus.map((s, i) => (
+                  <Cell
+                    key={s.name}
+                    fill={colorFor(s.name, i)}
+                    cursor="pointer"
+                    stroke="#fff"
+                    strokeWidth={2}
+                    opacity={opacityFor('milestoneStatus', s.name)}
+                  />
+                ))}
+                <Label
+                  position="center"
+                  content={(props) => (
+                    <CenterLabel viewBox={props.viewBox} top={filteredMiles.length} bottom={filterLabel ?? 'total'} />
+                  )}
+                />
+              </Pie>
+              <Tooltip />
+              <Legend />
+            </PieChart>
+          </ResponsiveContainer>
+        </ChartCard>
+
+        <ChartCard title="Completion" hint={`${completionPct}% of the current view`}>
+          <div className="gauge">
+            <ResponsiveContainer width="100%" height={260}>
+              <RadialBarChart
+                innerRadius="72%"
+                outerRadius="100%"
+                data={[{ name: 'Completed', value: completionPct }]}
+                startAngle={90}
+                endAngle={-270}
+              >
+                <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
+                <RadialBar background dataKey="value" cornerRadius={14} fill="#0e7a0b" />
+              </RadialBarChart>
+            </ResponsiveContainer>
+            <div className="gauge-center">
+              <span className="gauge-pct">{completionPct}%</span>
+              <span className="gauge-sub">completed</span>
+            </div>
+          </div>
+        </ChartCard>
+
+        <ChartCard title="Milestones by risk impact" hint="Click a bar to filter">
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={byRisk} margin={{ top: 8, right: 8, bottom: 0, left: -18 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef1f6" />
+              <XAxis dataKey="name" tickLine={false} axisLine={false} />
+              <YAxis allowDecimals={false} tickLine={false} axisLine={false} />
+              <Tooltip cursor={{ fill: 'rgba(43,108,255,0.06)' }} />
+              <Bar dataKey="value" radius={[6, 6, 0, 0]} onClick={(e) => toggle('riskImpact', nameOf(e))}>
+                {byRisk.map((s, i) => (
+                  <Cell
+                    key={s.name}
+                    fill={colorFor(s.name, i)}
+                    cursor="pointer"
+                    opacity={opacityFor('riskImpact', s.name)}
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartCard>
+
+        <ChartCard title="Opportunities by solution area" hint="Click a slice to filter">
+          <ResponsiveContainer width="100%" height={260}>
+            <PieChart>
+              <Pie
+                data={bySolutionArea}
+                dataKey="value"
+                nameKey="name"
+                outerRadius={92}
+                paddingAngle={2}
+                onClick={(e) => toggle('solutionArea', nameOf(e))}
+              >
+                {bySolutionArea.map((s, i) => (
+                  <Cell
+                    key={s.name}
+                    fill={colorFor(s.name, i)}
+                    cursor="pointer"
+                    stroke="#fff"
+                    strokeWidth={2}
+                    opacity={opacityFor('solutionArea', s.name)}
+                  />
+                ))}
+              </Pie>
+              <Tooltip />
+              <Legend />
+            </PieChart>
+          </ResponsiveContainer>
+        </ChartCard>
+
+        <ChartCard title="Pipeline $ by sales stage" hint="Click a bar to filter" wide>
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart layout="vertical" data={pipelineByStage} margin={{ top: 8, right: 24, bottom: 0, left: 24 }}>
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#eef1f6" />
+              <XAxis type="number" tickFormatter={compactCurrency} tickLine={false} axisLine={false} />
+              <YAxis type="category" dataKey="name" width={120} tickLine={false} axisLine={false} />
+              <Tooltip formatter={(v) => formatCurrency(Number(v) || 0)} cursor={{ fill: 'rgba(43,108,255,0.06)' }} />
+              <Bar dataKey="value" radius={[0, 6, 6, 0]} onClick={(e) => toggle('salesStage', nameOf(e))}>
+                {pipelineByStage.map((s, i) => (
+                  <Cell
+                    key={s.name}
+                    fill={colorFor(s.name, i)}
+                    cursor="pointer"
+                    opacity={opacityFor('salesStage', s.name)}
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartCard>
+      </div>
+
+      {/* Detail table — reflects the active cross-filter */}
+      <div className="card" style={{ marginTop: 'var(--sp-6)' }}>
+        <div className="chart-head">
+          <h3>Milestones {filter ? `· ${filterLabel}` : ''}</h3>
+          <Link to="/milestones" className="muted">View all →</Link>
+        </div>
+        <p className="muted">Showing {filteredMiles.length} of {miles.length} milestones.</p>
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Name</th>
+              <th>Opportunity</th>
+              <th>Status</th>
+              <th>Owner</th>
+              <th>Est Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredMiles.slice(0, 12).map((m) => (
+              <tr key={m.id}>
+                <td>{m.milestoneBusinessId}</td>
+                <td>
+                  <Link to={`/milestones/${m.id}`}>{m.milestoneName}</Link>
+                </td>
+                <td>{m.opportunity?.opportunityName ?? '—'}</td>
+                <td>
+                  <span className={`badge ${statusBadgeClass(m.milestoneStatus)}`}>{choiceLabel(m.milestoneStatus)}</span>
+                </td>
+                <td>{m.owner ?? '—'}</td>
+                <td>{formatDate(m.estDate)}</td>
+              </tr>
+            ))}
+            {filteredMiles.length === 0 && (
+              <tr>
+                <td colSpan={6} className="muted">No milestones match the current filter.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
+  );
+}
+
+/** Card wrapper matching the Fluent design system. */
+function ChartCard({
+  title,
+  hint,
+  wide,
+  children,
+}: {
+  title: string;
+  hint?: string;
+  wide?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div className={`card chart-card${wide ? ' wide' : ''}`}>
+      <div className="chart-head">
+        <h3>{title}</h3>
+        {hint && <span className="chart-hint">{hint}</span>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/** Two-line centered label for the donut (auto-centers on the pie via viewBox). */
+function CenterLabel({ viewBox, top, bottom }: { viewBox?: unknown; top: number | string; bottom: string }) {
+  const vb = (viewBox ?? {}) as { cx?: number; cy?: number };
+  if (vb.cx == null || vb.cy == null) return null;
+  return (
+    <>
+      <text x={vb.cx} y={vb.cy - 6} textAnchor="middle" fontSize={26} fontWeight={800} fill="#17203a">
+        {top}
+      </text>
+      <text x={vb.cx} y={vb.cy + 16} textAnchor="middle" fontSize={12} fill="#6b7280">
+        {bottom}
+      </text>
+    </>
   );
 }
