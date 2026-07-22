@@ -11,6 +11,7 @@ build/
 # Prisma / SQLite database
 prisma/dev.db
 prisma/dev.db-journal
+prisma/schema.local.prisma
 *.sqlite
 *.sqlite3
 
