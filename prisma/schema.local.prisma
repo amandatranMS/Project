@@ -1,0 +1,347 @@
+// MSX Milestone Assistant — Prisma schema
+//
+// SYNTHETIC MOCK ONLY. Models a simplified MSX-style workspace. NOT connected to
+// real MSX, Dataverse, Power Platform, or customer data.
+//
+// The Excel workbook (data/MSX_Mirror_Necessary_Tables_Import_10_More_Entries.xlsx)
+// is the single source of truth. This schema mirrors the 11 worksheets exactly.
+//
+// Exactly 11 tables. Risk, blocker, competitor and partner information is embedded
+// directly on Opportunity / OpportunityMilestone (no separate Account / Partner /
+// Competitor / Milestone Blocker / Milestone Risk Assessment tables).
+//
+// SQLite has no native enums, so choice fields are Strings. Business IDs / names
+// used as lookup targets are marked @unique so importers can use Prisma `connect`.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// 1. Opportunity — parent record (sheet "Opportunity").
+model Opportunity {
+  id                    String    @id @default(cuid())
+  opportunityBusinessId String    @unique // "Opportunity ID" (OPP-001)
+  opportunityName       String    @unique // "Opportunity Name" — child lookup target
+  tpid                  String?
+  customerName          String?
+  industry              String?
+  solutionArea          String?
+  salesStage            String?
+  status                String?
+  estimatedRevenue      Float?
+  closeDate             DateTime?
+  aeOwner               String?
+  assignedSE            String?
+  competitorName        String? // embedded competitor (no Competitor table)
+  consumptionPhase      String?
+  businessProblem       String?
+  nextStep              String?
+  lastUpdated           DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  milestones         OpportunityMilestone[]
+  statusHistories    MilestoneStatusHistory[]
+  recommendations    AiMilestoneRecommendation[]
+  approvalRequests   ApprovalRequest[]
+  collaborationNotes CollaborationNote[]
+  dealTeamMembers    DealTeamMember[]
+  notifications      AgentNotification[]
+  runLogs            AgentRunLog[]
+  auditLogs          AgentActionAuditLog[]
+
+  @@index([status])
+  @@index([salesStage])
+}
+
+// 2. Opportunity Milestone — central working record (sheet "Opportunity Milestone").
+// Embeds risk + blocker + competitor + partner detail directly.
+model OpportunityMilestone {
+  id                  String      @id @default(cuid())
+  milestoneBusinessId String      @unique // "Milestone ID" (MS-001)
+  milestoneName       String
+  opportunityId       String
+  opportunity         Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  workload           String?
+  customerCommitment String?
+  deliveredBy        String?
+  partnerName        String? // embedded partner (no Partner table)
+  milestoneCategory  String?
+  estDate            DateTime?
+  fitCharge          Float?
+  nonRecurring       Boolean?
+  comments           String?
+  milestoneStatus    String?
+  statusReason       String?
+
+  // Embedded risk (no Milestone Risk Assessment table)
+  riskDescription String?
+  riskImpact      String?
+  mitigationPlan  String?
+
+  // Embedded blocker (no Milestone Blocker table)
+  blockedReason          String?
+  blockedOwner           String?
+  blockedSince           DateTime?
+  expectedResolutionDate DateTime?
+  escalated              Boolean?
+
+  competitorName       String? // embedded competitor (no Competitor table)
+  azureCapacityType    String?
+  preferredAzureRegion String?
+  owner                String?
+  createdBy            String?
+  lastUpdated          DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  statusHistories    MilestoneStatusHistory[]
+  recommendations    AiMilestoneRecommendation[]
+  approvalRequests   ApprovalRequest[]
+  collaborationNotes CollaborationNote[]
+  notifications      AgentNotification[]
+  runLogs            AgentRunLog[]
+  auditLogs          AgentActionAuditLog[]
+
+  @@index([opportunityId])
+  @@index([milestoneStatus])
+}
+
+// 3. Milestone Status History (sheet "Milestone Status History").
+model MilestoneStatusHistory {
+  id                      String @id @default(cuid())
+  statusHistoryBusinessId String @unique // "Status History ID" (SH-001)
+
+  milestoneId   String
+  milestone     OpportunityMilestone @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+  opportunityId String?
+  opportunity   Opportunity?         @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+
+  oldStatus    String?
+  newStatus    String?
+  statusDate   DateTime?
+  reason       String?
+  changedBy    String?
+  agentFlagged Boolean?
+
+  createdAt DateTime @default(now())
+
+  @@index([milestoneId])
+}
+
+// 4. AI Milestone Recommendation (sheet "AI Milestone Recommendation").
+model AiMilestoneRecommendation {
+  id                        String  @id @default(cuid())
+  recommendationBusinessId  String  @unique // "Recommendation ID" (REC-001)
+  recommendedMilestoneTitle String?
+
+  opportunityId      String?
+  opportunity        Opportunity?          @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  relatedMilestoneId String?
+  relatedMilestone   OpportunityMilestone? @relation(fields: [relatedMilestoneId], references: [id], onDelete: SetNull)
+
+  suggestedDescription String?
+  suggestedOwnerRole   String?
+  suggestedDueDate     DateTime?
+  priority             String?
+  businessValue        String?
+  riskOrDependency     String?
+  confidence           String?
+  humanReviewRequired  Boolean?
+  reviewStatus         String?
+  reviewerNotes        String?
+  readyForMockCreation Boolean?
+  createdByAgent       Boolean?
+
+  createdAt DateTime @default(now())
+
+  approvalRequests ApprovalRequest[]
+  auditLogs        AgentActionAuditLog[]
+
+  @@index([reviewStatus])
+}
+
+// 5. Approval Request — human-in-the-loop gate (sheet "Approval Request").
+model ApprovalRequest {
+  id                        String  @id @default(cuid())
+  approvalRequestBusinessId String  @unique // "Approval Request ID" (APR-001)
+  requestName               String?
+
+  opportunityId           String?
+  opportunity             Opportunity?               @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  relatedRecommendationId String?
+  relatedRecommendation   AiMilestoneRecommendation? @relation(fields: [relatedRecommendationId], references: [id], onDelete: SetNull)
+  relatedMilestoneId      String?
+  relatedMilestone        OpportunityMilestone?      @relation(fields: [relatedMilestoneId], references: [id], onDelete: SetNull)
+
+  requestStatus       String?
+  approvalStatus      String?
+  requestedBy         String?
+  approvedBy          String?
+  approvedOn          DateTime?
+  mockWritebackStatus String?
+  errorMessage        String?
+
+  createdAt DateTime @default(now())
+
+  @@index([approvalStatus])
+}
+
+// 6. Collaboration Note (sheet "Collaboration Note").
+model CollaborationNote {
+  id                          String  @id @default(cuid())
+  collaborationNoteBusinessId String  @unique // "Collaboration Note ID" (CN-001)
+  noteTitle                   String?
+
+  opportunityId      String?
+  opportunity        Opportunity?          @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  relatedMilestoneId String?
+  relatedMilestone   OpportunityMilestone? @relation(fields: [relatedMilestoneId], references: [id], onDelete: SetNull)
+
+  noteType          String?
+  teamArea          String?
+  noteSummary       String?
+  suggestedAudience String?
+  createdBy         String?
+  createdOn         DateTime?
+  missingContext    String?
+  followUpNeeded    String?
+
+  createdAt DateTime @default(now())
+
+  @@index([opportunityId])
+}
+
+// 7. Deal Team Member (sheet "Deal Team Member").
+model DealTeamMember {
+  id                       String @id @default(cuid())
+  dealTeamMemberBusinessId String @unique // "Deal Team Member ID" (DT-001)
+
+  opportunityId String
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  personName      String?
+  role            String?
+  teamArea        String?
+  addedDate       DateTime?
+  active          Boolean?
+  handoffRequired Boolean?
+  handoffNotes    String?
+
+  createdAt DateTime @default(now())
+
+  @@index([opportunityId])
+}
+
+// 8. Agent Notification (sheet "Agent Notification").
+model AgentNotification {
+  id                     String @id @default(cuid())
+  notificationBusinessId String @unique // "Notification ID" (NT-001)
+
+  opportunityId      String?
+  opportunity        Opportunity?          @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  relatedMilestoneId String?
+  relatedMilestone   OpportunityMilestone? @relation(fields: [relatedMilestoneId], references: [id], onDelete: SetNull)
+
+  severity    String?
+  notifyRole  String?
+  message     String?
+  status      String?
+  createdDate DateTime?
+  reasonCode  String?
+
+  createdAt DateTime @default(now())
+
+  @@index([status])
+}
+
+// 9. Agent Run Log (sheet "Agent Run Log"). Keyed on the unique Run Name.
+model AgentRunLog {
+  id      String @id @default(cuid())
+  runName String @unique // "Run Name" (RUN-001 ...)
+
+  agentName String?
+  runType   String?
+  startTime DateTime?
+  endTime   DateTime?
+  status    String?
+
+  opportunityId      String?
+  opportunity        Opportunity?          @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  relatedMilestoneId String?
+  relatedMilestone   OpportunityMilestone? @relation(fields: [relatedMilestoneId], references: [id], onDelete: SetNull)
+
+  numberOfToolCalls                Int?
+  numberOfRecordsRead              Int?
+  numberOfRecordsCreated           Int?
+  numberOfRecommendationsGenerated Int?
+  notes                            String?
+
+  createdAt DateTime @default(now())
+
+  @@index([status])
+}
+
+// 10. Agent Action Audit Log (sheet "Agent Action Audit Log").
+model AgentActionAuditLog {
+  id              String  @id @default(cuid())
+  auditBusinessId String  @unique // "Audit ID" (AU-001)
+
+  actionName String?
+  agentName  String?
+  actionType String?
+  actor      String?
+
+  opportunityId           String?
+  opportunity             Opportunity?               @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  relatedMilestoneId      String?
+  relatedMilestone        OpportunityMilestone?      @relation(fields: [relatedMilestoneId], references: [id], onDelete: SetNull)
+  relatedRecommendationId String?
+  relatedRecommendation   AiMilestoneRecommendation? @relation(fields: [relatedRecommendationId], references: [id], onDelete: SetNull)
+
+  timestamp     DateTime?
+  inputSummary  String?
+  outputSummary String?
+  securityEvent Boolean?
+  result        String?
+
+  // JSON transcript of the chat turn (prompts + answers) that produced this
+  // action, when the action originated from the in-app assistant. Null for
+  // direct UI/API actions.
+  conversation String?
+
+  createdAt DateTime @default(now())
+
+  @@index([actionType])
+}
+
+// 11. Dashboard Metric Snapshot (sheet "Dashboard Metric Snapshot").
+model DashboardMetricSnapshot {
+  id           String    @id @default(cuid())
+  snapshotName String    @unique // "Snapshot Name" (SNAP-001)
+  snapshotDate DateTime?
+
+  totalAgentRuns             Int?
+  recommendationsGenerated   Int?
+  recommendationsApproved    Int?
+  mockMilestonesCreated      Int?
+  updatesMade                Int?
+  failedActions              Int?
+  blockedMilestones          Int?
+  atRiskMilestones           Int?
+  lostToCompetitorMilestones Int?
+  pendingApprovals           Int?
+  lastScheduledRunStatus     String?
+
+  createdAt DateTime @default(now())
+
+  @@index([snapshotName])
+}
