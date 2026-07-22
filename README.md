@@ -42,8 +42,8 @@ Account, Partner, Competitor, Milestone Blocker, or Milestone Risk Assessment ta
 
 ## Tech stack
 
-React + TypeScript · Node.js + Express + TypeScript · SQLite · Prisma · Zod ·
-REST API + OpenAPI.
+React + TypeScript · Node.js + Express + TypeScript · **PostgreSQL (Azure Database
+for PostgreSQL, cloud)** · Prisma · Zod · REST API + OpenAPI.
 
 ## Project structure
 
@@ -58,10 +58,14 @@ docs/        api-test.md, demo-script.md, architecture.md
 
 ## Getting started
 
-Requires Node.js 18+.
+Requires Node.js 18+ and a **PostgreSQL** database (see
+[Database — Azure PostgreSQL (cloud)](#database--azure-postgresql-cloud) below). Copy
+`.env.example` → `.env` and set `DATABASE_URL` to your connection string **before**
+running setup.
 
 ```bash
-# 1. Install deps, generate Prisma client, create the SQLite DB, and seed it
+# 1. Install deps, generate the Prisma client, push the schema to your
+#    PostgreSQL database, and load the mock data from the workbook
 npm run setup
 
 # 2. Run the API (http://localhost:4000) and web app (http://localhost:5173)
@@ -82,15 +86,67 @@ Then open **http://localhost:5173**.
 | `npm run db:seed`          | seed the DB (runs the workbook import)                 |
 | `npm run db:reset`         | force-reset the schema then reload the workbook        |
 | `npm run prisma:generate`  | regenerate the Prisma client after schema changes      |
+| `npm run db:push`          | push the Prisma schema to the PostgreSQL database      |
 | `npm run build`            | build shared, api, and web                             |
+
+## Database — Azure PostgreSQL (cloud)
+
+> **Deviation from the original plan.** This project started on a local **SQLite**
+> file (`prisma/dev.db`). It now runs against a **cloud PostgreSQL** database —
+> **Azure Database for PostgreSQL Flexible Server** — so the API, the hosted Foundry
+> agent, and multiple machines can all share one live dataset instead of a per-laptop
+> file. The mock-only rule is unchanged: just the 11 synthetic tables live there, and
+> no real MSX / customer data is ever stored.
+
+### What changed
+
+| Before (SQLite)                | After (Azure PostgreSQL)                                |
+| ------------------------------ | ------------------------------------------------------- |
+| `provider = "sqlite"`          | `provider = "postgresql"` in `prisma/schema.prisma`     |
+| `DATABASE_URL="file:./dev.db"` | `postgresql://…@<server>.postgres.database.azure.com…`  |
+| Local file, single machine     | Managed cloud server, shared across clients             |
+| No network / TLS               | `sslmode=require` (TLS) enforced                         |
+
+The Prisma models, the 11-table rule, the workbook import pipeline, and the REST API
+are all unchanged — only the datasource moved.
+
+### Connection string
+
+`DATABASE_URL` lives in `.env`, which is **gitignored and never committed**. Format:
+
+```
+postgresql://<admin-user>:<url-encoded-password>@<your-server>.postgres.database.azure.com:5432/<database>?sslmode=require
+```
+
+- **TLS is required** (`sslmode=require`) — Azure rejects non-TLS connections.
+- **URL-encode** special characters in the password (e.g. `@` → `%40`).
+- The password is supplied locally at runtime and is never committed; `.env.example`
+  ships only a safe placeholder.
+
+### Point it at your own database
+
+1. Create an **Azure Database for PostgreSQL Flexible Server** and an empty database.
+2. Allow your client IP in the server firewall (or "Allow public access from Azure
+   services" for hosted components).
+3. Copy `.env.example` → `.env` and set `DATABASE_URL` to your connection string.
+4. Create the schema and load the mock data:
+
+   ```bash
+   npm run prisma:generate   # regenerate the client for the postgres provider
+   npm run db:push           # create all 11 tables in the cloud database
+   npm run import-workbook   # load the synthetic records from the Excel workbook
+   ```
+
+`npm run setup` runs the generate → push → import steps in one go once `DATABASE_URL`
+is set. Use `npm run db:reset` to force-reset the cloud schema and reload the workbook.
 
 ## Data import pipeline (workbook is the single source of truth)
 
 Records are **not** hardcoded. They are imported from the Excel workbook:
 
 ```
-Excel Workbook  →  XLSX Parser  →  JSON Objects  →  Prisma (connect)  →  SQLite
- data/*.xlsx        scripts/          per-row map       @unique keys        dev.db
+Excel Workbook  →  XLSX Parser  →  JSON Objects  →  Prisma (connect)  →  PostgreSQL
+ data/*.xlsx        scripts/          per-row map       @unique keys      (Azure, cloud)
                  parseWorkbook.ts   workbookMappings.ts
 ```
 
