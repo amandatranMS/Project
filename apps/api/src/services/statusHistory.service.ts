@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma.js';
 import { HttpError } from '../lib/httpError.js';
 import { genId } from '../lib/ids.js';
+import { maybeNotifyManager, type MilestoneNotifyContext } from './managerNotifications.service.js';
 import type { z } from 'zod';
 import type { createStatusHistorySchema } from '../validators/schemas.js';
 
@@ -16,7 +17,7 @@ export const statusHistoryService = {
   },
 
   /** Adds a history row and moves the milestone to the new status (transaction). */
-  async create(input: CreateInput) {
+  async create(input: CreateInput, ctx?: MilestoneNotifyContext) {
     const milestone = await prisma.opportunityMilestone.findUnique({
       where: { milestoneBusinessId: input.milestoneBusinessId },
     });
@@ -40,6 +41,15 @@ export const statusHistoryService = {
         },
       }),
     ]);
-    return history;
+
+    // Side effect: a real transition INTO "Lost To Competitor" notifies the
+    // seller's manager (best-effort; guarded by the human acknowledgement).
+    const managerEmail = await maybeNotifyManager(
+      milestone.milestoneStatus,
+      { id: milestone.id, milestoneStatus: input.newStatus },
+      { ...ctx, changedBy: ctx?.changedBy ?? input.changedBy ?? undefined },
+    );
+
+    return managerEmail ? { ...history, managerEmail } : history;
   },
 };

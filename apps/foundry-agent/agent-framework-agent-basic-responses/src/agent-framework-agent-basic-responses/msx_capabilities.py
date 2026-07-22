@@ -170,14 +170,43 @@ def _submit_action_approval(
 
 # ---- Milestone tools -----------------------------------------------------
 def list_milestones(
+    opportunity: Annotated[
+        str | None,
+        Field(
+            description=(
+                "Optional opportunity filter: an opportunity name or business id "
+                "(e.g. OPP-002). When given, ONLY the milestones under that one "
+                "opportunity are returned — use this whenever the user asks about a "
+                "specific opportunity's milestones."
+            ),
+        ),
+    ] = None,
     milestoneStatus: Annotated[
         str | None,
         Field(description=f"Optional status filter. One of: {MILESTONE_STATUSES}."),
     ] = None,
 ) -> Any:
-    """List milestones, optionally filtered by status."""
+    """List EXISTING milestones, optionally scoped to one opportunity and/or status.
+
+    Returns exactly the milestones the API stores — nothing is fabricated or padded.
+    When ``opportunity`` is provided, the result contains ONLY milestones under that
+    opportunity, so you can answer "which milestones does OPP-XXX have?" precisely
+    instead of guessing from the full list. Recommendations and approval requests are
+    NOT milestones and are never included here.
+    """
     params = {"milestoneStatus": milestoneStatus} if milestoneStatus else None
     data = _mc.get("/api/milestones", params=params) or []
+
+    if opportunity:
+        exact_name, err = _resolve_opportunity(opportunity)
+        if err:
+            return err
+        target = (exact_name or "").strip().lower()
+        data = [
+            m
+            for m in data
+            if ((m.get("opportunity") or {}).get("opportunityName") or "").strip().lower() == target
+        ]
     return [_trim_milestone(m) for m in data]
 
 

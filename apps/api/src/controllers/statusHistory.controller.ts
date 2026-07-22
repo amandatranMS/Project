@@ -12,7 +12,11 @@ export const statusHistoryController = {
 
   create: asyncHandler(async (req, res) => {
     const input = createStatusHistorySchema.parse(req.body);
-    const data = await statusHistoryService.create(input);
+    const data = await statusHistoryService.create(input, {
+      user: req.user,
+      changedBy: req.user?.name ?? input.changedBy ?? undefined,
+      acknowledgeManagerEmail: req.body?.acknowledgeManagerEmail === true,
+    });
     sendOk(res, data, 201);
   }),
 };

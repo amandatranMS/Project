@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { MILESTONE_STATUSES, choiceLabel } from '@msx/shared';
-import { api, type Milestone } from '../api/client';
+import { useMsal } from '@azure/msal-react';
+import { MILESTONE_STATUSES, LOST_TO_COMPETITOR, choiceLabel } from '@msx/shared';
+import { api, type Milestone, type ManagerEmailOutcome, type GraphManager } from '../api/client';
 import { statusBadgeClass, formatDate, formatBool, formatCurrency } from '../ui';
 import MilestoneForm from '../components/form/MilestoneForm';
 import Modal from '../components/Modal';
+import LostToCompetitorDialog from '../components/LostToCompetitorDialog';
 
 interface MilestoneDetailData extends Milestone {
   statusHistories: { id: string; oldStatus?: string | null; newStatus?: string | null; changedBy?: string | null; reason?: string | null; statusDate?: string | null }[];
@@ -15,6 +17,8 @@ const STATUSES = MILESTONE_STATUSES;
 export default function MilestoneDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { accounts } = useMsal();
+  const signedInName = accounts[0]?.name ?? accounts[0]?.username ?? 'Demo User';
   const [data, setData] = useState<MilestoneDetailData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -22,6 +26,9 @@ export default function MilestoneDetail() {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [confirmingLost, setConfirmingLost] = useState(false);
+  const [managerName, setManagerName] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   function load() {
     if (!id) return;
@@ -47,16 +54,44 @@ export default function MilestoneDetail() {
     }
   }
 
-  async function changeStatus(newStatus: string) {
+  function onStatusClick(newStatus: string) {
+    setNotice(null);
+    setError(null);
+    if (newStatus === LOST_TO_COMPETITOR) {
+      // Best-effort: name the manager in the pop-up (falls back to generic copy).
+      setManagerName(null);
+      api
+        .get<{ manager: GraphManager | null }>('/graph/manager')
+        .then((r) => setManagerName(r.manager?.displayName ?? r.manager?.mail ?? null))
+        .catch(() => setManagerName(null));
+      setConfirmingLost(true);
+      return;
+    }
+    void changeStatus(newStatus);
+  }
+
+  async function changeStatus(newStatus: string, acknowledgeManagerEmail = false) {
     if (!data) return;
     setBusy(true);
     try {
-      await api.post('/status-history', {
+      const res = await api.post<{ managerEmail?: ManagerEmailOutcome }>('/status-history', {
         milestoneBusinessId: data.milestoneBusinessId,
         newStatus,
-        changedBy: 'Demo User',
+        changedBy: signedInName,
         reason: 'Manual update from UI',
+        acknowledgeManagerEmail,
       });
+      setConfirmingLost(false);
+      const outcome = res?.managerEmail;
+      if (outcome?.attempted && outcome.sent) {
+        setNotice(
+          `Manager email ${outcome.simulated ? 'simulated (recorded in the audit log, not delivered)' : 'sent'}${
+            outcome.managerEmail ? ` to ${outcome.managerEmail}` : ''
+          }.`,
+        );
+      } else if (outcome?.attempted && !outcome.sent) {
+        setNotice(`Status changed. Manager email not sent — ${outcome.skippedReason ?? 'unknown reason'}.`);
+      }
       load();
     } catch (e) {
       setError((e as Error).message);
@@ -141,14 +176,24 @@ export default function MilestoneDetail() {
 
       <div className="card">
         <h2>Change status</h2>
+        {notice && <p style={{ color: 'var(--success)' }}>{notice}</p>}
         <div className="btn-row">
           {STATUSES.map((s) => (
-            <button key={s} className="secondary" disabled={busy || s === data.milestoneStatus} onClick={() => changeStatus(s)}>
+            <button key={s} className="secondary" disabled={busy || s === data.milestoneStatus} onClick={() => onStatusClick(s)}>
               {choiceLabel(s)}
             </button>
           ))}
         </div>
       </div>
+
+      {confirmingLost && (
+        <LostToCompetitorDialog
+          managerName={managerName}
+          busy={busy}
+          onCancel={() => setConfirmingLost(false)}
+          onConfirm={() => void changeStatus(LOST_TO_COMPETITOR, true)}
+        />
+      )}
 
       <div className="card">
         <h2>Status history</h2>

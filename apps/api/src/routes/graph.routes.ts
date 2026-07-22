@@ -8,6 +8,7 @@ import { graphController as c } from '../controllers/graph.controller.js';
 const router = Router();
 router.get('/me', c.me);
 router.get('/hierarchy', c.hierarchy);
+router.get('/manager', c.manager);
 router.get('/outlook/messages', c.messages);
 router.get('/teams/chats', c.chats);
 router.post('/outlook/send', c.sendMail);

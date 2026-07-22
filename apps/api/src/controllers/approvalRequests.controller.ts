@@ -7,7 +7,7 @@ const q = (v: unknown) => (typeof v === 'string' && v ? v : undefined);
 
 export const approvalRequestsController = {
   list: asyncHandler(async (req, res) => {
-    const data = await approvalRequestsService.list({ approvalStatus: q(req.query.approvalStatus) });
+    const data = await approvalRequestsService.list({ approvalStatus: q(req.query.approvalStatus) }, req.user);
     sendOk(res, data);
   }),
 

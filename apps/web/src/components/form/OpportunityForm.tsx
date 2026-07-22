@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { SOLUTION_AREAS, SALES_STAGES, OPPORTUNITY_STATUSES } from '@msx/shared';
-import { api, type Opportunity } from '../../api/client';
+import { api, announceOpportunity, type Opportunity } from '../../api/client';
 import Modal from '../Modal';
+import OpportunityCreatedNotifyDialog from '../OpportunityCreatedNotifyDialog';
 import { TextField, NumberField, DateField, TextAreaField, SelectField } from './Fields';
 
 interface Props {
@@ -35,6 +36,11 @@ export default function OpportunityForm({ initial, onClose, onSaved }: Props) {
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // After a successful CREATE we show a consent modal offering to notify the team
+  // via Teams; `created` holds the new opportunity while that modal is open.
+  const [created, setCreated] = useState<Opportunity | null>(null);
+  const [notifyBusy, setNotifyBusy] = useState(false);
+  const [notifyError, setNotifyError] = useState<string | null>(null);
 
   const set = (k: keyof typeof form) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -60,15 +66,48 @@ export default function OpportunityForm({ initial, onClose, onSaved }: Props) {
       nextStep: clean(form.nextStep),
     };
     try {
-      if (editing && initial) await api.patch(`/opportunities/${initial.id}`, body);
-      else await api.post('/opportunities', body);
-      onSaved();
-      onClose();
+      if (editing && initial) {
+        await api.patch(`/opportunities/${initial.id}`, body);
+        onSaved();
+        onClose();
+      } else {
+        const opp = await api.post<Opportunity>('/opportunities', body);
+        onSaved(); // refresh the list behind the consent modal
+        setCreated(opp); // show the "notify the team?" consent modal instead of closing
+      }
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setBusy(false);
     }
+  }
+
+  /** Send the Teams visibility broadcast the user just consented to, then close. */
+  async function notifyTeam() {
+    if (!created) return;
+    setNotifyBusy(true);
+    setNotifyError(null);
+    try {
+      await announceOpportunity(created.id, true);
+      onClose();
+    } catch (e) {
+      setNotifyError((e as Error).message);
+    } finally {
+      setNotifyBusy(false);
+    }
+  }
+
+  // Consent step: opportunity is already saved; ask before notifying the team.
+  if (created) {
+    return (
+      <OpportunityCreatedNotifyDialog
+        opportunityName={created.opportunityName}
+        busy={notifyBusy}
+        error={notifyError}
+        onSkip={onClose}
+        onConfirm={notifyTeam}
+      />
+    );
   }
 
   return (

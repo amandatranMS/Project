@@ -160,7 +160,9 @@ export const opportunityTools: Tool[] = [
     },
     run: async (a) => {
       const input = createOpportunitySchema.parse(a);
-      return trimOpportunity(await opportunitiesService.create(input));
+      // The in-app assistant IS the agent, so a create here is an agent action:
+      // pass viaAgent=true to queue the approval-gated Teams broadcast (Path B).
+      return trimOpportunity(await opportunitiesService.create(input, { kind: 'service' }, true));
     },
   },
 ];

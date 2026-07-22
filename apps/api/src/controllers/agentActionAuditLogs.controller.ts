@@ -6,10 +6,13 @@ const q = (v: unknown) => (typeof v === 'string' && v ? v : undefined);
 
 export const agentActionAuditLogsController = {
   list: asyncHandler(async (req, res) => {
-    const data = await agentActionAuditLogsService.list({
-      agentName: q(req.query.agentName),
-      actionType: q(req.query.actionType),
-    });
+    const data = await agentActionAuditLogsService.list(
+      {
+        agentName: q(req.query.agentName),
+        actionType: q(req.query.actionType),
+      },
+      req.user,
+    );
     sendOk(res, data);
   }),
 

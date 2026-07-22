@@ -51,7 +51,10 @@ paths:
       responses: { '200': { description: Envelope with array of opportunities } }
     post:
       tags: [Opportunities]
-      summary: Create an opportunity
+      summary: >
+        Create an opportunity. Side-effect: records an in-app "all users"
+        notification and, when created by an agent (service principal) in live mode,
+        queues a Pending NotifyTeams ApprovalRequest for human consent (Path B).
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/OpportunityInput' } } }
@@ -88,6 +91,27 @@ paths:
         notifications, agent run logs, and audit logs.
       parameters: [{ $ref: '#/components/parameters/IdParam' }]
       responses: { '200': { description: Opportunity context }, '404': { description: Not found } }
+  /api/opportunities/{id}/announce:
+    post:
+      tags: [Opportunities]
+      summary: >
+        Send the "new opportunity" visibility message to the configured teammate
+        over Microsoft Teams (Path A, human consent). Called from the create-confirm
+        popup after a human agrees. Honors GRAPH_SEND_MODE (simulate vs live) and
+        requires TEAMS_BROADCAST_TO to be set; audited via recordAgentAction.
+      parameters: [{ $ref: '#/components/parameters/IdParam' }]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                confirm: { type: boolean, description: Human consent to deliver (default true) }
+      responses:
+        '200': { description: Envelope with delivery result (sent/simulated/skipped) }
+        '400': { description: No Teams recipient configured }
+        '404': { description: Not found }
 
   /api/milestones:
     get:
@@ -113,7 +137,13 @@ paths:
     patch:
       tags: [Milestones]
       summary: Update a milestone
+      description: >
+        Updating milestoneStatus to "Lost To Competitor" triggers an
+        executive-summary email to the seller's manager when
+        `acknowledgeManagerEmail` is true (best-effort; never blocks the update).
       parameters: [{ $ref: '#/components/parameters/IdParam' }]
+      requestBody:
+        content: { application/json: { schema: { $ref: '#/components/schemas/MilestoneInput' } } }
       responses: { '200': { description: Updated } }
     delete:
       tags: [Milestones]
@@ -130,6 +160,11 @@ paths:
     post:
       tags: [Status History]
       summary: Add a status change (moves the milestone to the new status)
+      description: >
+        Changing newStatus to "Lost To Competitor" triggers an executive-summary
+        email to the seller's manager when `acknowledgeManagerEmail` is true
+        (resolved from Microsoft Entra, audited; best-effort, never blocks the
+        status change).
       requestBody:
         required: true
         content:
@@ -143,6 +178,11 @@ paths:
                 oldStatus: { type: string }
                 changedBy: { type: string }
                 reason: { type: string }
+                acknowledgeManagerEmail:
+                  type: boolean
+                  description: >
+                    Human acknowledgement authorising the manager email when
+                    newStatus is "Lost To Competitor".
       responses: { '201': { description: Created } }
 
   /api/recommendations:
@@ -173,6 +213,11 @@ paths:
     get:
       tags: [Approval Requests]
       summary: List approval requests
+      description: >
+        Each row includes a sanitized `pendingAction` ({ kind, milestoneStatus? })
+        decoded from the stored deferred action, so the UI can warn before approving
+        one that moves a milestone to "Lost To Competitor". The raw encoded action
+        payload is not exposed.
       parameters: [{ in: query, name: approvalStatus, schema: { type: string } }]
       responses: { '200': { description: Approval requests } }
     post:
@@ -285,6 +330,8 @@ paths:
         email / notify Teams / update a milestone, opportunity, or deal team member /
         delete milestone) and audited. Otherwise it performs the mock milestone
         writeback from the related recommendation (audited as CreateMilestone).
+        If the action moves a milestone to "Lost To Competitor", an executive-summary
+        email is sent to the reviewer's manager when `acknowledgeManagerEmail` is true.
       parameters: [{ $ref: '#/components/parameters/IdParam' }]
       requestBody:
         content: { application/json: { schema: { $ref: '#/components/schemas/DecisionInput' } } }
@@ -413,6 +460,13 @@ components:
         reviewedBy: { type: string }
         notes: { type: string }
         agentName: { type: string }
+        acknowledgeManagerEmail:
+          type: boolean
+          description: >
+            Human acknowledgement (from the Approvals-tab pop-up) authorising the
+            executive-summary email to the reviewer's manager when approving an
+            action that moves a milestone to "Lost To Competitor". Ignored for
+            any other action.
     OpportunityInput:
       type: object
       required: [opportunityName]
@@ -464,6 +518,13 @@ components:
         escalated: { type: boolean }
         comments: { type: string }
         lastUpdated: { type: string, format: date }
+        acknowledgeManagerEmail:
+          type: boolean
+          description: >
+            Only honored on PATCH /api/milestones/{id}. When the update transitions
+            the milestone INTO "Lost To Competitor", this human acknowledgement
+            authorises an executive-summary email to the seller's manager (resolved
+            from Microsoft Entra, audited). Ignored on create.
     DealTeamMemberInput:
       type: object
       required: [opportunityName, personName, role]

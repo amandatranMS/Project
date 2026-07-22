@@ -28,7 +28,11 @@ export const milestonesController = {
 
   update: asyncHandler(async (req, res) => {
     const input = updateMilestoneSchema.parse(req.body);
-    const data = await milestonesService.update(req.params.id, input);
+    const data = await milestonesService.update(req.params.id, input, {
+      user: req.user,
+      changedBy: req.user?.name ?? input.createdBy ?? undefined,
+      acknowledgeManagerEmail: req.body?.acknowledgeManagerEmail === true,
+    });
     sendOk(res, data);
   }),
 

@@ -49,6 +49,18 @@ export const graphController = {
     sendOk(res, await graphService.hierarchy(user));
   }),
 
+  /**
+   * The signed-in user's manager (for the Lost-to-Competitor pop-up, which names
+   * the recipient). Degrades gracefully: returns { manager: null } when there is
+   * no signed-in Microsoft user, so the UI can still show a generic warning.
+   */
+  manager: asyncHandler(async (req, res) => {
+    if (!req.user || req.user.kind !== 'user' || !req.user.bearer) {
+      return sendOk(res, { manager: null });
+    }
+    sendOk(res, { manager: await graphService.manager(req.user) });
+  }),
+
   messages: asyncHandler(async (req, res) => {
     const user = requireUser(req);
     sendOk(res, await graphService.messages(user, topParam(req.query.top)));

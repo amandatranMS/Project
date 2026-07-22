@@ -4,6 +4,7 @@ import { genId } from '../lib/ids.js';
 import { connectOpportunity, connectMilestone, connectRecommendation } from '../lib/connect.js';
 import { recordAgentAction } from '../lib/audit.js';
 import type { AuthUser } from '../lib/entraAuth.js';
+import { currentOwnerId, ownerScopeWhere } from '../lib/requestContext.js';
 import { graphService } from './graph.service.js';
 import { milestonesService } from './milestones.service.js';
 import { opportunitiesService } from './opportunities.service.js';
@@ -71,7 +72,12 @@ function summarizeAction(action: PendingAction): string {
 }
 
 /** Execute a deferred action after a human approves it. Underlying services audit their own writes. */
-async function executeAction(action: PendingAction, actor: AuthUser, agentName: string): Promise<unknown> {
+async function executeAction(
+  action: PendingAction,
+  actor: AuthUser,
+  agentName: string,
+  acknowledgeManagerEmail?: boolean,
+): Promise<unknown> {
   switch (action.kind) {
     case 'SendOutlookMail':
       return graphService.sendMail(actor, {
@@ -84,8 +90,14 @@ async function executeAction(action: PendingAction, actor: AuthUser, agentName: 
       return graphService.notifyTeams(actor, { message: action.message, to: action.to, confirm: true });
     case 'UpdateMilestone': {
       // Pass through every proposed milestone field; stamp the agent as author.
+      // The approver acts as the seller, so a transition to Lost To Competitor
+      // resolves THEIR manager for the email (gated by the ack from the pop-up).
       const { kind, milestoneId, ...fields } = action;
-      return milestonesService.update(milestoneId, { ...fields, createdBy: agentName });
+      return milestonesService.update(
+        milestoneId,
+        { ...fields, createdBy: agentName },
+        { user: actor, changedBy: actor.name ?? agentName, acknowledgeManagerEmail },
+      );
     }
     case 'UpdateOpportunity': {
       const { kind, opportunityId, ...fields } = action;
@@ -106,17 +118,40 @@ const detailInclude = {
   relatedMilestone: { select: { milestoneBusinessId: true, milestoneName: true } },
 } as const;
 
+/**
+ * Sanitized view of an approval row for the API/UI. Replaces the raw encoded
+ * `errorMessage` action blob with a readable summary and exposes a minimal
+ * `pendingAction` ({ kind, milestoneStatus? }) so the Approvals UI can warn
+ * before approving an action that moves a milestone to Lost To Competitor —
+ * without leaking the full stored payload (e.g. an email body).
+ */
+function toPublic<T extends { errorMessage?: string | null }>(row: T) {
+  const action = decodeAction(row.errorMessage);
+  if (!action) return { ...row, pendingAction: null };
+  const pendingAction: { kind: string; milestoneStatus?: string | null } = { kind: action.kind };
+  if (action.kind === 'UpdateMilestone') pendingAction.milestoneStatus = action.milestoneStatus ?? null;
+  return { ...row, errorMessage: summarizeAction(action), pendingAction };
+}
+
 export const approvalRequestsService = {
-  list(where: { approvalStatus?: string }) {
-    return prisma.approvalRequest.findMany({
-      where,
+  async list(where: { approvalStatus?: string }, user?: AuthUser) {
+    const scope = ownerScopeWhere(user);
+    const rows = await prisma.approvalRequest.findMany({
+      where: scope ? { AND: [where, scope] } : where,
       orderBy: { approvalRequestBusinessId: 'asc' },
       include: detailInclude,
+      omit: { ownerId: true },
     });
+    return rows.map(toPublic);
   },
 
-  get(id: string) {
-    return prisma.approvalRequest.findUnique({ where: { id }, include: detailInclude });
+  async get(id: string) {
+    const row = await prisma.approvalRequest.findUnique({
+      where: { id },
+      include: detailInclude,
+      omit: { ownerId: true },
+    });
+    return row ? toPublic(row) : null;
   },
 
   async create(input: CreateInput) {
@@ -129,6 +164,9 @@ export const approvalRequestsService = {
         // An action-backed request is always Submitted (awaiting a human); plain ones default to Draft.
         requestStatus: action ? 'Submitted' : (rest.requestStatus ?? 'Draft'),
         errorMessage: action ? encodeAction(action) : undefined,
+        // Stamp the signed-in user as owner (per-user Approvals scoping). Null for
+        // the agent/service principal — back-stamped by chatService after the turn.
+        ownerId: currentOwnerId(),
         opportunity: connectOpportunity(opportunityName),
         relatedRecommendation: connectRecommendation(relatedRecommendationBusinessId),
         relatedMilestone: connectMilestone(relatedMilestoneBusinessId),
@@ -203,7 +241,12 @@ export const approvalRequestsService = {
     // Approved + a deferred action attached → execute it (send / update / delete).
     // The stored payload is sent verbatim — the exact body the agent drafted.
     if (pendingAction) {
-      const result = await executeAction(pendingAction, actor ?? { kind: 'service' }, agentName);
+      const result = await executeAction(
+        pendingAction,
+        actor ?? { kind: 'service' },
+        agentName,
+        input.acknowledgeManagerEmail,
+      );
       const updated = await prisma.approvalRequest.update({
         where: { id },
         data: {

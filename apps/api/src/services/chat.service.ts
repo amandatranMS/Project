@@ -37,10 +37,21 @@ export const chatService = {
       const startedAt = new Date();
       const reply = await runFoundryAgent(messages, onToken, sessionId);
       const fullConversation = JSON.stringify([...messages, { role: 'assistant', content: reply }]);
+      // Attribute everything the hosted agent did during THIS user's turn to that
+      // user, so the Approvals log and Audit Log stay private per user. The agent
+      // calls back with the service key (no user identity), so its rows are created
+      // with ownerId=null and back-stamped here.
+      const ownerId = user?.kind === 'user' ? user.oid : undefined;
       await prisma.agentActionAuditLog.updateMany({
         where: { createdAt: { gte: startedAt }, conversation: null },
-        data: { conversation: fullConversation },
+        data: { conversation: fullConversation, ...(ownerId ? { ownerId } : {}) },
       });
+      if (ownerId) {
+        await prisma.approvalRequest.updateMany({
+          where: { createdAt: { gte: startedAt }, ownerId: null },
+          data: { ownerId },
+        });
+      }
       return { reply, engine };
     }
 

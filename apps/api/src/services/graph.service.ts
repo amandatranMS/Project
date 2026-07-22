@@ -18,6 +18,7 @@ interface GraphUser {
   jobTitle?: string;
   department?: string;
 }
+export type { GraphUser };
 
 interface GraphList<T> {
   value: T[];
@@ -108,6 +109,29 @@ export const graphService = {
     return audited(user, 'ReadProfile', 'GET /me', async () => {
       const data = await graphGet<GraphUser>(token, `/me?$select=${USER_SELECT}`);
       return { data, outputSummary: `profile for ${data.userPrincipalName ?? data.id}` };
+    });
+  },
+
+  /**
+   * The signed-in user's manager only (lighter than hierarchy()). Returns null
+   * when the user has no manager on record (Graph 404). Any other Graph failure
+   * (e.g. missing consent) propagates so callers can audit it as a failure.
+   */
+  manager(user: AuthUser): Promise<GraphUser | null> {
+    const token = assertion(user);
+    return audited<GraphUser | null>(user, 'ReadManager', 'GET /me/manager', async () => {
+      try {
+        const m = await graphGet<GraphUser>(token, `/me/manager?$select=${USER_SELECT}`);
+        return {
+          data: m,
+          outputSummary: `manager=${m.displayName ?? m.userPrincipalName ?? m.id}`,
+        };
+      } catch (err) {
+        if (err instanceof GraphError && err.status === 404) {
+          return { data: null, outputSummary: 'no manager on record' };
+        }
+        throw err;
+      }
     });
   },
 

@@ -8,9 +8,11 @@ import {
   RISK_IMPACTS,
   AZURE_CAPACITY_TYPES,
   PREFERRED_AZURE_REGIONS,
+  LOST_TO_COMPETITOR,
 } from '@msx/shared';
-import { api, type Milestone, type Opportunity } from '../../api/client';
+import { api, type Milestone, type Opportunity, type GraphManager } from '../../api/client';
 import Modal from '../Modal';
+import LostToCompetitorDialog from '../LostToCompetitorDialog';
 import { TextField, NumberField, DateField, TextAreaField, SelectField, BoolSelectField } from './Fields';
 
 interface Props {
@@ -59,6 +61,8 @@ export default function MilestoneForm({ initial, defaultOpportunityName, onClose
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmingLost, setConfirmingLost] = useState(false);
+  const [managerName, setManagerName] = useState<string | null>(null);
 
   useEffect(() => {
     if (!editing) api.get<Opportunity[]>('/opportunities').then(setOpportunities).catch(() => setOpportunities([]));
@@ -66,10 +70,8 @@ export default function MilestoneForm({ initial, defaultOpportunityName, onClose
 
   const set = (k: keyof typeof form) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
 
-  async function save() {
-    setBusy(true);
-    setError(null);
-    const body: Record<string, unknown> = {
+  function buildBody(): Record<string, unknown> {
+    return {
       milestoneName: form.milestoneName.trim(),
       workload: clean(form.workload),
       milestoneCategory: clean(form.milestoneCategory),
@@ -96,9 +98,15 @@ export default function MilestoneForm({ initial, defaultOpportunityName, onClose
       comments: clean(form.comments),
       lastUpdated: clean(form.lastUpdated),
     };
+  }
+
+  async function doSave(acknowledgeManagerEmail: boolean) {
+    setBusy(true);
+    setError(null);
+    const body = buildBody();
     try {
       if (editing && initial) {
-        await api.patch(`/milestones/${initial.id}`, body);
+        await api.patch(`/milestones/${initial.id}`, { ...body, acknowledgeManagerEmail });
       } else {
         await api.post('/milestones', { ...body, opportunityName: form.opportunityName.trim() });
       }
@@ -109,6 +117,26 @@ export default function MilestoneForm({ initial, defaultOpportunityName, onClose
     } finally {
       setBusy(false);
     }
+  }
+
+  function save() {
+    setError(null);
+    // A real transition INTO Lost To Competitor (edit only — creating a new
+    // milestone doesn't trigger the manager email) needs an acknowledgement.
+    const movingToLost =
+      editing &&
+      initial?.milestoneStatus !== LOST_TO_COMPETITOR &&
+      clean(form.milestoneStatus) === LOST_TO_COMPETITOR;
+    if (movingToLost) {
+      setManagerName(null);
+      api
+        .get<{ manager: GraphManager | null }>('/graph/manager')
+        .then((r) => setManagerName(r.manager?.displayName ?? r.manager?.mail ?? null))
+        .catch(() => setManagerName(null));
+      setConfirmingLost(true);
+      return;
+    }
+    void doSave(false);
   }
 
   const canSave = form.milestoneName.trim() !== '' && (editing || form.opportunityName.trim() !== '');
@@ -167,6 +195,14 @@ export default function MilestoneForm({ initial, defaultOpportunityName, onClose
         <BoolSelectField label="Escalated" value={form.escalated} onChange={set('escalated')} />
         <TextAreaField label="Comments" value={form.comments} onChange={set('comments')} full />
       </div>
+      {confirmingLost && (
+        <LostToCompetitorDialog
+          managerName={managerName}
+          busy={busy}
+          onCancel={() => setConfirmingLost(false)}
+          onConfirm={() => void doSave(true)}
+        />
+      )}
     </Modal>
   );
 }

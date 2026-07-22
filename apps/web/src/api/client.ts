@@ -230,6 +230,24 @@ export interface ApprovalRequest {
   opportunity?: { opportunityName: string } | null;
   relatedRecommendation?: { recommendationBusinessId: string; recommendedMilestoneTitle?: string | null } | null;
   relatedMilestone?: { milestoneBusinessId: string; milestoneName: string } | null;
+  /** Sanitized deferred action (no payload) so the UI can warn before approving. */
+  pendingAction?: { kind: string; milestoneStatus?: string | null } | null;
+}
+
+/** Outcome of the manager notification attached to a status-changing response. */
+export interface ManagerEmailOutcome {
+  attempted: boolean;
+  sent?: boolean;
+  simulated?: boolean;
+  managerEmail?: string;
+  skippedReason?: string;
+}
+
+export interface GraphManager {
+  id: string;
+  displayName?: string;
+  mail?: string;
+  userPrincipalName?: string;
 }
 
 export interface AuditLog {
@@ -265,4 +283,23 @@ export interface Notification {
   message?: string | null;
   status?: string | null;
   createdDate?: string | null;
+}
+
+/** Result of a Teams visibility broadcast (POST /opportunities/:id/announce). */
+export interface NotifyResult {
+  sent: boolean;
+  simulated?: boolean;
+  requiresConfirmation?: boolean;
+  mode?: string;
+  to?: string;
+  message?: string;
+  note?: string;
+}
+
+/**
+ * Post the "notify the team of this new opportunity" Teams DM. `confirm` defaults
+ * to true because this is called from the consent modal AFTER the user agrees.
+ */
+export function announceOpportunity(id: string, confirm = true) {
+  return api.post<NotifyResult>(`/opportunities/${id}/announce`, { confirm });
 }

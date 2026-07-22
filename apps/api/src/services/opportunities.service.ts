@@ -2,6 +2,8 @@ import { prisma } from '../lib/prisma.js';
 import { HttpError } from '../lib/httpError.js';
 import { genId } from '../lib/ids.js';
 import { recordAgentAction } from '../lib/audit.js';
+import type { AuthUser } from '../lib/entraAuth.js';
+import { opportunityBroadcastService } from './opportunityBroadcast.service.js';
 import type { z } from 'zod';
 import type { createOpportunitySchema, updateOpportunitySchema } from '../validators/schemas.js';
 
@@ -51,9 +53,9 @@ export const opportunitiesService = {
     });
   },
 
-  async create(input: CreateInput) {
+  async create(input: CreateInput, actor?: AuthUser, viaAgent = false) {
     const { opportunityBusinessId, closeDate, lastUpdated, ...rest } = input;
-    return prisma.opportunity.create({
+    const created = await prisma.opportunity.create({
       data: {
         ...rest,
         opportunityBusinessId: opportunityBusinessId || genId('OPP'),
@@ -61,6 +63,18 @@ export const opportunitiesService = {
         lastUpdated: lastUpdated ? new Date(lastUpdated) : null,
       },
     });
+
+    // Best-effort "notify the team of a new opportunity" broadcast. Always records
+    // the in-app notification; when an agent initiated the create (viaAgent) it also
+    // queues the approval-gated Teams message (Path B). Human form creates are
+    // handled by the web consent modal (Path A). Never let it block/fail creation.
+    try {
+      await opportunityBroadcastService.onOpportunityCreated(created, actor, viaAgent);
+    } catch (err) {
+      console.error('[opportunityBroadcast] notify-on-create failed:', err);
+    }
+
+    return created;
   },
 
   async update(id: string, input: UpdateInput, actor?: string) {

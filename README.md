@@ -191,6 +191,35 @@ The whole point of the POC: agents are useful but **gated**.
 
 Walk through it with `docs/api-test.md`, or narrate it using `docs/demo-script.md`.
 
+## Notify the team on a new opportunity (Teams)
+
+To boost visibility, creating an opportunity can broadcast the full opportunity
+details to a teammate over Microsoft Teams. It is **consent-gated on both paths** so
+a real message never goes out without a human deciding:
+
+- **Human creates it** — after clicking **Create**, a popup asks whether to send the
+  visibility message. Agreeing calls `POST /api/opportunities/:id/announce` and the
+  Teams DM is sent as the signed-in user. Declining just closes the form.
+- **An agent creates it** — whether the in-app assistant or the Foundry hosted
+  agent, the agent never sends. A **Pending** `ApprovalRequest` carrying a deferred
+  `NotifyTeams` action is queued; the same consent popup appears when a human
+  approves it on the **Approvals** page, and only then is it delivered.
+
+Every path is audited via `recordAgentAction`, and an in-app `AgentNotification` is
+always recorded for the "all users" feed regardless of Teams delivery.
+
+Configure it in `.env` (see `.env.example`):
+
+| Var | Purpose |
+| --- | --- |
+| `NOTIFY_ON_OPPORTUNITY_CREATE` | Master switch (default `true`). |
+| `TEAMS_BROADCAST_TO` | Email of the teammate who receives the 1:1 Teams DM. |
+| `GRAPH_SEND_MODE` | `simulate` (audit only, default) or `live` (real delivery). |
+
+> Teams sends are 1:1, so `TEAMS_BROADCAST_TO` must be someone **other** than the
+> person signing in — you can't open a chat with yourself. `live` mode needs the
+> admin-consented delegated scopes `Chat.ReadWrite` and `ChatMessage.Send`.
+
 ## API
 
 REST API served at `http://localhost:4000/api`. Full contract in

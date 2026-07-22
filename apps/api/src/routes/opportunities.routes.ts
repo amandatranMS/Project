@@ -6,6 +6,7 @@ router.get('/', c.list);
 router.get('/:id', c.get);
 router.get('/:id/context', c.context);
 router.post('/', c.create);
+router.post('/:id/announce', c.announce);
 router.patch('/:id', c.update);
 router.delete('/:id', c.remove);
 export default router;

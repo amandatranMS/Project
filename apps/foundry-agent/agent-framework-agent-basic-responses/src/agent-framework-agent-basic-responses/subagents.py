@@ -46,6 +46,18 @@ _CONFIRM_RULE = (
     "Never invent data — rely on your tools."
 )
 
+# Read/reporting rule: the model must never embellish a tool result. This is what
+# stops the agent inventing milestones (e.g. padding an opportunity's real single
+# milestone into a fuller-looking list, or listing recommendations as milestones).
+_GROUNDING_RULE = (
+    " GROUNDING: Report ONLY records your tools actually return. If a tool returns two "
+    "milestones, list exactly those two — never add, pad, merge, or invent items to make "
+    "the answer look fuller, and never guess ids, names, owners, statuses, or dates. "
+    "Recommendations and approval requests are NOT milestones: never present a "
+    "recommendation (its recommendedMilestoneTitle) or an approval request as an existing "
+    "milestone. If a tool returns nothing, say there are none."
+)
+
 # Governance rule: NO agent action that changes data or sends a message happens
 # directly. Every such action is submitted as an approval request and a human must
 # approve it in the Approvals log before it executes.
@@ -104,7 +116,10 @@ def build_subagents(client) -> list[Agent]:
                 "submit an approval request that a human must approve in the Approvals log. You "
                 "cannot create milestones — if the user wants a new milestone, tell them it must "
                 "go through the governance flow (recommend -> request approval -> a human "
-                "approves). Report ids and names clearly." + _APPROVAL_RULE + _CONFIRM_RULE
+                "approves). When the user asks about a specific opportunity's milestones, call "
+                "list_milestones with `opportunity` set to that opportunity's name or business id "
+                "so you return exactly that opportunity's milestones. Report ids and names "
+                "clearly." + _APPROVAL_RULE + _CONFIRM_RULE + _GROUNDING_RULE
             ),
             tools=[list_milestones, get_milestone, update_milestone, delete_milestone],
         ),
@@ -146,7 +161,7 @@ def build_subagents(client) -> list[Agent]:
                 "approval request that a human must approve in the Approvals log. To update a "
                 "deal team member, first call list_deal_team (or get_opportunity) to find the "
                 "member's id, then call update_deal_team_member with only the fields to change. "
-                "Report ids and names clearly." + _APPROVAL_RULE + _CONFIRM_RULE
+                "Report ids and names clearly." + _APPROVAL_RULE + _CONFIRM_RULE + _GROUNDING_RULE
             ),
             tools=[
                 list_opportunities,

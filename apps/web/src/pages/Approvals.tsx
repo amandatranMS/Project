@@ -1,13 +1,21 @@
 import { useEffect, useState } from 'react';
-import { choiceLabel } from '@msx/shared';
-import { api, type ApprovalRequest } from '../api/client';
+import { useMsal } from '@azure/msal-react';
+import { choiceLabel, LOST_TO_COMPETITOR } from '@msx/shared';
+import { api, type ApprovalRequest, type ManagerEmailOutcome, type GraphManager } from '../api/client';
 import { statusBadgeClass } from '../ui';
+import LostToCompetitorDialog from '../components/LostToCompetitorDialog';
+import ApproveTeamsBroadcastDialog from '../components/ApproveTeamsBroadcastDialog';
 
 export default function Approvals() {
+  const { accounts } = useMsal();
+  const reviewedBy = accounts[0]?.name ?? accounts[0]?.username ?? 'Demo Approver';
   const [items, setItems] = useState<ApprovalRequest[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [confirmingLostId, setConfirmingLostId] = useState<string | null>(null);
+  const [managerName, setManagerName] = useState<string | null>(null);
+  const [confirmingTeamsId, setConfirmingTeamsId] = useState<string | null>(null);
 
   function load() {
     api
@@ -18,19 +26,62 @@ export default function Approvals() {
 
   useEffect(load, []);
 
-  async function decide(id: string, action: 'approve' | 'reject' | 'needs-changes') {
+  /** True when approving this request will move a milestone to Lost To Competitor. */
+  function movesToLost(a: ApprovalRequest): boolean {
+    return a.pendingAction?.kind === 'UpdateMilestone' && a.pendingAction.milestoneStatus === LOST_TO_COMPETITOR;
+  }
+
+  /** True when approving this request will post a new-opportunity broadcast to Teams. */
+  function isTeamsBroadcast(a: ApprovalRequest): boolean {
+    return a.pendingAction?.kind === 'NotifyTeams';
+  }
+
+  function onApproveClick(a: ApprovalRequest) {
+    setMessage(null);
+    setError(null);
+    if (movesToLost(a)) {
+      setManagerName(null);
+      api
+        .get<{ manager: GraphManager | null }>('/graph/manager')
+        .then((r) => setManagerName(r.manager?.displayName ?? r.manager?.mail ?? null))
+        .catch(() => setManagerName(null));
+      setConfirmingLostId(a.id);
+      return;
+    }
+    if (isTeamsBroadcast(a)) {
+      setConfirmingTeamsId(a.id);
+      return;
+    }
+    void decide(a.id, 'approve');
+  }
+
+  async function decide(
+    id: string,
+    action: 'approve' | 'reject' | 'needs-changes',
+    acknowledgeManagerEmail = false,
+  ) {
     setBusyId(id);
     setMessage(null);
     try {
       const result = await api.patch<{
         milestone?: { milestoneBusinessId: string; milestoneName: string };
         action?: string;
-      }>(`/approval-requests/${id}/${action}`, { reviewedBy: 'Demo Approver' });
+        result?: { managerEmail?: ManagerEmailOutcome };
+      }>(`/approval-requests/${id}/${action}`, { reviewedBy, acknowledgeManagerEmail });
+      setConfirmingLostId(null);
+      setConfirmingTeamsId(null);
       if (action === 'approve') {
         if (result?.milestone) {
           setMessage(`Approved — milestone created: ${result.milestone.milestoneBusinessId} — ${result.milestone.milestoneName}`);
         } else if (result?.action) {
-          setMessage(`Approved — action executed: ${result.action} (simulated where applicable, recorded in the audit log).`);
+          const email = result.result?.managerEmail;
+          const emailNote =
+            email?.attempted && email.sent
+              ? ` Manager email ${email.simulated ? 'simulated' : 'sent'}${email.managerEmail ? ` to ${email.managerEmail}` : ''}.`
+              : email?.attempted && !email.sent
+                ? ` Manager email not sent — ${email.skippedReason ?? 'unknown reason'}.`
+                : '';
+          setMessage(`Approved — action executed: ${result.action} (simulated where applicable, recorded in the audit log).${emailNote}`);
         } else {
           setMessage('Approved.');
         }
@@ -80,7 +131,7 @@ export default function Approvals() {
                 <div className="btn-row">
                   {(a.approvalStatus === 'Pending' || a.approvalStatus === 'Needs Changes') && (
                     <>
-                      <button disabled={busyId === a.id} onClick={() => decide(a.id, 'approve')}>Approve</button>
+                      <button disabled={busyId === a.id} onClick={() => onApproveClick(a)}>Approve</button>
                       <button className="danger" disabled={busyId === a.id} onClick={() => decide(a.id, 'reject')}>Reject</button>
                       <button className="secondary" disabled={busyId === a.id} onClick={() => decide(a.id, 'needs-changes')}>Needs changes</button>
                     </>
@@ -96,6 +147,25 @@ export default function Approvals() {
           )}
         </tbody>
       </table>
+
+      {confirmingLostId && (
+        <LostToCompetitorDialog
+          managerName={managerName}
+          busy={busyId === confirmingLostId}
+          onCancel={() => setConfirmingLostId(null)}
+          onConfirm={() => void decide(confirmingLostId, 'approve', true)}
+        />
+      )}
+
+      {confirmingTeamsId && (
+        <ApproveTeamsBroadcastDialog
+          requestName={items.find((i) => i.id === confirmingTeamsId)?.requestName}
+          opportunityName={items.find((i) => i.id === confirmingTeamsId)?.opportunity?.opportunityName}
+          busy={busyId === confirmingTeamsId}
+          onCancel={() => setConfirmingTeamsId(null)}
+          onConfirm={() => void decide(confirmingTeamsId, 'approve')}
+        />
+      )}
     </div>
   );
 }

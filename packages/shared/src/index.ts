@@ -31,6 +31,13 @@ export const MILESTONE_STATUSES = [
   'Lost To Competitor',
   'Hygiene/Duplicate',
 ] as const;
+
+/**
+ * The single milestone status that triggers an executive-summary email to the
+ * seller's manager. Kept as a shared constant so the API trigger and the web
+ * pop-up compare against the exact same string (note the capital "T").
+ */
+export const LOST_TO_COMPETITOR = 'Lost To Competitor';
 export const WORKLOADS = [
   'M365 Copilot for Microsoft 365',
   'Microsoft Sentinel',

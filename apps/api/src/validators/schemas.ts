@@ -199,6 +199,13 @@ export const approvalDecisionSchema = z.object({
   reviewedBy: z.string().min(1),
   notes: nstr,
   agentName: z.string().optional(),
+  /**
+   * The reviewer's acknowledgement (from the Approvals-tab pop-up) that they
+   * understand an executive-summary email will be sent to their manager when
+   * approving an action that moves a milestone to "Lost To Competitor". This
+   * flag is the human-in-the-loop confirm that authorises the send.
+   */
+  acknowledgeManagerEmail: z.boolean().optional(),
 });
 
 // ---- Collaboration notes ----
@@ -306,5 +313,14 @@ export const sendMailSchema = z.object({
 export const notifyTeamsSchema = z.object({
   message: z.string().min(1),
   to: z.string().email().optional(),
+  confirm: z.boolean().optional(),
+});
+
+/**
+ * Body for POST /opportunities/:id/announce — the human-consented "notify the
+ * team of this new opportunity" Teams broadcast. `confirm: true` is the explicit
+ * go-ahead from the inline consent modal that authorises the send.
+ */
+export const announceOpportunitySchema = z.object({
   confirm: z.boolean().optional(),
 });

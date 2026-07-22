@@ -3,11 +3,19 @@ import { HttpError } from '../lib/httpError.js';
 import { genId } from '../lib/ids.js';
 import { connectOpportunity } from '../lib/connect.js';
 import { recordAgentAction } from '../lib/audit.js';
+import { maybeNotifyManager, type MilestoneNotifyContext } from './managerNotifications.service.js';
 import type { z } from 'zod';
 import type { createMilestoneSchema, updateMilestoneSchema } from '../validators/schemas.js';
 
 type CreateInput = z.infer<typeof createMilestoneSchema>;
 type UpdateInput = z.infer<typeof updateMilestoneSchema>;
+
+/**
+ * Extra context for a status-changing update: who is acting (for the Graph
+ * manager-email side effect) and whether they acknowledged that email. Optional
+ * so non-UI callers (e.g. the disabled in-app tool) simply never send.
+ */
+export type MilestoneUpdateContext = MilestoneNotifyContext;
 
 export const milestonesService = {
   list(where: { opportunityId?: string; milestoneStatus?: string }) {
@@ -59,7 +67,7 @@ export const milestonesService = {
     return milestone;
   },
 
-  async update(id: string, input: UpdateInput) {
+  async update(id: string, input: UpdateInput, ctx?: MilestoneUpdateContext) {
     const existing = await prisma.opportunityMilestone.findFirst({
       where: { OR: [{ id }, { milestoneBusinessId: id }] },
     });
@@ -91,7 +99,11 @@ export const milestonesService = {
       }`,
     });
 
-    return milestone;
+    // Side effect: a real transition INTO "Lost To Competitor" notifies the
+    // seller's manager (best-effort; guarded by the human acknowledgement).
+    const managerEmail = await maybeNotifyManager(existing.milestoneStatus, milestone, ctx);
+
+    return managerEmail ? { ...milestone, managerEmail } : milestone;
   },
 
   /** Deletes a milestone (status history cascades; other links are set to null). */

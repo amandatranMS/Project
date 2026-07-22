@@ -3,6 +3,7 @@ import cors from 'cors';
 import apiRoutes from './routes/index.js';
 import { errorHandler } from './lib/errorHandler.js';
 import { authenticate } from './lib/entraAuth.js';
+import { requestContextMiddleware } from './lib/requestContext.js';
 import { sendOk } from './lib/responses.js';
 
 /** Builds and configures the Express application. */
@@ -20,7 +21,7 @@ export function createApp() {
     sendOk(res, { status: 'ok', service: 'msx-milestone-assistant-api', mock: true });
   });
 
-  app.use('/api', authenticate, apiRoutes);
+  app.use('/api', authenticate, requestContextMiddleware, apiRoutes);
 
   app.use(errorHandler);
 

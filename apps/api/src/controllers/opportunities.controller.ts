@@ -1,7 +1,12 @@
 import { asyncHandler, sendOk } from '../lib/responses.js';
 import { HttpError } from '../lib/httpError.js';
 import { opportunitiesService } from '../services/opportunities.service.js';
-import { createOpportunitySchema, updateOpportunitySchema } from '../validators/schemas.js';
+import { opportunityBroadcastService } from '../services/opportunityBroadcast.service.js';
+import {
+  createOpportunitySchema,
+  updateOpportunitySchema,
+  announceOpportunitySchema,
+} from '../validators/schemas.js';
 
 const q = (v: unknown) => (typeof v === 'string' && v ? v : undefined);
 
@@ -29,8 +34,27 @@ export const opportunitiesController = {
 
   create: asyncHandler(async (req, res) => {
     const input = createOpportunitySchema.parse(req.body);
-    const data = await opportunitiesService.create(input);
+    // An agent-initiated create must queue the approval-gated Teams broadcast
+    // (Path B). The Foundry hosted agent calls back over the dev tunnel acting on
+    // behalf of the user and echoes the x-msx-session handle (the web UI never
+    // sends it); a key-based agent authenticates as a service principal. Either
+    // signal marks this as an agent create. A human using the form has neither, so
+    // it stays Path A (the inline consent modal drives the send).
+    const viaAgent = req.user?.kind === 'service' || Boolean(req.header('x-msx-session'));
+    const data = await opportunitiesService.create(input, req.user, viaAgent);
     sendOk(res, data, 201);
+  }),
+
+  /**
+   * Human-consented "notify the team of this new opportunity" Teams broadcast.
+   * Called from the inline consent modal after a manual create. `confirm: true`
+   * (from the modal) authorises the live send; the service posts a 1:1 Teams DM
+   * to the configured recipient and audits it.
+   */
+  announce: asyncHandler(async (req, res) => {
+    const { confirm } = announceOpportunitySchema.parse(req.body ?? {});
+    const data = await opportunityBroadcastService.announce(req.params.id, req.user, confirm ?? false);
+    sendOk(res, data);
   }),
 
   update: asyncHandler(async (req, res) => {

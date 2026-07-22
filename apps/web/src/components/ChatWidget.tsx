@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { sendChatStream, type ChatEngine, type ChatTurn } from '../api/client';
+import { authEnabled, msalInstance } from '../auth/msalConfig';
 
 const WELCOME: ChatTurn = {
   role: 'assistant',
@@ -22,9 +23,24 @@ interface Conversation {
   updatedAt: number;
 }
 
-const CONVERSATIONS_KEY = 'msx-chat-conversations';
-const ACTIVE_KEY = 'msx-chat-active';
+const BASE_CONVERSATIONS_KEY = 'msx-chat-conversations';
+const BASE_ACTIVE_KEY = 'msx-chat-active';
 const LEGACY_TRANSCRIPT_KEY = 'msx-chat-transcript';
+
+// Chat history is stored per signed-in user so it stays private on a shared
+// browser — one user can never see another user's chats. The namespace is the
+// MSAL account id (falls back to 'local' when auth is disabled for local dev).
+const conversationsKey = (owner: string) => `${BASE_CONVERSATIONS_KEY}::${owner}`;
+const activeKey = (owner: string) => `${BASE_ACTIVE_KEY}::${owner}`;
+
+function chatOwnerKey(): string {
+  if (authEnabled && msalInstance) {
+    const acct = msalInstance.getActiveAccount() ?? msalInstance.getAllAccounts()[0];
+    const id = acct?.homeAccountId ?? acct?.localAccountId ?? acct?.username;
+    if (id) return id;
+  }
+  return 'local';
+}
 
 function genId(): string {
   try {
@@ -45,37 +61,48 @@ function newConversation(engine: ChatEngine = 'foundry'): Conversation {
   return { id: genId(), title: 'New chat', engine, messages: [], updatedAt: Date.now() };
 }
 
-function loadConversations(): Conversation[] {
+function loadConversations(owner: string): Conversation[] {
   try {
-    const raw = localStorage.getItem(CONVERSATIONS_KEY);
+    const raw = localStorage.getItem(conversationsKey(owner));
     const parsed = raw ? (JSON.parse(raw) as Conversation[]) : null;
     if (Array.isArray(parsed) && parsed.length) return parsed;
   } catch {
     /* ignore corrupt storage */
   }
-  // Migrate the previous single-transcript format into one conversation.
-  // The in-app engine is disabled, so any migrated chat uses the Foundry agent.
-  try {
-    const legacy = localStorage.getItem(LEGACY_TRANSCRIPT_KEY);
-    const msgs = legacy ? (JSON.parse(legacy) as ChatTurn[]) : null;
-    if (Array.isArray(msgs) && msgs.length) {
-      localStorage.removeItem(LEGACY_TRANSCRIPT_KEY);
-      return [{ id: genId(), title: deriveTitle(msgs), engine: 'foundry', messages: msgs, updatedAt: Date.now() }];
+  // One-time migration of the older un-namespaced history — ONLY for local dev
+  // (owner 'local'). Real accounts never inherit pre-existing shared history, so
+  // a signed-in user can't see chats left by a different account on this browser.
+  if (owner === 'local') {
+    try {
+      const rawOld = localStorage.getItem(BASE_CONVERSATIONS_KEY);
+      const parsedOld = rawOld ? (JSON.parse(rawOld) as Conversation[]) : null;
+      if (Array.isArray(parsedOld) && parsedOld.length) return parsedOld;
+    } catch {
+      /* ignore */
     }
-  } catch {
-    /* ignore */
+    try {
+      const legacy = localStorage.getItem(LEGACY_TRANSCRIPT_KEY);
+      const msgs = legacy ? (JSON.parse(legacy) as ChatTurn[]) : null;
+      if (Array.isArray(msgs) && msgs.length) {
+        localStorage.removeItem(LEGACY_TRANSCRIPT_KEY);
+        return [{ id: genId(), title: deriveTitle(msgs), engine: 'foundry', messages: msgs, updatedAt: Date.now() }];
+      }
+    } catch {
+      /* ignore */
+    }
   }
   return [];
 }
 
 export default function ChatWidget() {
+  const ownerKey = useMemo(() => chatOwnerKey(), []);
   const [open, setOpen] = useState(false);
   const [railOpen, setRailOpen] = useState(true);
   const [conversations, setConversations] = useState<Conversation[]>(() => {
-    const loaded = loadConversations();
+    const loaded = loadConversations(ownerKey);
     return loaded.length ? loaded : [newConversation()];
   });
-  const [activeId, setActiveId] = useState<string>(() => localStorage.getItem(ACTIVE_KEY) ?? '');
+  const [activeId, setActiveId] = useState<string>(() => localStorage.getItem(activeKey(ownerKey)) ?? '');
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -105,18 +132,18 @@ export default function ChatWidget() {
   // Persist conversations + which one is active.
   useEffect(() => {
     try {
-      localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(conversations));
+      localStorage.setItem(conversationsKey(ownerKey), JSON.stringify(conversations));
     } catch {
       /* storage may be unavailable (private mode, quota) */
     }
-  }, [conversations]);
+  }, [conversations, ownerKey]);
   useEffect(() => {
     try {
-      if (activeId) localStorage.setItem(ACTIVE_KEY, activeId);
+      if (activeId) localStorage.setItem(activeKey(ownerKey), activeId);
     } catch {
       /* ignore */
     }
-  }, [activeId]);
+  }, [activeId, ownerKey]);
 
   function newChat() {
     const c = newConversation('foundry');

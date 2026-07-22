@@ -190,9 +190,15 @@ model ApprovalRequest {
   mockWritebackStatus String?
   errorMessage        String?
 
+  // Entra oid of the user in whose session this request was created. Null for
+  // seeded/system rows. NOT a workbook column — used only for per-user scoping
+  // of the Approvals log (opportunities/milestones stay global).
+  ownerId String?
+
   createdAt DateTime @default(now())
 
   @@index([approvalStatus])
+  @@index([ownerId])
 }
 
 // 6. Collaboration Note (sheet "Collaboration Note").
@@ -318,9 +324,15 @@ model AgentActionAuditLog {
   // direct UI/API actions.
   conversation String?
 
+  // Entra oid of the user in whose session this action ran. Null for seeded/
+  // system rows. NOT a workbook column — used only for per-user scoping of the
+  // Agent Action Audit Log (opportunities/milestones stay global).
+  ownerId String?
+
   createdAt DateTime @default(now())
 
   @@index([actionType])
+  @@index([ownerId])
 }
 
 // 11. Dashboard Metric Snapshot (sheet "Dashboard Metric Snapshot").
