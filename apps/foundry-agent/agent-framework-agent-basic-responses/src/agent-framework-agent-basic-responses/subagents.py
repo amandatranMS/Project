@@ -55,7 +55,11 @@ _GROUNDING_RULE = (
     "the answer look fuller, and never guess ids, names, owners, statuses, or dates. "
     "Recommendations and approval requests are NOT milestones: never present a "
     "recommendation (its recommendedMilestoneTitle) or an approval request as an existing "
-    "milestone. If a tool returns nothing, say there are none."
+    "milestone. For analysis or advice, use Known Facts, Assumptions, Recommended Actions, "
+    "and Expected Outcome. Put only retrieved values in Known Facts, label every inference as "
+    "an Assumption, and present generic best practice only as a proposed action. Never supply "
+    "a specific owner, stakeholder, partner, date, risk rating, or metric unless the tool "
+    "returned it for the requested record. If a tool returns nothing, say there are none."
 )
 
 # Governance rule: NO agent action that changes data or sends a message happens

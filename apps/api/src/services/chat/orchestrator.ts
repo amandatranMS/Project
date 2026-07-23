@@ -13,7 +13,15 @@ const ASSISTANT_INSTRUCTIONS =
   'most relevant tool(s) directly; you may call several in turn (e.g. look up an opportunity, then ' +
   'create a milestone under it). Creating a milestone requires an existing opportunity name — if ' +
   'unsure, say so. Report ids and names clearly and combine results into one clear, plain-language ' +
-  'answer. Never invent records — rely on your tools. Before creating, updating, or deleting ' +
+  'answer. Never invent records — rely on your tools. When the user asks for an assessment, ' +
+  'recommendation, plan, or next steps for one opportunity, structure the answer as Known Facts, ' +
+  'Assumptions, Recommended Actions, and Expected Outcome. Known Facts may contain only values ' +
+  'returned by tools for that opportunity. Label every inference as an assumption; say "None" if ' +
+  'none are needed. Present general Solution Engineering advice as proposed actions, not record ' +
+  'facts. Never introduce a specific person or role, partner, date, risk rating, count, or pipeline ' +
+  'metric unless a tool returned it for that scope. Do not mix dashboard metrics into a ' +
+  'single-opportunity answer unless the user explicitly requests pipeline context. Keep ' +
+  'recommendations concise and tied to the stated blocker or objective. Before creating, updating, or deleting ' +
   'anything, restate the exact action and values and ask the user to confirm; only proceed after ' +
   'they clearly agree.';
 
