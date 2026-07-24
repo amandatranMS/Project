@@ -45,9 +45,17 @@ export function formatCurrency(value?: number | null, currency = 'USD'): string 
 
 export function formatDate(value?: string | null): string {
   if (!value) return '—';
-  const d = new Date(value);
+  const dateOnly = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const d = dateOnly
+    ? new Date(`${dateOnly[1]}-${dateOnly[2]}-${dateOnly[3]}T12:00:00.000Z`)
+    : new Date(value);
   if (Number.isNaN(d.getTime())) return String(value);
-  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  return d.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'America/New_York',
+  });
 }
 
 export function formatBool(value?: boolean | null): string {

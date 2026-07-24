@@ -13,6 +13,7 @@ to both the agents and every MCP consumer at once.
 from __future__ import annotations
 
 import difflib
+from contextvars import ContextVar, Token
 from typing import Annotated, Any
 
 from pydantic import Field
@@ -45,6 +46,22 @@ PREFERRED_AZURE_REGIONS = [
 RISK_IMPACTS = ["High", "Medium", "Low"]
 
 _mc = MsxClient()
+_captured_submissions: ContextVar[list[dict] | None] = ContextVar(
+    "captured_submissions",
+    default=None,
+)
+
+
+def begin_submission_capture() -> Token:
+    return _captured_submissions.set([])
+
+
+def captured_submissions() -> list[dict]:
+    return list(_captured_submissions.get() or [])
+
+
+def end_submission_capture(token: Token) -> None:
+    _captured_submissions.reset(token)
 
 
 def _trim_milestone(m: dict) -> dict:
@@ -168,7 +185,11 @@ def _submit_action_approval(
     }
     if opportunity_name:
         payload["opportunityName"] = opportunity_name
-    return _mc.post("/api/approval-requests", json=payload) or {}
+    approval = _mc.post("/api/approval-requests", json=payload) or {}
+    captured = _captured_submissions.get()
+    if captured is not None and approval.get("approvalRequestBusinessId"):
+        captured.append(_trim_approval(approval))
+    return approval
 
 
 # ---- Milestone tools -----------------------------------------------------

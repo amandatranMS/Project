@@ -191,6 +191,20 @@ export const approvalRequestsService = {
       include: detailInclude,
       omit: { ownerId: true },
     });
+    if (action) {
+      await recordAgentAction({
+        agentName: rest.requestedBy ?? 'HostedAgent',
+        actionType: action.kind,
+        actionName: 'Approval submitted',
+        actor: rest.requestedBy ?? undefined,
+        opportunityId: row.opportunityId,
+        relatedMilestoneId: row.relatedMilestoneId,
+        relatedRecommendationId: row.relatedRecommendationId,
+        result: 'Success',
+        inputSummary: summarizeAction(action),
+        outputSummary: `Submitted ${row.approvalRequestBusinessId} for human approval`,
+      });
+    }
     return toPublic(row);
   },
 

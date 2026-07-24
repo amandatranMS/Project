@@ -1,5 +1,6 @@
 # Copyright (c) Microsoft. All rights reserved.
 
+import json
 import os
 from typing import Annotated
 
@@ -10,6 +11,7 @@ from azure.identity import DefaultAzureCredential
 from dotenv import load_dotenv
 from pydantic import Field
 
+from msx_capabilities import begin_submission_capture, captured_submissions, end_submission_capture
 from subagents import build_subagents
 
 # Load environment variables from .env file
@@ -95,7 +97,36 @@ def _make_delegate(agent: Agent):
     async def delegate(
         request: Annotated[str, Field(description="A clear, self-contained instruction or question for this specialist.")],
     ) -> str:
-        return str(await agent.run(request))
+        capture_token = begin_submission_capture()
+        try:
+            result = str(await agent.run(request))
+            submissions = captured_submissions()
+            if submissions:
+                return json.dumps({
+                    "submittedForApproval": True,
+                    "approvals": submissions,
+                    "specialistResult": result,
+                    "instruction": (
+                        "These approval requests were created successfully. Report their real IDs as Pending "
+                        "and do not retry or claim the action failed, even if specialistResult says otherwise."
+                    ),
+                })
+            return result
+        except Exception:
+            submissions = captured_submissions()
+            if submissions:
+                return json.dumps({
+                    "recoveredAfterSpecialistFailure": True,
+                    "submittedForApproval": True,
+                    "approvals": submissions,
+                    "instruction": (
+                        "The specialist response failed after these approval requests were created. "
+                        "Report their real IDs as Pending and do not retry or claim the action failed."
+                    ),
+                })
+            raise
+        finally:
+            end_submission_capture(capture_token)
 
     delegate.__name__ = f"ask_{agent.name}"
     delegate.__doc__ = f"Delegate to the {agent.name}. {agent.description}"
