@@ -85,6 +85,7 @@ def _trim_recommendation(r: dict) -> dict:
 
 
 def _trim_approval(a: dict) -> dict:
+    pending_action = a.get("pendingAction") or {}
     return {
         "id": a.get("id"),
         "approvalRequestBusinessId": a.get("approvalRequestBusinessId"),
@@ -93,6 +94,8 @@ def _trim_approval(a: dict) -> dict:
         "requestStatus": a.get("requestStatus"),
         "opportunity": (a.get("opportunity") or {}).get("opportunityName"),
         "relatedRecommendation": (a.get("relatedRecommendation") or {}).get("recommendationBusinessId"),
+        "actionKind": pending_action.get("kind"),
+        "milestoneFields": pending_action.get("milestoneFields"),
     }
 
 
@@ -210,13 +213,15 @@ def list_milestones(
     return [_trim_milestone(m) for m in data]
 
 
-def get_milestone(id: Annotated[str, Field(description="The milestone id.")]) -> Any:
+def get_milestone(
+    id: Annotated[str, Field(description="The milestone id or business id (e.g. MS-001).")],
+) -> Any:
     """Get one milestone's full detail by its id."""
     return _mc.get(f"/api/milestones/{id}")
 
 
 def update_milestone(
-    id: Annotated[str, Field(description="The milestone id to update.")],
+    id: Annotated[str, Field(description="The milestone id or business id (e.g. MS-001) to update.")],
     milestoneName: Annotated[str | None, Field(description="New name.")] = None,
     milestoneStatus: Annotated[str | None, Field(description=f"One of: {MILESTONE_STATUSES}.")] = None,
     milestoneCategory: Annotated[str | None, Field(description=f"One of: {MILESTONE_CATEGORIES}.")] = None,
@@ -238,6 +243,7 @@ def update_milestone(
     blockedSince: Annotated[str | None, Field(description="Blocked since (ISO date).")] = None,
     expectedResolutionDate: Annotated[str | None, Field(description="Expected resolution date (ISO date).")] = None,
     escalated: Annotated[bool | None, Field(description="Whether the blocker is escalated.")] = None,
+    competitorName: Annotated[str | None, Field(description="Milestone competitor name. This updates the milestone, not its opportunity.")] = None,
     azureCapacityType: Annotated[str | None, Field(description=f"One of: {AZURE_CAPACITY_TYPES}.")] = None,
     preferredAzureRegion: Annotated[str | None, Field(description=f"One of: {PREFERRED_AZURE_REGIONS}.")] = None,
     lastUpdated: Annotated[str | None, Field(description="Last-updated date (ISO date).")] = None,
@@ -267,6 +273,7 @@ def update_milestone(
         "blockedSince": blockedSince,
         "expectedResolutionDate": expectedResolutionDate,
         "escalated": escalated,
+        "competitorName": competitorName,
         "azureCapacityType": azureCapacityType,
         "preferredAzureRegion": preferredAzureRegion,
         "lastUpdated": lastUpdated,
@@ -491,12 +498,22 @@ def update_deal_team_member(
 def create_recommendation(
     recommendedMilestoneTitle: Annotated[str, Field(description="Title of the milestone being recommended.")],
     opportunityName: Annotated[str, Field(description="The opportunity's exact name OR its business id (e.g. OPP-003) OR a label; it is resolved automatically.")],
+    competitorName: Annotated[str | None, Field(description="Milestone competitor explicitly supplied or explicitly confirmed for this milestone by the user. This is separate from Opportunity.competitorName; never copy or infer the opportunity competitor.")],
+    competitorBlankConfirmed: Annotated[bool, Field(description="True only after the user explicitly confirmed that Competitor should be blank.")],
     suggestedDescription: Annotated[str | None, Field(description="Why this milestone is recommended / what it covers.")] = None,
     suggestedOwnerRole: Annotated[str | None, Field(description="Suggested owner or role.")] = None,
+    suggestedDueDate: Annotated[str | None, Field(description="Suggested due date (ISO, e.g. 2026-07-21). Use only after user confirmation.")] = None,
     priority: Annotated[str | None, Field(description=f"One of: {PRIORITIES}.")] = None,
+    businessValue: Annotated[str | None, Field(description="Expected business value.")] = None,
+    riskOrDependency: Annotated[str | None, Field(description="Known risk or dependency supporting the recommendation.")] = None,
     confidence: Annotated[str | None, Field(description=f"One of: {CONFIDENCE_LEVELS}.")] = None,
 ) -> Any:
     """Create an AI milestone recommendation under an opportunity. This does NOT create a milestone; it records a suggestion for human review."""
+    if not (competitorName or "").strip() and not competitorBlankConfirmed:
+        return {
+            "error": "Competitor confirmation required before creating a recommendation.",
+            "requiredQuestion": "Are you sure you want to leave Competitor empty?",
+        }
     resolved_name, err = _resolve_opportunity(opportunityName)
     if err:
         return err
@@ -505,7 +522,10 @@ def create_recommendation(
         "opportunityName": resolved_name,
         "suggestedDescription": suggestedDescription,
         "suggestedOwnerRole": suggestedOwnerRole,
+        "suggestedDueDate": suggestedDueDate,
         "priority": priority,
+        "businessValue": businessValue,
+        "riskOrDependency": riskOrDependency,
         "confidence": confidence,
         "reviewStatus": "Pending",
         "createdByAgent": True,
@@ -521,24 +541,198 @@ def submit_approval_request(
     requestName: Annotated[str, Field(description="Short name for the approval request.")],
     opportunityName: Annotated[str, Field(description="The opportunity's exact name OR its business id (e.g. OPP-003) OR a label; it is resolved automatically. Use the same opportunity as the recommendation.")],
     relatedRecommendationBusinessId: Annotated[str, Field(description="The recommendationBusinessId returned by create_recommendation.")],
+    milestoneName: Annotated[str, Field(description="User-confirmed milestone name.")],
+    competitorName: Annotated[str | None, Field(description="User-confirmed milestone competitor. Opportunity competitor is a separate field and must not be copied without explicit confirmation for this milestone. Pass None only after the user explicitly confirms it should be blank.")],
+    competitorBlankConfirmed: Annotated[bool, Field(description="True only when the user explicitly confirmed that Competitor should be left empty; otherwise false.")],
+    workload: Annotated[str | None, Field(description=f"One of: {WORKLOADS}.")] = None,
+    customerCommitment: Annotated[str | None, Field(description=f"One of: {CUSTOMER_COMMITMENTS}.")] = None,
+    deliveredBy: Annotated[str | None, Field(description=f"One of: {DELIVERED_BY}.")] = None,
+    partnerName: Annotated[str | None, Field(description="Partner name; omit when not applicable.")] = None,
+    milestoneCategory: Annotated[str | None, Field(description=f"One of: {MILESTONE_CATEGORIES}.")] = None,
+    milestoneStatus: Annotated[str | None, Field(description=f"One of: {MILESTONE_STATUSES}.")] = None,
+    statusReason: Annotated[str | None, Field(description="Reason for the selected status.")] = None,
+    estDate: Annotated[str | None, Field(description="User-confirmed estimated date (ISO, e.g. 2026-07-21).")]= None,
+    fitCharge: Annotated[float | None, Field(description="User-confirmed fit charge amount.")] = None,
+    nonRecurring: Annotated[bool | None, Field(description="Whether the charge is non-recurring.")] = None,
+    comments: Annotated[str | None, Field(description="Milestone comments.")] = None,
+    riskDescription: Annotated[str | None, Field(description="Known risk description; omit when not applicable.")] = None,
+    riskImpact: Annotated[str | None, Field(description=f"One of: {RISK_IMPACTS}.")] = None,
+    mitigationPlan: Annotated[str | None, Field(description="Risk mitigation plan; omit when not applicable.")] = None,
+    blockedReason: Annotated[str | None, Field(description="Why the milestone is blocked; omit unless status is Blocked.")] = None,
+    blockedOwner: Annotated[str | None, Field(description="Who owns unblocking; omit unless status is Blocked.")] = None,
+    blockedSince: Annotated[str | None, Field(description="Blocked-since date (ISO); omit unless status is Blocked.")] = None,
+    expectedResolutionDate: Annotated[str | None, Field(description="Expected resolution date (ISO); omit unless status is Blocked.")] = None,
+    escalated: Annotated[bool | None, Field(description="Whether the blocker is escalated; omit unless status is Blocked.")] = None,
+    azureCapacityType: Annotated[str | None, Field(description=f"One of: {AZURE_CAPACITY_TYPES}.")] = None,
+    preferredAzureRegion: Annotated[str | None, Field(description=f"One of: {PREFERRED_AZURE_REGIONS}.")] = None,
+    owner: Annotated[str | None, Field(description="User-confirmed milestone owner.")] = None,
+    lastUpdated: Annotated[str | None, Field(description="Last-updated date (ISO).")]= None,
     requestedBy: Annotated[str | None, Field(description="Who is requesting (defaults to the agent).")] = None,
 ) -> Any:
-    """Submit an approval request for a recommendation. A human must approve it in the web UI before any milestone is created. This tool never creates a milestone."""
+    """Submit a complete milestone payload for approval. A human must approve it in
+    the web UI before the milestone is created. This tool never creates a milestone."""
     resolved_name, err = _resolve_opportunity(opportunityName)
     if err:
         return err
+    milestone_fields = {
+        "milestoneName": milestoneName,
+        "opportunityName": resolved_name,
+        "competitorName": competitorName,
+        "workload": workload,
+        "customerCommitment": customerCommitment,
+        "deliveredBy": deliveredBy,
+        "partnerName": partnerName,
+        "milestoneCategory": milestoneCategory,
+        "milestoneStatus": milestoneStatus,
+        "statusReason": statusReason,
+        "estDate": estDate,
+        "fitCharge": fitCharge,
+        "nonRecurring": nonRecurring,
+        "comments": comments,
+        "riskDescription": riskDescription,
+        "riskImpact": riskImpact,
+        "mitigationPlan": mitigationPlan,
+        "blockedReason": blockedReason,
+        "blockedOwner": blockedOwner,
+        "blockedSince": blockedSince,
+        "expectedResolutionDate": expectedResolutionDate,
+        "escalated": escalated,
+        "azureCapacityType": azureCapacityType,
+        "preferredAzureRegion": preferredAzureRegion,
+        "owner": owner,
+        "lastUpdated": lastUpdated,
+    }
+    milestone_fields = {k: v for k, v in milestone_fields.items() if v is not None}
     payload = {
         "requestName": requestName,
         "opportunityName": resolved_name,
         "relatedRecommendationBusinessId": relatedRecommendationBusinessId,
         "requestStatus": "Submitted",
         "requestedBy": requestedBy or "HostedAgent",
+        "action": {
+            "kind": "CreateMilestone",
+            "competitorBlankConfirmed": competitorBlankConfirmed,
+            **milestone_fields,
+        },
     }
     payload = {k: v for k, v in payload.items() if v is not None}
     try:
         return _trim_approval(_mc.post("/api/approval-requests", json=payload))
     except Exception as e:  # surface a recoverable message instead of a hard failure
         return {"error": f"Failed to submit approval request: {e}", "opportunityUsed": resolved_name}
+
+
+def propose_milestone_for_approval(
+    recommendedMilestoneTitle: Annotated[str, Field(description="User-confirmed milestone name.")],
+    opportunityName: Annotated[str, Field(description="Opportunity name or business id.")],
+    competitorName: Annotated[str | None, Field(description="User-confirmed milestone competitor. Never copy Opportunity.competitorName without explicit milestone-specific confirmation.")],
+    competitorBlankConfirmed: Annotated[bool, Field(description="True only after the user explicitly confirmed Competitor should be blank.")],
+    suggestedDescription: Annotated[str, Field(description="Complete milestone description/comments confirmed by the user.")],
+    milestoneCategory: Annotated[str | None, Field(description=f"One of: {MILESTONE_CATEGORIES}.")] = None,
+    owner: Annotated[str | None, Field(description="User-confirmed milestone owner.")] = None,
+    estDate: Annotated[str | None, Field(description="User-confirmed estimated date (ISO).")]= None,
+    deliveredBy: Annotated[str | None, Field(description=f"One of: {DELIVERED_BY}.")] = None,
+    fitCharge: Annotated[float | None, Field(description="User-confirmed fit charge amount.")] = None,
+    nonRecurring: Annotated[bool | None, Field(description="Whether the charge is non-recurring.")] = None,
+    customerCommitment: Annotated[str | None, Field(description=f"One of: {CUSTOMER_COMMITMENTS}.")] = None,
+    workload: Annotated[str | None, Field(description=f"One of: {WORKLOADS}.")] = None,
+    azureCapacityType: Annotated[str | None, Field(description=f"One of: {AZURE_CAPACITY_TYPES}.")] = None,
+    preferredAzureRegion: Annotated[str | None, Field(description=f"One of: {PREFERRED_AZURE_REGIONS}.")] = None,
+    riskImpact: Annotated[str | None, Field(description=f"One of: {RISK_IMPACTS}.")] = None,
+    milestoneStatus: Annotated[str | None, Field(description=f"One of: {MILESTONE_STATUSES}.")] = None,
+    statusReason: Annotated[str | None, Field(description="Reason for the selected status.")] = None,
+    partnerName: Annotated[str | None, Field(description="Partner name; omit when not applicable.")] = None,
+    riskDescription: Annotated[str | None, Field(description="Known risk description.")] = None,
+    mitigationPlan: Annotated[str | None, Field(description="Risk mitigation plan.")] = None,
+    blockedReason: Annotated[str | None, Field(description="Why the milestone is blocked.")] = None,
+    blockedOwner: Annotated[str | None, Field(description="Who owns unblocking.")] = None,
+    blockedSince: Annotated[str | None, Field(description="Blocked-since date (ISO).")]= None,
+    expectedResolutionDate: Annotated[str | None, Field(description="Expected resolution date (ISO).")]= None,
+    escalated: Annotated[bool | None, Field(description="Whether the blocker is escalated.")] = None,
+    lastUpdated: Annotated[str | None, Field(description="Last-updated date (ISO).")]= None,
+    priority: Annotated[str | None, Field(description=f"Recommendation priority. One of: {PRIORITIES}.")] = None,
+    confidence: Annotated[str | None, Field(description=f"Recommendation confidence. One of: {CONFIDENCE_LEVELS}.")] = None,
+    requestedBy: Annotated[str | None, Field(description="Who is requesting (defaults to the hosted agent).")] = None,
+) -> Any:
+    """In one tool call, record a recommendation and submit its complete milestone payload
+    for human approval. No milestone is created until a human approves the request."""
+    if not (competitorName or "").strip() and not competitorBlankConfirmed:
+        return {
+            "error": "Competitor confirmation required before submission.",
+            "requiredQuestion": "Are you sure you want to leave Competitor empty?",
+        }
+
+    recommendation = create_recommendation(
+        recommendedMilestoneTitle=recommendedMilestoneTitle,
+        opportunityName=opportunityName,
+        competitorName=competitorName,
+        competitorBlankConfirmed=competitorBlankConfirmed,
+        suggestedDescription=suggestedDescription,
+        suggestedOwnerRole=owner,
+        suggestedDueDate=estDate,
+        priority=priority,
+        riskOrDependency=riskDescription or blockedReason,
+        confidence=confidence,
+    )
+    if not isinstance(recommendation, dict) or recommendation.get("error"):
+        return recommendation
+
+    recommendation_id = recommendation.get("recommendationBusinessId")
+    if not recommendation_id:
+        return {"error": "Recommendation was created without a business id; approval was not submitted."}
+
+    approval = submit_approval_request(
+        requestName=f"Create milestone: {recommendedMilestoneTitle}",
+        opportunityName=opportunityName,
+        relatedRecommendationBusinessId=recommendation_id,
+        milestoneName=recommendedMilestoneTitle,
+        competitorName=competitorName,
+        competitorBlankConfirmed=competitorBlankConfirmed,
+        workload=workload,
+        customerCommitment=customerCommitment,
+        deliveredBy=deliveredBy,
+        partnerName=partnerName,
+        milestoneCategory=milestoneCategory,
+        milestoneStatus=milestoneStatus,
+        statusReason=statusReason,
+        estDate=estDate,
+        fitCharge=fitCharge,
+        nonRecurring=nonRecurring,
+        comments=suggestedDescription,
+        riskDescription=riskDescription,
+        riskImpact=riskImpact,
+        mitigationPlan=mitigationPlan,
+        blockedReason=blockedReason,
+        blockedOwner=blockedOwner,
+        blockedSince=blockedSince,
+        expectedResolutionDate=expectedResolutionDate,
+        escalated=escalated,
+        azureCapacityType=azureCapacityType,
+        preferredAzureRegion=preferredAzureRegion,
+        owner=owner,
+        lastUpdated=lastUpdated,
+        requestedBy=requestedBy,
+    )
+    if not isinstance(approval, dict) or approval.get("error"):
+        return approval
+
+    captured_fields = approval.get("milestoneFields")
+    if approval.get("actionKind") != "CreateMilestone" or not isinstance(captured_fields, dict):
+        return {
+            "error": "The approval API did not confirm the stored CreateMilestone payload.",
+            "recommendationBusinessId": recommendation_id,
+            "approvalRequestBusinessId": approval.get("approvalRequestBusinessId"),
+            "requiredAction": "Do not claim that milestone fields were captured; investigate or resubmit after the API is updated.",
+        }
+    return {
+        "submittedForApproval": True,
+        "recommendationBusinessId": recommendation_id,
+        "approvalRequestBusinessId": approval.get("approvalRequestBusinessId"),
+        "requestStatus": approval.get("requestStatus"),
+        "approvalStatus": approval.get("approvalStatus"),
+        "capturedFields": captured_fields,
+        "note": "Pending human approval. The milestone does not exist until approved.",
+    }
 
 
 def list_pending_approvals() -> Any:

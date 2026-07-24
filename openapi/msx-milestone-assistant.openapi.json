@@ -225,7 +225,7 @@
         "tags": [
           "Opportunities"
         ],
-        "summary": "Send the \"new opportunity\" visibility message to the configured teammate over Microsoft Teams (Path A, human consent). Called from the create-confirm popup after a human agrees. Honors GRAPH_SEND_MODE (simulate vs live) and requires TEAMS_BROADCAST_TO; audited via recordAgentAction.\n",
+        "summary": "Send the \"new opportunity\" visibility message to the configured teammate over Microsoft Teams (Path A, human consent). Called from the create-confirm popup after a human agrees. Honors GRAPH_SEND_MODE (simulate vs live) and requires TEAMS_BROADCAST_TO to be set; audited via recordAgentAction.\n",
         "parameters": [
           {
             "$ref": "#/components/parameters/IdParam"
@@ -534,7 +534,7 @@
           "Approval Requests"
         ],
         "summary": "List approval requests",
-        "description": "Each row includes a sanitized `pendingAction` ({ kind, milestoneStatus? }) decoded from the stored deferred action, so the UI can warn before approving one that moves a milestone to \"Lost To Competitor\". The raw encoded action payload is not exposed.\n",
+        "description": "Each row includes a sanitized `pendingAction` decoded from the stored deferred action. CreateMilestone actions expose their mock business fields as `milestoneFields` for human review, and UpdateMilestone exposes `milestoneStatus` for the \"Lost To Competitor\" warning. Sensitive message bodies and all other raw deferred action payloads are not exposed.\n",
         "parameters": [
           {
             "in": "query",
@@ -554,7 +554,7 @@
         "tags": [
           "Approval Requests"
         ],
-        "summary": "Create an approval request. May carry a deferred `action` (SendOutlookMail, NotifyTeams, UpdateMilestone, UpdateOpportunity, UpdateDealTeamMember, or DeleteMilestone) that the API executes ONLY when a human approves the request. This is how agent writes/sends are gated.\n",
+        "summary": "Create an approval request. May carry a deferred `action` (CreateMilestone, SendOutlookMail, NotifyTeams, UpdateMilestone, UpdateOpportunity, UpdateDealTeamMember, or DeleteMilestone) that the API executes ONLY when a human approves the request. This is how agent writes/sends are gated.\n",
         "requestBody": {
           "content": {
             "application/json": {
@@ -581,7 +581,7 @@
                   },
                   "action": {
                     "type": "object",
-                    "description": "Optional deferred action executed on approval. The carried fields depend on `kind`: send actions use to/subject/body/message; UpdateMilestone uses milestoneId + any MilestoneInput fields; UpdateOpportunity uses opportunityId + any OpportunityInput fields; UpdateDealTeamMember uses dealTeamMemberId + any DealTeamMemberInput fields; DeleteMilestone uses milestoneId.\n",
+                    "description": "Optional deferred action executed on approval. The carried fields depend on `kind`: send actions use to/subject/body/message; CreateMilestone uses a complete MilestoneInput payload plus competitorBlankConfirmed; UpdateMilestone uses milestoneId + any MilestoneInput fields; UpdateOpportunity uses opportunityId + any OpportunityInput fields; UpdateDealTeamMember uses dealTeamMemberId + any DealTeamMemberInput fields; DeleteMilestone uses milestoneId.\n",
                     "required": [
                       "kind"
                     ],
@@ -589,6 +589,7 @@
                       "kind": {
                         "type": "string",
                         "enum": [
+                          "CreateMilestone",
                           "SendOutlookMail",
                           "NotifyTeams",
                           "UpdateMilestone",
@@ -596,6 +597,10 @@
                           "UpdateDealTeamMember",
                           "DeleteMilestone"
                         ]
+                      },
+                      "competitorBlankConfirmed": {
+                        "type": "boolean",
+                        "description": "For CreateMilestone, must be true when competitorName is empty, confirming the user explicitly chose to leave Competitor blank.\n"
                       },
                       "to": {
                         "type": "string"
@@ -640,6 +645,9 @@
                         "type": "string"
                       },
                       "partnerName": {
+                        "type": "string"
+                      },
+                      "competitorName": {
                         "type": "string"
                       },
                       "statusReason": {
@@ -726,9 +734,6 @@
                         "type": "string"
                       },
                       "assignedSE": {
-                        "type": "string"
-                      },
-                      "competitorName": {
                         "type": "string"
                       },
                       "consumptionPhase": {
@@ -1331,6 +1336,12 @@
               "Customer",
               "Joint"
             ]
+          },
+          "partnerName": {
+            "type": "string"
+          },
+          "competitorName": {
+            "type": "string"
           },
           "milestoneCategory": {
             "type": "string",

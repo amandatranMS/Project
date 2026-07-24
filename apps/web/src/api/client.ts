@@ -218,6 +218,35 @@ export interface Recommendation {
   opportunity?: { opportunityName: string } | null;
 }
 
+export interface MilestoneApprovalFields {
+  milestoneName: string;
+  opportunityName: string;
+  workload?: string | null;
+  customerCommitment?: string | null;
+  deliveredBy?: string | null;
+  partnerName?: string | null;
+  milestoneCategory?: string | null;
+  milestoneStatus?: string | null;
+  statusReason?: string | null;
+  estDate?: string | null;
+  fitCharge?: number | null;
+  nonRecurring?: boolean | null;
+  comments?: string | null;
+  riskDescription?: string | null;
+  riskImpact?: string | null;
+  mitigationPlan?: string | null;
+  blockedReason?: string | null;
+  blockedOwner?: string | null;
+  blockedSince?: string | null;
+  expectedResolutionDate?: string | null;
+  escalated?: boolean | null;
+  competitorName?: string | null;
+  azureCapacityType?: string | null;
+  preferredAzureRegion?: string | null;
+  owner?: string | null;
+  lastUpdated?: string | null;
+}
+
 export interface ApprovalRequest {
   id: string;
   approvalRequestBusinessId: string;
@@ -230,8 +259,12 @@ export interface ApprovalRequest {
   opportunity?: { opportunityName: string } | null;
   relatedRecommendation?: { recommendationBusinessId: string; recommendedMilestoneTitle?: string | null } | null;
   relatedMilestone?: { milestoneBusinessId: string; milestoneName: string } | null;
-  /** Sanitized deferred action (no payload) so the UI can warn before approving. */
-  pendingAction?: { kind: string; milestoneStatus?: string | null } | null;
+  /** Sanitized deferred action. Message payloads remain hidden. */
+  pendingAction?: {
+    kind: string;
+    milestoneStatus?: string | null;
+    milestoneFields?: MilestoneApprovalFields;
+  } | null;
 }
 
 /** Outcome of the manager notification attached to a status-changing response. */

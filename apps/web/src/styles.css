@@ -578,6 +578,37 @@ tbody tr { transition: background var(--dur-1) var(--ease); }
 tbody tr:hover { background: var(--accent-grad-soft); }
 tbody tr.clickable { cursor: pointer; }
 
+.approval-fields { margin-top: var(--sp-2); min-width: 280px; }
+.approval-fields summary {
+  width: fit-content;
+  color: var(--brand-primary);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.approval-fields dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(120px, 1fr));
+  gap: var(--sp-2) var(--sp-4);
+  margin: var(--sp-3) 0 0;
+  padding: var(--sp-3);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+}
+.approval-fields dl > div { min-width: 0; }
+.approval-fields dt {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.approval-fields dd {
+  margin: 2px 0 0;
+  color: var(--text);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
 /* Audit detail modal */
 .audit-meta {
   display: grid;

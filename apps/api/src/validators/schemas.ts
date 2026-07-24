@@ -71,6 +71,7 @@ export const createMilestoneSchema = z.object({
   blockedSince: dateish,
   expectedResolutionDate: dateish,
   escalated: z.boolean().optional().nullable(),
+  competitorName: nstr,
   azureCapacityType: z.enum(AZURE_CAPACITY_TYPES).optional().nullable(),
   preferredAzureRegion: z.enum(PREFERRED_AZURE_REGIONS).optional().nullable(),
   owner: nstr,
@@ -145,6 +146,12 @@ export const updateDealTeamMemberSchema = createDealTeamMemberSchema.partial().o
  * ONLY when a human approves the request (see approvalRequestsService.decide).
  */
 export const pendingActionSchema = z.discriminatedUnion('kind', [
+  z
+    .object({
+      kind: z.literal('CreateMilestone'),
+      competitorBlankConfirmed: z.boolean(),
+    })
+    .merge(createMilestoneSchema.omit({ milestoneBusinessId: true, createdBy: true })),
   z.object({
     kind: z.literal('SendOutlookMail'),
     to: z.string().email(),
@@ -173,7 +180,19 @@ export const pendingActionSchema = z.discriminatedUnion('kind', [
     kind: z.literal('DeleteMilestone'),
     milestoneId: z.string().min(1),
   }),
-]);
+]).superRefine((action, ctx) => {
+  if (
+    action.kind === 'CreateMilestone' &&
+    !action.competitorName?.trim() &&
+    !action.competitorBlankConfirmed
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['competitorBlankConfirmed'],
+      message: 'Ask the user to confirm before leaving competitor empty.',
+    });
+  }
+});
 export type PendingAction = z.infer<typeof pendingActionSchema>;
 
 export const createApprovalSchema = z.object({
@@ -185,8 +204,16 @@ export const createApprovalSchema = z.object({
   requestStatus: z.enum(REQUEST_STATUSES).optional().nullable(),
   approvalStatus: z.enum(APPROVAL_STATUSES).optional().nullable(),
   requestedBy: nstr,
-  /** Optional deferred action executed on approval (send email, notify Teams, milestone update/delete). */
+  /** Optional deferred action executed on approval (create/update/delete, email, or Teams). */
   action: pendingActionSchema.optional(),
+}).superRefine((approval, ctx) => {
+  if (approval.relatedRecommendationBusinessId && !approval.action) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['action'],
+      message: 'A recommendation-backed approval must include its complete deferred action.',
+    });
+  }
 });
 export const updateApprovalSchema = z.object({
   requestName: nstr,

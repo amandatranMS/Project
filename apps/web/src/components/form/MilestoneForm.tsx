@@ -44,6 +44,7 @@ export default function MilestoneForm({ initial, defaultOpportunityName, onClose
     azureCapacityType: initial?.azureCapacityType ?? '',
     preferredAzureRegion: initial?.preferredAzureRegion ?? '',
     partnerName: initial?.partnerName ?? '',
+    competitorName: initial?.competitorName ?? '',
     owner: initial?.owner ?? '',
     createdBy: initial?.createdBy ?? '',
     estDate: isoToDateInput(initial?.estDate),
@@ -83,6 +84,7 @@ export default function MilestoneForm({ initial, defaultOpportunityName, onClose
       azureCapacityType: clean(form.azureCapacityType),
       preferredAzureRegion: clean(form.preferredAzureRegion),
       partnerName: clean(form.partnerName),
+      competitorName: clean(form.competitorName),
       owner: clean(form.owner),
       createdBy: clean(form.createdBy),
       estDate: clean(form.estDate),
@@ -179,6 +181,7 @@ export default function MilestoneForm({ initial, defaultOpportunityName, onClose
         <SelectField label="Azure capacity type" value={form.azureCapacityType} onChange={set('azureCapacityType')} options={AZURE_CAPACITY_TYPES} />
         <SelectField label="Preferred Azure region" value={form.preferredAzureRegion} onChange={set('preferredAzureRegion')} options={PREFERRED_AZURE_REGIONS} />
         <TextField label="Partner" value={form.partnerName} onChange={set('partnerName')} />
+        <TextField label="Competitor" value={form.competitorName} onChange={set('competitorName')} />
         <TextField label="Owner" value={form.owner} onChange={set('owner')} />
         <TextField label="Created by" value={form.createdBy} onChange={set('createdBy')} />
         <DateField label="Estimated date" value={form.estDate} onChange={set('estDate')} />

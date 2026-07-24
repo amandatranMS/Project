@@ -214,18 +214,19 @@ paths:
       tags: [Approval Requests]
       summary: List approval requests
       description: >
-        Each row includes a sanitized `pendingAction` ({ kind, milestoneStatus? })
-        decoded from the stored deferred action, so the UI can warn before approving
-        one that moves a milestone to "Lost To Competitor". The raw encoded action
-        payload is not exposed.
+        Each row includes a sanitized `pendingAction` decoded from the stored
+        deferred action. CreateMilestone actions expose their mock business fields
+        as `milestoneFields` for human review, and UpdateMilestone exposes
+        `milestoneStatus` for the "Lost To Competitor" warning. Sensitive message
+        bodies and all other raw deferred action payloads are not exposed.
       parameters: [{ in: query, name: approvalStatus, schema: { type: string } }]
       responses: { '200': { description: Approval requests } }
     post:
       tags: [Approval Requests]
       summary: >
-        Create an approval request. May carry a deferred `action` (SendOutlookMail,
-        NotifyTeams, UpdateMilestone, UpdateOpportunity, UpdateDealTeamMember, or
-        DeleteMilestone) that the API executes ONLY when a human approves the
+        Create an approval request. May carry a deferred `action` (CreateMilestone,
+        SendOutlookMail, NotifyTeams, UpdateMilestone, UpdateOpportunity,
+        UpdateDealTeamMember, or DeleteMilestone) that the API executes ONLY when a human approves the
         request. This is how agent writes/sends are gated.
       requestBody:
         content:
@@ -243,6 +244,8 @@ paths:
                   description: >
                     Optional deferred action executed on approval. The carried fields
                     depend on `kind`: send actions use to/subject/body/message;
+                    CreateMilestone uses a complete MilestoneInput payload plus
+                    competitorBlankConfirmed;
                     UpdateMilestone uses milestoneId + any MilestoneInput fields;
                     UpdateOpportunity uses opportunityId + any OpportunityInput fields;
                     UpdateDealTeamMember uses dealTeamMemberId + any DealTeamMemberInput
@@ -251,7 +254,12 @@ paths:
                   properties:
                     kind:
                       type: string
-                      enum: [SendOutlookMail, NotifyTeams, UpdateMilestone, UpdateOpportunity, UpdateDealTeamMember, DeleteMilestone]
+                      enum: [CreateMilestone, SendOutlookMail, NotifyTeams, UpdateMilestone, UpdateOpportunity, UpdateDealTeamMember, DeleteMilestone]
+                    competitorBlankConfirmed:
+                      type: boolean
+                      description: >
+                        For CreateMilestone, must be true when competitorName is empty,
+                        confirming the user explicitly chose to leave Competitor blank.
                     # Send actions
                     to: { type: string }
                     subject: { type: string }
@@ -261,7 +269,7 @@ paths:
                     milestoneId: { type: string }
                     opportunityId: { type: string }
                     dealTeamMemberId: { type: string }
-                    # Milestone fields (UpdateMilestone)
+                    # Milestone fields (CreateMilestone / UpdateMilestone)
                     milestoneName: { type: string }
                     milestoneStatus: { type: string }
                     milestoneCategory: { type: string }
@@ -270,6 +278,7 @@ paths:
                     customerCommitment: { type: string }
                     deliveredBy: { type: string }
                     partnerName: { type: string }
+                    competitorName: { type: string }
                     statusReason: { type: string }
                     estDate: { type: string, format: date }
                     fitCharge: { type: number }
@@ -298,7 +307,6 @@ paths:
                     closeDate: { type: string, format: date }
                     aeOwner: { type: string }
                     assignedSE: { type: string }
-                    competitorName: { type: string }
                     consumptionPhase: { type: string }
                     businessProblem: { type: string }
                     nextStep: { type: string }
@@ -498,6 +506,8 @@ components:
         workload: { type: string, enum: [M365 Copilot for Microsoft 365, Microsoft Sentinel, Microsoft Purview, Azure Migration, Copilot Studio, Defender XDR, Teams Premium] }
         customerCommitment: { type: string, enum: [Uncommitted, Verbal, Committed, Contracted] }
         deliveredBy: { type: string, enum: [Microsoft, Partner, Customer, Joint] }
+        partnerName: { type: string }
+        competitorName: { type: string }
         milestoneCategory: { type: string, enum: [Production, Pilot, Workshop, Assessment, Deployment, Adoption] }
         milestoneStatus: { type: string, enum: ['---', On Track, At Risk, Blocked, Completed, Cancelled, Lost To Competitor, Hygiene/Duplicate] }
         statusReason: { type: string }

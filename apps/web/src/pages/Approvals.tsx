@@ -1,10 +1,51 @@
 import { useEffect, useState } from 'react';
 import { useMsal } from '@azure/msal-react';
+import { Link } from 'react-router-dom';
 import { choiceLabel, LOST_TO_COMPETITOR } from '@msx/shared';
-import { api, type ApprovalRequest, type ManagerEmailOutcome, type GraphManager } from '../api/client';
+import {
+  api,
+  type ApprovalRequest,
+  type GraphManager,
+  type ManagerEmailOutcome,
+  type MilestoneApprovalFields,
+} from '../api/client';
 import { statusBadgeClass } from '../ui';
 import LostToCompetitorDialog from '../components/LostToCompetitorDialog';
 import ApproveTeamsBroadcastDialog from '../components/ApproveTeamsBroadcastDialog';
+
+const milestoneFieldLabels: Array<[keyof MilestoneApprovalFields, string]> = [
+  ['milestoneName', 'Milestone Name'],
+  ['milestoneCategory', 'Category'],
+  ['owner', 'Owner'],
+  ['estDate', 'Estimated Date'],
+  ['fitCharge', 'Fit Charge'],
+  ['competitorName', 'Competitor'],
+  ['riskImpact', 'Risk Impact'],
+  ['comments', 'Description'],
+  ['milestoneStatus', 'Status'],
+  ['statusReason', 'Status Reason'],
+  ['workload', 'Workload'],
+  ['customerCommitment', 'Customer Commitment'],
+  ['deliveredBy', 'Delivered By'],
+  ['partnerName', 'Partner'],
+  ['nonRecurring', 'Non-Recurring'],
+  ['riskDescription', 'Risk Description'],
+  ['mitigationPlan', 'Mitigation Plan'],
+  ['blockedReason', 'Blocked Reason'],
+  ['blockedOwner', 'Blocked Owner'],
+  ['blockedSince', 'Blocked Since'],
+  ['expectedResolutionDate', 'Expected Resolution'],
+  ['escalated', 'Escalated'],
+  ['azureCapacityType', 'Azure Capacity Type'],
+  ['preferredAzureRegion', 'Preferred Azure Region'],
+  ['lastUpdated', 'Last Updated'],
+];
+
+function displayFieldValue(value: string | number | boolean): string {
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (typeof value === 'number') return value.toLocaleString();
+  return value;
+}
 
 export default function Approvals() {
   const { accounts } = useMsal();
@@ -66,13 +107,22 @@ export default function Approvals() {
       const result = await api.patch<{
         milestone?: { milestoneBusinessId: string; milestoneName: string };
         action?: string;
-        result?: { managerEmail?: ManagerEmailOutcome };
+        result?: {
+          milestoneBusinessId?: string;
+          milestoneName?: string;
+          managerEmail?: ManagerEmailOutcome;
+        };
       }>(`/approval-requests/${id}/${action}`, { reviewedBy, acknowledgeManagerEmail });
       setConfirmingLostId(null);
       setConfirmingTeamsId(null);
       if (action === 'approve') {
-        if (result?.milestone) {
-          setMessage(`Approved — milestone created: ${result.milestone.milestoneBusinessId} — ${result.milestone.milestoneName}`);
+        const milestone = result?.milestone ?? (
+          result?.action === 'CreateMilestone' && result.result?.milestoneBusinessId && result.result.milestoneName
+            ? result.result as { milestoneBusinessId: string; milestoneName: string }
+            : undefined
+        );
+        if (milestone) {
+          setMessage(`Approved — milestone created: ${milestone.milestoneBusinessId} — ${milestone.milestoneName}`);
         } else if (result?.action) {
           const email = result.result?.managerEmail;
           const emailNote =
@@ -122,7 +172,26 @@ export default function Approvals() {
           {items.map((a) => (
             <tr key={a.id}>
               <td>{a.approvalRequestBusinessId}</td>
-              <td>{a.requestName ?? '—'}</td>
+              <td>
+                <div>{a.requestName ?? '—'}</div>
+                {a.pendingAction?.milestoneFields && (
+                  <details className="approval-fields">
+                    <summary>Review fields</summary>
+                    <dl>
+                      {milestoneFieldLabels.map(([key, label]) => {
+                        const value = a.pendingAction?.milestoneFields?.[key];
+                        if (value === null || value === undefined || value === '') return null;
+                        return (
+                          <div key={key}>
+                            <dt>{label}</dt>
+                            <dd>{displayFieldValue(value)}</dd>
+                          </div>
+                        );
+                      })}
+                    </dl>
+                  </details>
+                )}
+              </td>
               <td>{a.opportunity?.opportunityName ?? '—'}</td>
               <td>{a.requestedBy ?? '—'}</td>
               <td><span className={`badge ${statusBadgeClass(a.approvalStatus)}`}>{choiceLabel(a.approvalStatus)}</span></td>
@@ -136,7 +205,15 @@ export default function Approvals() {
                       <button className="secondary" disabled={busyId === a.id} onClick={() => decide(a.id, 'needs-changes')}>Needs changes</button>
                     </>
                   )}
-                  {a.approvalStatus === 'Approved' && <span className="muted">Executed</span>}
+                  {a.approvalStatus === 'Approved' && (
+                    a.relatedMilestone ? (
+                      <Link to={`/milestones/${a.relatedMilestone.milestoneBusinessId}`}>
+                        View {a.relatedMilestone.milestoneBusinessId}
+                      </Link>
+                    ) : (
+                      <span className="muted">Executed</span>
+                    )
+                  )}
                   {a.approvalStatus === 'Rejected' && <span className="muted">Rejected</span>}
                 </div>
               </td>

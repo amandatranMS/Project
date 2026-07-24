@@ -16,6 +16,7 @@ import type {
   approvalDecisionSchema,
   PendingAction,
 } from '../validators/schemas.js';
+import { pendingActionSchema } from '../validators/schemas.js';
 
 type CreateInput = z.infer<typeof createApprovalSchema>;
 type UpdateInput = z.infer<typeof updateApprovalSchema>;
@@ -34,7 +35,8 @@ function encodeAction(action: PendingAction): string {
 function decodeAction(errorMessage?: string | null): PendingAction | null {
   if (!errorMessage || !errorMessage.startsWith(ACTION_TAG)) return null;
   try {
-    return JSON.parse(errorMessage.slice(ACTION_TAG.length)) as PendingAction;
+    const parsed = pendingActionSchema.safeParse(JSON.parse(errorMessage.slice(ACTION_TAG.length)));
+    return parsed.success ? parsed.data : null;
   } catch {
     return null;
   }
@@ -56,6 +58,8 @@ function legacySendKind(name?: string | null): 'email' | 'teams' | null {
 
 function summarizeAction(action: PendingAction): string {
   switch (action.kind) {
+    case 'CreateMilestone':
+      return `Create milestone "${action.milestoneName}"`;
     case 'SendOutlookMail':
       return `Send email to ${action.to} — "${action.subject}"`;
     case 'NotifyTeams':
@@ -79,6 +83,10 @@ async function executeAction(
   acknowledgeManagerEmail?: boolean,
 ): Promise<unknown> {
   switch (action.kind) {
+    case 'CreateMilestone': {
+      const { kind, competitorBlankConfirmed, ...fields } = action;
+      return milestonesService.create({ ...fields, createdBy: agentName });
+    }
     case 'SendOutlookMail':
       return graphService.sendMail(actor, {
         to: action.to,
@@ -109,6 +117,8 @@ async function executeAction(
     }
     case 'DeleteMilestone':
       return milestonesService.remove(action.milestoneId);
+    default:
+      throw new HttpError(400, 'This approval contains an unsupported action and was not executed.');
   }
 }
 
@@ -120,16 +130,23 @@ const detailInclude = {
 
 /**
  * Sanitized view of an approval row for the API/UI. Replaces the raw encoded
- * `errorMessage` action blob with a readable summary and exposes a minimal
- * `pendingAction` ({ kind, milestoneStatus? }) so the Approvals UI can warn
- * before approving an action that moves a milestone to Lost To Competitor —
- * without leaking the full stored payload (e.g. an email body).
+ * `errorMessage` action blob with a readable summary. CreateMilestone fields
+ * are safe mock business data and are exposed for human review; message bodies
+ * and other deferred action payloads remain hidden.
  */
 function toPublic<T extends { errorMessage?: string | null }>(row: T) {
   const action = decodeAction(row.errorMessage);
   if (!action) return { ...row, pendingAction: null };
-  const pendingAction: { kind: string; milestoneStatus?: string | null } = { kind: action.kind };
+  const pendingAction: {
+    kind: string;
+    milestoneStatus?: string | null;
+    milestoneFields?: Omit<Extract<PendingAction, { kind: 'CreateMilestone' }>, 'kind' | 'competitorBlankConfirmed'>;
+  } = { kind: action.kind };
   if (action.kind === 'UpdateMilestone') pendingAction.milestoneStatus = action.milestoneStatus ?? null;
+  if (action.kind === 'CreateMilestone') {
+    const { kind: _kind, competitorBlankConfirmed: _competitorBlankConfirmed, ...milestoneFields } = action;
+    pendingAction.milestoneFields = milestoneFields;
+  }
   return { ...row, errorMessage: summarizeAction(action), pendingAction };
 }
 
@@ -156,7 +173,7 @@ export const approvalRequestsService = {
 
   async create(input: CreateInput) {
     const { approvalRequestBusinessId, opportunityName, relatedRecommendationBusinessId, relatedMilestoneBusinessId, action, ...rest } = input;
-    return prisma.approvalRequest.create({
+    const row = await prisma.approvalRequest.create({
       data: {
         ...rest,
         approvalRequestBusinessId: approvalRequestBusinessId || genId('APR'),
@@ -171,7 +188,10 @@ export const approvalRequestsService = {
         relatedRecommendation: connectRecommendation(relatedRecommendationBusinessId),
         relatedMilestone: connectMilestone(relatedMilestoneBusinessId),
       },
+      include: detailInclude,
+      omit: { ownerId: true },
     });
+    return toPublic(row);
   },
 
   async update(id: string, input: UpdateInput) {
@@ -205,6 +225,9 @@ export const approvalRequestsService = {
     const agentName = input.agentName ?? 'MilestoneAdvisor';
     const reviewStatus = decision; // review + approval vocab match
     const pendingAction = decodeAction(approval.errorMessage);
+    if (approval.errorMessage?.startsWith(ACTION_TAG) && !pendingAction) {
+      throw new HttpError(422, 'This approval has an invalid saved action and was not executed. Please recreate the request.');
+    }
 
     if (decision !== 'Approved') {
       // Preserve the encoded action when it may still be approved later.
@@ -238,7 +261,7 @@ export const approvalRequestsService = {
       return updated;
     }
 
-    // Approved + a deferred action attached → execute it (send / update / delete).
+    // Approved + a deferred action attached → execute it (create / send / update / delete).
     // The stored payload is sent verbatim — the exact body the agent drafted.
     if (pendingAction) {
       const result = await executeAction(
@@ -247,6 +270,12 @@ export const approvalRequestsService = {
         agentName,
         input.acknowledgeManagerEmail,
       );
+      if (result === undefined) {
+        throw new HttpError(500, 'The approval action returned no result and was not marked complete.');
+      }
+      const createdMilestone = pendingAction.kind === 'CreateMilestone'
+        ? result as Awaited<ReturnType<typeof milestonesService.create>>
+        : null;
       const updated = await prisma.approvalRequest.update({
         where: { id },
         data: {
@@ -255,19 +284,33 @@ export const approvalRequestsService = {
           approvedBy: input.reviewedBy,
           approvedOn: new Date(),
           mockWritebackStatus: 'Completed',
-          errorMessage: `Executed: ${summarizeAction(pendingAction)}`,
+          errorMessage: approval.errorMessage,
+          relatedMilestoneId: createdMilestone?.id,
         },
       });
+      if (createdMilestone && approval.relatedRecommendationId) {
+        await prisma.aiMilestoneRecommendation.update({
+          where: { id: approval.relatedRecommendationId },
+          data: { reviewStatus: 'Approved', readyForMockCreation: true },
+        });
+      }
       await recordAgentAction({
         agentName,
         actionType: pendingAction.kind,
         actionName: 'Executed after approval',
         actor: input.reviewedBy,
         opportunityId: approval.opportunityId,
+        relatedMilestoneId: createdMilestone?.id,
+        relatedRecommendationId: approval.relatedRecommendationId,
         securityEvent: pendingAction.kind === 'SendOutlookMail' || pendingAction.kind === 'NotifyTeams',
         outputSummary: `Approved ${approval.approvalRequestBusinessId} → ${summarizeAction(pendingAction)}`,
       });
-      return { approval: updated, action: pendingAction.kind, result };
+      return {
+        approval: updated,
+        action: pendingAction.kind,
+        result,
+        ...(createdMilestone ? { milestone: createdMilestone } : {}),
+      };
     }
 
     // Approved but no stored action. If the title looks like a legacy send

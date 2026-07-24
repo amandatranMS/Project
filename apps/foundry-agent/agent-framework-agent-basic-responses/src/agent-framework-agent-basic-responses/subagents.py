@@ -23,7 +23,6 @@ from agent_framework import Agent, MCPStdioTool
 
 from msx_capabilities import (
     create_opportunity,
-    create_recommendation,
     delete_milestone,
     get_dashboard_summary,
     get_milestone,
@@ -33,8 +32,8 @@ from msx_capabilities import (
     list_opportunities,
     list_pending_approvals,
     notify_teams,
+    propose_milestone_for_approval,
     send_email,
-    submit_approval_request,
     update_deal_team_member,
     update_milestone,
     update_opportunity,
@@ -78,9 +77,30 @@ _APPROVAL_RULE = (
 # Governance rule: a milestone is created ONLY when a human approves an approval
 # request. The agent may recommend and request approval, but must then stop.
 _GOVERNANCE_RULE = (
-    " You cannot create milestones directly. To propose a new milestone, first call "
-    "create_recommendation, then submit_approval_request referencing that "
-    "recommendation's recommendationBusinessId. After submitting, STOP and tell the "
+    " HARD STOP: before any recommendation or approval tool call for a new milestone, ask "
+    "the user for the milestone competitor. Opportunity competitor and milestone competitor are "
+    "separate fields: never assume they match and never copy the opportunity value. If an "
+    "opportunity competitor is available, ask whether it also applies to this milestone and use "
+    "it only after the user explicitly confirms that milestone-specific value. Never infer or "
+    "invent it. If they provide none, ask whether "
+    "they are sure they want to leave Competitor empty and wait for an explicit confirmation. "
+    "You cannot create milestones directly. After the user confirms the complete field summary, "
+    "call propose_milestone_for_approval exactly once. It records the recommendation "
+    "and submits the complete milestone payload. Do not call create_recommendation or "
+    "submit_approval_request separately. BEFORE calling the tool, prepare "
+    "a complete field summary covering name, opportunity, competitor, workload, category, status and reason, "
+    "owner, estimated date, customer commitment, delivery owner and partner, fit charge and "
+    "non-recurring flag, comments, risk impact/description/mitigation, blocker owner/reason/dates/"
+    "escalation, Azure capacity type, preferred region, and last-updated date. You may recommend "
+    "values supported by retrieved opportunity context, but clearly mark them as proposed. Ask "
+    "the user one grouped set of questions for every missing or accuracy-sensitive value, "
+    "especially competitor, owner, dates, commitment, delivery/partner, financial values, region/capacity, "
+    "and blocker/risk details. Accept an explicit 'Unknown' or 'Not applicable'; never silently "
+    "invent a value or substitute a default. Milestone Competitor is mandatory to discuss: never infer or "
+    "randomly fill it. Ask the user for the competitor; if they do not provide one, explicitly ask "
+    "whether they are sure it should be left empty. Set competitorBlankConfirmed=true only after "
+    "they clearly confirm the blank. Restate the completed field summary and obtain one "
+    "confirmation before calling the tools. After submitting, STOP and tell the "
     "user the request is Pending and a human must approve it in the web UI. Never "
     "claim a milestone was created — you cannot approve or reject requests yourself."
 )
@@ -123,7 +143,9 @@ def build_subagents(client) -> list[Agent]:
                 "approves). When the user asks about a specific opportunity's milestones, call "
                 "list_milestones with `opportunity` set to that opportunity's name or business id "
                 "so you return exactly that opportunity's milestones. Report ids and names "
-                "clearly." + _APPROVAL_RULE + _CONFIRM_RULE + _GROUNDING_RULE
+                "clearly. An identifier beginning with MS- is a milestone business id. Use "
+                "get_milestone and update_milestone for it, including when changing competitorName; "
+                "never treat an MS- identifier as an opportunity." + _APPROVAL_RULE + _CONFIRM_RULE + _GROUNDING_RULE
             ),
             tools=[list_milestones, get_milestone, update_milestone, delete_milestone],
         ),
@@ -134,13 +156,16 @@ def build_subagents(client) -> list[Agent]:
             instructions=(
                 "You are the Governance specialist for a SYNTHETIC MOCK MSX workspace. New "
                 "milestones are created ONLY after a human approves an approval request, so you "
-                "drive the recommend -> request-approval handoff. Use create_recommendation to "
-                "record a suggestion, then submit_approval_request with the returned "
-                "recommendationBusinessId. Use list_pending_approvals to report what is awaiting "
+                "drive the recommend -> request-approval handoff. Use "
+                "propose_milestone_for_approval once, after the user confirms the complete field "
+                "summary. Use list_pending_approvals to report what is awaiting "
                 "a human. Report the recommendationBusinessId and approvalRequestBusinessId "
-                "clearly." + _GOVERNANCE_RULE + _CONFIRM_RULE
+                "clearly. If the tool returns competitor confirmation required, show its "
+                "requiredQuestion to the user and stop. Report capturedFields exactly and never "
+                "claim a user-provided field was unsupported."
+                + _GOVERNANCE_RULE
             ),
-            tools=[create_recommendation, submit_approval_request, list_pending_approvals],
+            tools=[propose_milestone_for_approval, list_pending_approvals],
         ),
         Agent(
             client=client,
@@ -165,7 +190,9 @@ def build_subagents(client) -> list[Agent]:
                 "approval request that a human must approve in the Approvals log. To update a "
                 "deal team member, first call list_deal_team (or get_opportunity) to find the "
                 "member's id, then call update_deal_team_member with only the fields to change. "
-                "Report ids and names clearly." + _APPROVAL_RULE + _CONFIRM_RULE + _GROUNDING_RULE
+                "Report ids and names clearly. Opportunity business ids begin with OPP-. Never "
+                "pass an MS- milestone business id to an opportunity tool; milestone competitor "
+                "updates belong to the milestone specialist." + _APPROVAL_RULE + _CONFIRM_RULE + _GROUNDING_RULE
             ),
             tools=[
                 list_opportunities,
