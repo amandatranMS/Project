@@ -1,8 +1,21 @@
 """Thin client for the MSX Milestone Assistant REST API.
 
-Handles the response envelope ({success, data} | {success, error}) and sends the
-`x-api-key` header. Because this agent runs hosted in Foundry, it reaches the
-(local) MSX app through a public dev-tunnel URL supplied via API_BASE_URL.
+Handles the response envelope ({success, data} | {success, error}) and
+authenticates to the API. Preferred: a real Microsoft Entra access token
+(``Authorization: Bearer``) so Conditional Access can govern the agent; the
+static ``x-api-key`` header is used as a fallback when no token scope is set.
+Because this agent runs hosted in Foundry, it reaches the (local) MSX app
+through a public dev-tunnel URL supplied via API_BASE_URL.
+
+Auth is chosen from the environment:
+  * ``MSX_API_SCOPE`` set (e.g. ``api://<msx-api-client-id>/.default``) → fetch an
+    Entra token and send it as a bearer.
+      - If ``AAD_TENANT_ID`` and ``AGENT_APP_CLIENT_ID`` are also set, the hosted
+        managed identity is federated INTO the agent's Entra Agent ID app
+        (workload identity federation), so the token that reaches the API is the
+        agent app identity — Conditional Access then governs the agent app.
+      - Otherwise the hosted managed identity calls the API directly.
+  * ``MSX_API_SCOPE`` unset → fall back to the static ``x-api-key`` header.
 """
 from __future__ import annotations
 
@@ -19,14 +32,52 @@ class MsxClient:
     def __init__(self) -> None:
         self.base = os.environ.get("API_BASE_URL", "http://localhost:4000").rstrip("/")
         self.session = requests.Session()
-        api_key = os.environ.get("API_KEY", "")
-        if api_key:
-            self.session.headers["x-api-key"] = api_key
         # Lets requests pass through a dev tunnel without the browser
         # anti-phishing interstitial; harmless when talking to localhost.
         self.session.headers["X-Tunnel-Skip-AntiPhishing-Page"] = "true"
 
+        # Prefer a real Entra token so Conditional Access can govern the agent;
+        # fall back to the static x-api-key when no token scope is configured.
+        self._scope = os.environ.get("MSX_API_SCOPE", "").strip() or None
+        self._credential = None
+        if self._scope:
+            self._credential = self._build_credential()
+        else:
+            api_key = os.environ.get("API_KEY", "")
+            if api_key:
+                self.session.headers["x-api-key"] = api_key
+
+    @staticmethod
+    def _build_credential():
+        """Credential used to fetch the MSX API access token (see module docstring)."""
+        from azure.identity import ClientAssertionCredential, DefaultAzureCredential
+
+        tenant = (
+            os.environ.get("AAD_TENANT_ID") or os.environ.get("AZURE_TENANT_ID") or ""
+        ).strip()
+        agent_app_client_id = os.environ.get("AGENT_APP_CLIENT_ID", "").strip()
+        if tenant and agent_app_client_id:
+            # Federate the hosted managed identity into the agent's Agent ID app.
+            managed_identity = DefaultAzureCredential()
+            return ClientAssertionCredential(
+                tenant_id=tenant,
+                client_id=agent_app_client_id,
+                func=lambda: managed_identity.get_token(
+                    "api://AzureADTokenExchange/.default"
+                ).token,
+            )
+        # Managed identity calls the API directly.
+        return DefaultAzureCredential()
+
+    def _apply_bearer(self) -> None:
+        """Refresh the Authorization header from the credential (tokens are cached
+        and auto-refreshed by azure-identity, so this is cheap per request)."""
+        if self._credential and self._scope:
+            token = self._credential.get_token(self._scope).token
+            self.session.headers["Authorization"] = f"Bearer {token}"
+
     def request(self, method: str, path: str, params: dict | None = None, json: dict | None = None):
+        self._apply_bearer()
         url = f"{self.base}{path}"
         resp = self.session.request(method, url, params=params, json=json, timeout=30)
         try:

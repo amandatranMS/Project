@@ -12,13 +12,18 @@ import { createRemoteJWKSet, jwtVerify } from 'jose';
  *     token is stashed on `req.user.bearer` so Phase 2 can do an On-Behalf-Of
  *     exchange for Microsoft Graph (Teams / Outlook / org hierarchy).
  *
- *  2. **Service** — the existing `x-api-key` header, used by the Python/Foundry
- *     agent for machine-to-machine calls. Preserved unchanged.
+ *  2. **Service** — a machine-to-machine caller (the Python/Foundry agent). Two
+ *     forms are accepted: an app-only Entra token (`Authorization: Bearer`,
+ *     issued to the agent identity via client credentials / workload-identity
+ *     federation) so Conditional Access can govern the agent, OR the legacy
+ *     `x-api-key` header, kept as a fallback during rollout.
  *
  * Config (set once Phase 0 app registration is done):
- *   AAD_TENANT_ID  — directory (tenant) id of your Foundry tenant
- *   AAD_CLIENT_ID  — application (client) id of the registered app
- *   API_KEY        — optional shared secret for the agent (unchanged)
+ *   AAD_TENANT_ID         — directory (tenant) id of your Foundry tenant
+ *   AAD_CLIENT_ID         — application (client) id of the registered app
+ *   AGENT_ALLOWED_APP_IDS — optional CSV allowlist of app ids that may call as a
+ *                           service via an Entra token (default: any valid app)
+ *   API_KEY               — optional shared secret for the agent (unchanged)
  *
  * If neither AAD_TENANT_ID/AAD_CLIENT_ID nor API_KEY are set, the gate is
  * disabled (local dev), so the app keeps running until Phase 0 is complete.
@@ -35,6 +40,8 @@ export interface AuthUser {
   email?: string;
   /** Raw bearer token — needed for the Graph On-Behalf-Of flow in Phase 2. */
   bearer?: string;
+  /** Calling application id (azp/appid) when a service authenticated via Entra. */
+  appId?: string;
 }
 
 declare global {
@@ -63,6 +70,14 @@ const issuer = [
 // A v2 token carries aud = the client id; a v1 token carries aud = api://<clientId>.
 const audiences = [clientId ?? '', `api://${clientId ?? ''}`];
 
+// Optional allowlist of application ids permitted to call as the agent via an
+// app-only Entra token. Comma-separated. Leave unset to accept any app token
+// that already passed issuer + audience verification.
+const allowedAppIds = (process.env.AGENT_ALLOWED_APP_IDS ?? '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
 const jwks = entraAuthEnabled
   ? createRemoteJWKSet(
       new URL(`https://login.microsoftonline.com/${tenantId}/discovery/v2.0/keys`),
@@ -75,6 +90,24 @@ async function verifyBearer(token: string): Promise<AuthUser> {
     issuer,
     audience: audiences,
   });
+
+  // App-only (agent) token — issued via client credentials / workload-identity
+  // federation, so there is no delegated user. Identify by idtyp === 'app', or an
+  // app id (azp/appid) with no delegated scope (scp). Treated as a SERVICE call,
+  // so Conditional Access on the agent identity governs these requests.
+  const appId =
+    (typeof payload.azp === 'string' && payload.azp) ||
+    (typeof payload.appid === 'string' && payload.appid) ||
+    undefined;
+  const isAppOnly =
+    payload.idtyp === 'app' || (appId !== undefined && typeof payload.scp !== 'string');
+  if (isAppOnly) {
+    if (allowedAppIds.length > 0 && (!appId || !allowedAppIds.includes(appId))) {
+      throw new Error('Application is not authorized to call this API.');
+    }
+    return { kind: 'service', appId, bearer: token };
+  }
+
   return {
     kind: 'user',
     oid: typeof payload.oid === 'string' ? payload.oid : undefined,

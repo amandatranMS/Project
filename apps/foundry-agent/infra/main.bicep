@@ -89,6 +89,9 @@ param enableCapabilityHost bool
 @description('Enable monitoring for the AI project')
 param enableMonitoring bool
 
+@description('Create a user-assigned managed identity for the hosted agent to federate onto its Entra Agent ID blueprint.')
+param enableAgentIdentity bool = true
+
 @description('When true, skip Foundry project/role/connection provisioning and reference the existing project read-only. Use when pointing at an existing Foundry project via --project-id.')
 param useExistingAiProject bool = false
 
@@ -205,6 +208,19 @@ module acrForExistingProject 'core/host/acr.bicep' = if (shouldCreateAcrForExist
   }
 }
 
+// User-assigned managed identity for the hosted agent's Entra Agent ID.
+// Federate this identity's principalId onto the agent blueprint (no secret to
+// manage). The agent runtime picks it up via DefaultAzureCredential().
+module agentIdentity 'core/security/agent-identity.bicep' = if (enableAgentIdentity) {
+  scope: rg
+  name: 'agent-identity'
+  params: {
+    location: location
+    tags: tags
+    resourceName: 'id-${uniqueString(subscription().id, resourceGroupName, location)}'
+  }
+}
+
 // Resources
 output AZURE_RESOURCE_GROUP string = resourceGroupName
 output AZURE_AI_ACCOUNT_ID string = useExistingAiProject ? existingAiProject.outputs.accountId : aiProject.outputs.accountId
@@ -246,3 +262,11 @@ output AZURE_STORAGE_ACCOUNT_NAME string = useExistingAiProject ? existingAiProj
 
 // Connections
 output AI_PROJECT_CONNECTION_IDS_JSON string = useExistingAiProject ? string(existingAiProject.outputs.connectionIds) : string(aiProject.outputs.connectionIds)
+
+// Agent identity — federate the principalId onto the Entra Agent ID blueprint
+// as the FIC subject (audience api://AzureADTokenExchange). clientId is used by
+// the agent runtime (DefaultAzureCredential) to select this identity.
+output AZURE_AGENT_IDENTITY_NAME string = enableAgentIdentity ? agentIdentity.outputs.name : ''
+output AZURE_AGENT_IDENTITY_PRINCIPAL_ID string = enableAgentIdentity ? agentIdentity.outputs.principalId : ''
+output AZURE_AGENT_IDENTITY_CLIENT_ID string = enableAgentIdentity ? agentIdentity.outputs.clientId : ''
+output AZURE_AGENT_IDENTITY_RESOURCE_ID string = enableAgentIdentity ? agentIdentity.outputs.resourceId : ''

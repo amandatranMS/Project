@@ -44,6 +44,9 @@
       "enableMonitoring": {
         "value": "${ENABLE_MONITORING=true}"
       },
+      "enableAgentIdentity": {
+        "value": "${ENABLE_AGENT_IDENTITY=true}"
+      },
       "enableHostedAgents": {
         "value": "${ENABLE_HOSTED_AGENTS=false}"
       },

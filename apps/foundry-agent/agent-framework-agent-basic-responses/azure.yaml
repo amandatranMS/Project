@@ -26,6 +26,12 @@ services:
               value: ${MSX_API_BASE_URL}
             - name: API_KEY
               value: ${MSX_API_KEY}
+            - name: AAD_TENANT_ID
+              value: ${AAD_TENANT_ID}
+            - name: AGENT_APP_CLIENT_ID
+              value: ${AGENT_APP_CLIENT_ID}
+            - name: MSX_API_SCOPE
+              value: ${MSX_API_SCOPE}
         kind: hosted
         metadata:
             tags:
