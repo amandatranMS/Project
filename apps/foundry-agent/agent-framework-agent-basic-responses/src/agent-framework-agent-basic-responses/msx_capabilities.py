@@ -371,15 +371,26 @@ def create_opportunity(
     salesStage: Annotated[str | None, Field(description=f"One of: {SALES_STAGES}.")] = None,
     status: Annotated[str | None, Field(description=f"One of: {OPPORTUNITY_STATUSES}.")] = None,
 ) -> Any:
-    """Create a new opportunity."""
-    payload = {
+    """Request creation of a new opportunity. This does NOT create anything — it
+    submits an approval request that a human must approve in the Approvals log
+    before the opportunity is created."""
+    fields = {
         "opportunityName": opportunityName,
         "customerName": customerName,
         "salesStage": salesStage,
         "status": status,
     }
-    payload = {k: v for k, v in payload.items() if v is not None}
-    return _trim_opportunity(_mc.post("/api/opportunities", json=payload))
+    fields = {k: v for k, v in fields.items() if v is not None}
+    action = {"kind": "CreateOpportunity", **fields}
+    try:
+        appr = _submit_action_approval(f"Create opportunity {opportunityName}", action)
+        return {
+            "submittedForApproval": True,
+            "approvalRequestBusinessId": (appr or {}).get("approvalRequestBusinessId"),
+            "note": "Pending human approval in the Approvals log. The opportunity is NOT created until a human approves.",
+        }
+    except Exception as e:
+        return {"error": f"Failed to submit opportunity creation for approval: {e}"}
 
 
 def update_opportunity(
@@ -759,6 +770,27 @@ def propose_milestone_for_approval(
 def list_pending_approvals() -> Any:
     """List approval requests still awaiting a human decision (approvalStatus = Pending)."""
     data = _mc.get("/api/approval-requests", params={"approvalStatus": "Pending"}) or []
+    return [_trim_approval(a) for a in data]
+
+
+def list_approvals(
+    approvalStatus: Annotated[
+        str | None,
+        Field(
+            description=(
+                "Optional status filter. One of: Pending, Approved, Rejected, "
+                "Needs Changes. Omit to list every approval request across all "
+                "statuses (the full governance history)."
+            ),
+        ),
+    ] = None,
+) -> Any:
+    """List approval requests in the governance queue, optionally filtered by status
+    (Pending, Approved, Rejected, Needs Changes). Read-only visibility into the approval
+    pipeline and each request's disposition (what action it will perform and whether a
+    human has decided it yet). This NEVER approves, rejects, or changes anything."""
+    params = {"approvalStatus": approvalStatus} if approvalStatus else None
+    data = _mc.get("/api/approval-requests", params=params) or []
     return [_trim_approval(a) for a in data]
 
 

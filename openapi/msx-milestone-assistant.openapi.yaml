@@ -14,10 +14,12 @@ info:
       success: { "success": true, "data": ... }
       error:   { "success": false, "error": "Plain language error message" }
 
-    Governance: a real milestone is created only when a human decides an approval
-    request via PATCH /api/approval-requests/{id}/approve, which performs the mock
-    milestone writeback and records it in the Agent Action Audit Log as
-    "CreateMilestone". reject / needs-changes never create a milestone.
+    Governance: agent-initiated writes — including creating a milestone or an
+    opportunity — happen only when a human decides an approval request via PATCH
+    /api/approval-requests/{id}/approve. Approving executes the request's deferred
+    action (create/update/delete, email, or Teams) or performs the mock milestone
+    writeback for a recommendation-backed request, and records it in the Agent
+    Action Audit Log. reject / needs-changes never execute anything.
 servers:
   - url: http://localhost:4000
     description: Local mock server (replace with your public tunnel URL when connecting an agent, then run `npm run openapi:json`)
@@ -216,7 +218,8 @@ paths:
       description: >
         Each row includes a sanitized `pendingAction` decoded from the stored
         deferred action. CreateMilestone actions expose their mock business fields
-        as `milestoneFields` for human review, and UpdateMilestone exposes
+        as `milestoneFields` and CreateOpportunity actions expose theirs as
+        `opportunityFields` for human review, and UpdateMilestone exposes
         `milestoneStatus` for the "Lost To Competitor" warning. Sensitive message
         bodies and all other raw deferred action payloads are not exposed.
       parameters: [{ in: query, name: approvalStatus, schema: { type: string } }]
@@ -225,7 +228,7 @@ paths:
       tags: [Approval Requests]
       summary: >
         Create an approval request. May carry a deferred `action` (CreateMilestone,
-        SendOutlookMail, NotifyTeams, UpdateMilestone, UpdateOpportunity,
+        CreateOpportunity, SendOutlookMail, NotifyTeams, UpdateMilestone, UpdateOpportunity,
         UpdateDealTeamMember, or DeleteMilestone) that the API executes ONLY when a human approves the
         request. This is how agent writes/sends are gated.
       requestBody:
@@ -246,6 +249,7 @@ paths:
                     depend on `kind`: send actions use to/subject/body/message;
                     CreateMilestone uses a complete MilestoneInput payload plus
                     competitorBlankConfirmed;
+                    CreateOpportunity uses an OpportunityInput payload (opportunityName required);
                     UpdateMilestone uses milestoneId + any MilestoneInput fields;
                     UpdateOpportunity uses opportunityId + any OpportunityInput fields;
                     UpdateDealTeamMember uses dealTeamMemberId + any DealTeamMemberInput
@@ -254,7 +258,7 @@ paths:
                   properties:
                     kind:
                       type: string
-                      enum: [CreateMilestone, SendOutlookMail, NotifyTeams, UpdateMilestone, UpdateOpportunity, UpdateDealTeamMember, DeleteMilestone]
+                      enum: [CreateMilestone, CreateOpportunity, SendOutlookMail, NotifyTeams, UpdateMilestone, UpdateOpportunity, UpdateDealTeamMember, DeleteMilestone]
                     competitorBlankConfirmed:
                       type: boolean
                       description: >
@@ -295,7 +299,7 @@ paths:
                     preferredAzureRegion: { type: string }
                     comments: { type: string }
                     lastUpdated: { type: string, format: date }
-                    # Opportunity fields (UpdateOpportunity)
+                    # Opportunity fields (UpdateOpportunity / CreateOpportunity)
                     opportunityName: { type: string }
                     tpid: { type: string }
                     customerName: { type: string }
@@ -335,7 +339,7 @@ paths:
       tags: [Approval Requests]
       summary: >
         Approve. If the request carries a deferred action, it is executed now (send
-        email / notify Teams / update a milestone, opportunity, or deal team member /
+        email / notify Teams / create an opportunity / update a milestone, opportunity, or deal team member /
         delete milestone) and audited. Otherwise it performs the mock milestone
         writeback from the related recommendation (audited as CreateMilestone).
         If the action moves a milestone to "Lost To Competitor", an executive-summary

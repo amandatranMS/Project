@@ -3,7 +3,7 @@
   "info": {
     "title": "MSX Milestone Assistant API (Mock)",
     "version": "0.4.0",
-    "description": "REST API for the MSX Milestone Assistant, a SYNTHETIC MOCK application for Solution Engineering opportunity and milestone management. NOT connected to real MSX, Dataverse, Power Platform, or customer data.\nData is imported from the Excel workbook (single source of truth): data/MSX_Mirror_Necessary_Tables_Import_10_More_Entries.xlsx.\nEvery response uses a consistent envelope:\n  success: { \"success\": true, \"data\": ... }\n  error:   { \"success\": false, \"error\": \"Plain language error message\" }\n\nGovernance: a real milestone is created only when a human decides an approval request via PATCH /api/approval-requests/{id}/approve, which performs the mock milestone writeback and records it in the Agent Action Audit Log as \"CreateMilestone\". reject / needs-changes never create a milestone.\n"
+    "description": "REST API for the MSX Milestone Assistant, a SYNTHETIC MOCK application for Solution Engineering opportunity and milestone management. NOT connected to real MSX, Dataverse, Power Platform, or customer data.\nData is imported from the Excel workbook (single source of truth): data/MSX_Mirror_Necessary_Tables_Import_10_More_Entries.xlsx.\nEvery response uses a consistent envelope:\n  success: { \"success\": true, \"data\": ... }\n  error:   { \"success\": false, \"error\": \"Plain language error message\" }\n\nGovernance: agent-initiated writes — including creating a milestone or an opportunity — happen only when a human decides an approval request via PATCH /api/approval-requests/{id}/approve. Approving executes the request's deferred action (create/update/delete, email, or Teams) or performs the mock milestone writeback for a recommendation-backed request, and records it in the Agent Action Audit Log. reject / needs-changes never execute anything.\n"
   },
   "servers": [
     {
@@ -534,7 +534,7 @@
           "Approval Requests"
         ],
         "summary": "List approval requests",
-        "description": "Each row includes a sanitized `pendingAction` decoded from the stored deferred action. CreateMilestone actions expose their mock business fields as `milestoneFields` for human review, and UpdateMilestone exposes `milestoneStatus` for the \"Lost To Competitor\" warning. Sensitive message bodies and all other raw deferred action payloads are not exposed.\n",
+        "description": "Each row includes a sanitized `pendingAction` decoded from the stored deferred action. CreateMilestone actions expose their mock business fields as `milestoneFields` and CreateOpportunity actions expose theirs as `opportunityFields` for human review, and UpdateMilestone exposes `milestoneStatus` for the \"Lost To Competitor\" warning. Sensitive message bodies and all other raw deferred action payloads are not exposed.\n",
         "parameters": [
           {
             "in": "query",
@@ -554,7 +554,7 @@
         "tags": [
           "Approval Requests"
         ],
-        "summary": "Create an approval request. May carry a deferred `action` (CreateMilestone, SendOutlookMail, NotifyTeams, UpdateMilestone, UpdateOpportunity, UpdateDealTeamMember, or DeleteMilestone) that the API executes ONLY when a human approves the request. This is how agent writes/sends are gated.\n",
+        "summary": "Create an approval request. May carry a deferred `action` (CreateMilestone, CreateOpportunity, SendOutlookMail, NotifyTeams, UpdateMilestone, UpdateOpportunity, UpdateDealTeamMember, or DeleteMilestone) that the API executes ONLY when a human approves the request. This is how agent writes/sends are gated.\n",
         "requestBody": {
           "content": {
             "application/json": {
@@ -581,7 +581,7 @@
                   },
                   "action": {
                     "type": "object",
-                    "description": "Optional deferred action executed on approval. The carried fields depend on `kind`: send actions use to/subject/body/message; CreateMilestone uses a complete MilestoneInput payload plus competitorBlankConfirmed; UpdateMilestone uses milestoneId + any MilestoneInput fields; UpdateOpportunity uses opportunityId + any OpportunityInput fields; UpdateDealTeamMember uses dealTeamMemberId + any DealTeamMemberInput fields; DeleteMilestone uses milestoneId.\n",
+                    "description": "Optional deferred action executed on approval. The carried fields depend on `kind`: send actions use to/subject/body/message; CreateMilestone uses a complete MilestoneInput payload plus competitorBlankConfirmed; CreateOpportunity uses an OpportunityInput payload (opportunityName required); UpdateMilestone uses milestoneId + any MilestoneInput fields; UpdateOpportunity uses opportunityId + any OpportunityInput fields; UpdateDealTeamMember uses dealTeamMemberId + any DealTeamMemberInput fields; DeleteMilestone uses milestoneId.\n",
                     "required": [
                       "kind"
                     ],
@@ -590,6 +590,7 @@
                         "type": "string",
                         "enum": [
                           "CreateMilestone",
+                          "CreateOpportunity",
                           "SendOutlookMail",
                           "NotifyTeams",
                           "UpdateMilestone",
@@ -823,7 +824,7 @@
         "tags": [
           "Approval Requests"
         ],
-        "summary": "Approve. If the request carries a deferred action, it is executed now (send email / notify Teams / update a milestone, opportunity, or deal team member / delete milestone) and audited. Otherwise it performs the mock milestone writeback from the related recommendation (audited as CreateMilestone). If the action moves a milestone to \"Lost To Competitor\", an executive-summary email is sent to the reviewer's manager when `acknowledgeManagerEmail` is true.\n",
+        "summary": "Approve. If the request carries a deferred action, it is executed now (send email / notify Teams / create an opportunity / update a milestone, opportunity, or deal team member / delete milestone) and audited. Otherwise it performs the mock milestone writeback from the related recommendation (audited as CreateMilestone). If the action moves a milestone to \"Lost To Competitor\", an executive-summary email is sent to the reviewer's manager when `acknowledgeManagerEmail` is true.\n",
         "parameters": [
           {
             "$ref": "#/components/parameters/IdParam"

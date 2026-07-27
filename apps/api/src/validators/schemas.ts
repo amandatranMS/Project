@@ -152,6 +152,13 @@ export const pendingActionSchema = z.discriminatedUnion('kind', [
       competitorBlankConfirmed: z.boolean(),
     })
     .merge(createMilestoneSchema.omit({ milestoneBusinessId: true, createdBy: true })),
+  // Creating an opportunity is a business-changing action, so it is gated exactly
+  // like the others: the agent submits this and the API creates the opportunity
+  // ONLY when a human approves the request. Business id is omitted so the agent
+  // never chooses one (the service generates it on approval).
+  z
+    .object({ kind: z.literal('CreateOpportunity') })
+    .merge(createOpportunitySchema.omit({ opportunityBusinessId: true })),
   z.object({
     kind: z.literal('SendOutlookMail'),
     to: z.string().email(),

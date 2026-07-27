@@ -76,12 +76,12 @@ allowed to do. This project instead breaks the work into smaller, focused specia
 agents coordinated by an **orchestrator** (see
 [Foundry hosted agent architecture](#foundry-hosted-agent-architecture-high-level)):
 
-- a **milestone specialist** — reads existing milestones and requests updates/deletions
-  (through human approval);
-- a **governance specialist** — proposes new milestones the governed way (recommend →
-  request approval);
-- an **opportunity specialist** — reads/creates opportunities and requests updates to
-  opportunity and deal-team fields;
+- a **milestone specialist** — owns the full milestone lifecycle: reads milestones and
+  requests creations, updates, and deletions (all through human approval);
+- a **governance specialist** — the read-only authority on the approval queue: lists
+  pending approvals and reports approval status/history across every governed action;
+- an **opportunity specialist** — reads opportunities and requests creation of
+  opportunities and updates to opportunity and deal-team fields (through human approval);
 - a **communications specialist** — drafts Outlook email and Teams messages, then
   submits them for human approval; and
 - a **dashboard specialist** — answers aggregate metric and pipeline-health questions.

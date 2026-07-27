@@ -30,6 +30,7 @@ from msx_capabilities import (
     list_deal_team,
     list_milestones,
     list_opportunities,
+    list_approvals,
     list_pending_approvals,
     notify_teams,
     propose_milestone_for_approval,
@@ -65,9 +66,10 @@ _GROUNDING_RULE = (
 # directly. Every such action is submitted as an approval request and a human must
 # approve it in the Approvals log before it executes.
 _APPROVAL_RULE = (
-    " IMPORTANT: You cannot change data or send messages directly. Record "
-    "updates and deletions (milestones, opportunities, deal team members), emails, "
-    "and Teams messages are all SUBMITTED as approval requests. After you call one "
+    " IMPORTANT: You cannot change data or send messages directly. Creating an "
+    "opportunity, record updates and deletions (milestones, opportunities, deal "
+    "team members), emails, and Teams messages are all SUBMITTED as approval "
+    "requests. After you call one "
     "of these tools, it returns submittedForApproval=true and an "
     "approvalRequestBusinessId. STOP and tell the user it is Pending and a human "
     "must approve it in the Approvals log before anything happens. Never claim the "
@@ -132,40 +134,46 @@ def build_subagents(client) -> list[Agent]:
         Agent(
             client=client,
             name="milestone_specialist",
-            description="Handles existing milestones: list, look up, and request updates or deletions (which go through human approval). Cannot create milestones.",
+            description="Owns the full milestone lifecycle: list, look up, and request creation, updates, and deletions of milestones (every change goes through human approval). Never creates or approves directly.",
             instructions=(
-                "You are the Milestone specialist for a SYNTHETIC MOCK MSX workspace. Use your "
-                "tools to read EXISTING milestones, and to REQUEST updates or deletions. Updates "
-                "and deletions are not applied directly — update_milestone and delete_milestone "
-                "submit an approval request that a human must approve in the Approvals log. You "
-                "cannot create milestones — if the user wants a new milestone, tell them it must "
-                "go through the governance flow (recommend -> request approval -> a human "
-                "approves). When the user asks about a specific opportunity's milestones, call "
-                "list_milestones with `opportunity` set to that opportunity's name or business id "
-                "so you return exactly that opportunity's milestones. Report ids and names "
-                "clearly. An identifier beginning with MS- is a milestone business id. Use "
-                "get_milestone and update_milestone for it, including when changing competitorName; "
-                "never treat an MS- identifier as an opportunity." + _APPROVAL_RULE + _CONFIRM_RULE + _GROUNDING_RULE
+                "You are the Milestone specialist for a SYNTHETIC MOCK MSX workspace. You own "
+                "the FULL milestone lifecycle: read EXISTING milestones, and REQUEST creations, "
+                "updates, and deletions. Nothing is applied directly — propose_milestone_for_approval, "
+                "update_milestone, and delete_milestone each submit an approval request that a "
+                "human must approve in the Approvals log. To CREATE a new milestone, drive the "
+                "governed recommend -> request-approval flow: gather a complete, user-confirmed "
+                "field set, then call propose_milestone_for_approval exactly once (it records the "
+                "recommendation and submits the milestone payload in a single step). When the user "
+                "asks about a specific opportunity's milestones, call list_milestones with "
+                "`opportunity` set to that opportunity's name or business id so you return exactly "
+                "that opportunity's milestones. Report ids and names clearly. An identifier "
+                "beginning with MS- is a milestone business id. Use get_milestone and "
+                "update_milestone for it, including when changing competitorName; never treat an "
+                "MS- identifier as an opportunity." + _APPROVAL_RULE + _CONFIRM_RULE + _GROUNDING_RULE + _GOVERNANCE_RULE
             ),
-            tools=[list_milestones, get_milestone, update_milestone, delete_milestone],
+            tools=[list_milestones, get_milestone, propose_milestone_for_approval, update_milestone, delete_milestone],
         ),
         Agent(
             client=client,
             name="governance_specialist",
-            description="Proposes new milestones the governed way: create a recommendation, submit an approval request, and list pending approvals. Never creates or approves milestones.",
+            description="Read-only authority on the approval queue: lists pending approvals and reports approval status/history for every governed action. Never creates, updates, sends, approves, or rejects.",
             instructions=(
-                "You are the Governance specialist for a SYNTHETIC MOCK MSX workspace. New "
-                "milestones are created ONLY after a human approves an approval request, so you "
-                "drive the recommend -> request-approval handoff. Use "
-                "propose_milestone_for_approval once, after the user confirms the complete field "
-                "summary. Use list_pending_approvals to report what is awaiting "
-                "a human. Report the recommendationBusinessId and approvalRequestBusinessId "
-                "clearly. If the tool returns competitor confirmation required, show its "
-                "requiredQuestion to the user and stop. Report capturedFields exactly and never "
-                "claim a user-provided field was unsupported."
-                + _GOVERNANCE_RULE
+                "You are the Governance specialist for a SYNTHETIC MOCK MSX workspace. You are the "
+                "READ-ONLY authority on the APPROVAL QUEUE — the pipeline every governed action "
+                "flows through before it can happen. Use list_pending_approvals to report what is "
+                "still awaiting a human decision, and list_approvals (optionally filtered by "
+                "status: Pending, Approved, Rejected, Needs Changes) to report approval status and "
+                "history across all governed actions. For each request, report its "
+                "approvalRequestBusinessId, requestName, the action it will perform (actionKind), "
+                "the related opportunity/recommendation when present, and its current "
+                "approvalStatus; explain that a human must approve it in the Approvals log before "
+                "anything happens. You do NOT create, update, or delete records, you do NOT send "
+                "messages, and you can NEVER approve or reject a request yourself — approvals are a "
+                "human decision. If the user wants to CREATE or change a milestone, hand off to the "
+                "milestone specialist; to create or change an opportunity or its deal team, hand "
+                "off to the opportunity specialist." + _GROUNDING_RULE
             ),
-            tools=[propose_milestone_for_approval, list_pending_approvals],
+            tools=[list_pending_approvals, list_approvals],
         ),
         Agent(
             client=client,
@@ -181,13 +189,14 @@ def build_subagents(client) -> list[Agent]:
         Agent(
             client=client,
             name="opportunity_specialist",
-            description="Handles opportunities and their deal team: list, look up, create opportunities, and request updates to opportunity or deal-team fields (updates go through human approval).",
+            description="Handles opportunities and their deal team: list, look up, and request creation of opportunities or updates to opportunity/deal-team fields (creation and updates go through human approval). Never creates or approves records directly.",
             instructions=(
                 "You are the Opportunity specialist for a SYNTHETIC MOCK MSX workspace. Use your "
-                "tools to read and create opportunities, and to REQUEST updates to ANY field of "
-                "an opportunity (update_opportunity) or of a deal team member "
-                "(update_deal_team_member). Updates are NOT applied directly — they submit an "
-                "approval request that a human must approve in the Approvals log. To update a "
+                "tools to read opportunities, and to REQUEST creation of a new opportunity "
+                "(create_opportunity) or updates to ANY field of an opportunity "
+                "(update_opportunity) or of a deal team member (update_deal_team_member). "
+                "Creation and updates are NOT applied directly — they submit an approval "
+                "request that a human must approve in the Approvals log. To update a "
                 "deal team member, first call list_deal_team (or get_opportunity) to find the "
                 "member's id, then call update_deal_team_member with only the fields to change. "
                 "Report ids and names clearly. Opportunity business ids begin with OPP-. Never "

@@ -43,6 +43,7 @@ _CAPABILITIES = (
     cap.create_recommendation,
     cap.submit_approval_request,
     cap.list_pending_approvals,
+    cap.list_approvals,
 )
 
 for _fn in _CAPABILITIES:

@@ -8,6 +8,7 @@ import {
   type GraphManager,
   type ManagerEmailOutcome,
   type MilestoneApprovalFields,
+  type OpportunityApprovalFields,
 } from '../api/client';
 import { statusBadgeClass } from '../ui';
 import LostToCompetitorDialog from '../components/LostToCompetitorDialog';
@@ -46,6 +47,25 @@ function displayFieldValue(value: string | number | boolean): string {
   if (typeof value === 'number') return value.toLocaleString();
   return value;
 }
+
+const opportunityFieldLabels: Array<[keyof OpportunityApprovalFields, string]> = [
+  ['opportunityName', 'Opportunity Name'],
+  ['customerName', 'Account'],
+  ['tpid', 'TPID'],
+  ['industry', 'Industry'],
+  ['solutionArea', 'Solution Area'],
+  ['salesStage', 'Sales Stage'],
+  ['status', 'Status'],
+  ['estimatedRevenue', 'Estimated Revenue'],
+  ['closeDate', 'Close Date'],
+  ['aeOwner', 'AE Owner'],
+  ['assignedSE', 'Assigned SE'],
+  ['competitorName', 'Competitor'],
+  ['consumptionPhase', 'Consumption Phase'],
+  ['businessProblem', 'Business Problem'],
+  ['nextStep', 'Next Step'],
+  ['lastUpdated', 'Last Updated'],
+];
 
 export default function Approvals() {
   const { accounts } = useMsal();
@@ -180,6 +200,23 @@ export default function Approvals() {
                     <dl>
                       {milestoneFieldLabels.map(([key, label]) => {
                         const value = a.pendingAction?.milestoneFields?.[key];
+                        if (value === null || value === undefined || value === '') return null;
+                        return (
+                          <div key={key}>
+                            <dt>{label}</dt>
+                            <dd>{displayFieldValue(value)}</dd>
+                          </div>
+                        );
+                      })}
+                    </dl>
+                  </details>
+                )}
+                {a.pendingAction?.opportunityFields && (
+                  <details className="approval-fields">
+                    <summary>Review fields</summary>
+                    <dl>
+                      {opportunityFieldLabels.map(([key, label]) => {
+                        const value = a.pendingAction?.opportunityFields?.[key];
                         if (value === null || value === undefined || value === '') return null;
                         return (
                           <div key={key}>

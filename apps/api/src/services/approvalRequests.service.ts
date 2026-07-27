@@ -60,6 +60,8 @@ function summarizeAction(action: PendingAction): string {
   switch (action.kind) {
     case 'CreateMilestone':
       return `Create milestone "${action.milestoneName}"`;
+    case 'CreateOpportunity':
+      return `Create opportunity "${action.opportunityName}"`;
     case 'SendOutlookMail':
       return `Send email to ${action.to} — "${action.subject}"`;
     case 'NotifyTeams':
@@ -86,6 +88,13 @@ async function executeAction(
     case 'CreateMilestone': {
       const { kind, competitorBlankConfirmed, ...fields } = action;
       return milestonesService.create({ ...fields, createdBy: agentName });
+    }
+    case 'CreateOpportunity': {
+      // A human has now approved the creation, so perform the mock write. Keep
+      // viaAgent=true so the follow-on "notify the team" Teams broadcast stays
+      // its own approval-gated request (Path B) rather than sending directly.
+      const { kind, ...fields } = action;
+      return opportunitiesService.create(fields, actor, true);
     }
     case 'SendOutlookMail':
       return graphService.sendMail(actor, {
@@ -141,11 +150,16 @@ function toPublic<T extends { errorMessage?: string | null }>(row: T) {
     kind: string;
     milestoneStatus?: string | null;
     milestoneFields?: Omit<Extract<PendingAction, { kind: 'CreateMilestone' }>, 'kind' | 'competitorBlankConfirmed'>;
+    opportunityFields?: Omit<Extract<PendingAction, { kind: 'CreateOpportunity' }>, 'kind'>;
   } = { kind: action.kind };
   if (action.kind === 'UpdateMilestone') pendingAction.milestoneStatus = action.milestoneStatus ?? null;
   if (action.kind === 'CreateMilestone') {
     const { kind: _kind, competitorBlankConfirmed: _competitorBlankConfirmed, ...milestoneFields } = action;
     pendingAction.milestoneFields = milestoneFields;
+  }
+  if (action.kind === 'CreateOpportunity') {
+    const { kind: _kind, ...opportunityFields } = action;
+    pendingAction.opportunityFields = opportunityFields;
   }
   return { ...row, errorMessage: summarizeAction(action), pendingAction };
 }
@@ -290,6 +304,12 @@ export const approvalRequestsService = {
       const createdMilestone = pendingAction.kind === 'CreateMilestone'
         ? result as Awaited<ReturnType<typeof milestonesService.create>>
         : null;
+      const createdOpportunity = pendingAction.kind === 'CreateOpportunity'
+        ? result as Awaited<ReturnType<typeof opportunitiesService.create>>
+        : null;
+      // Back-link a newly created opportunity so the approval row and its audit
+      // entry point at the record they produced.
+      const linkedOpportunityId = approval.opportunityId ?? createdOpportunity?.id ?? undefined;
       const updated = await prisma.approvalRequest.update({
         where: { id },
         data: {
@@ -300,6 +320,7 @@ export const approvalRequestsService = {
           mockWritebackStatus: 'Completed',
           errorMessage: approval.errorMessage,
           relatedMilestoneId: createdMilestone?.id,
+          opportunityId: linkedOpportunityId,
         },
       });
       if (createdMilestone && approval.relatedRecommendationId) {
@@ -313,7 +334,7 @@ export const approvalRequestsService = {
         actionType: pendingAction.kind,
         actionName: 'Executed after approval',
         actor: input.reviewedBy,
-        opportunityId: approval.opportunityId,
+        opportunityId: linkedOpportunityId,
         relatedMilestoneId: createdMilestone?.id,
         relatedRecommendationId: approval.relatedRecommendationId,
         securityEvent: pendingAction.kind === 'SendOutlookMail' || pendingAction.kind === 'NotifyTeams',
@@ -324,6 +345,7 @@ export const approvalRequestsService = {
         action: pendingAction.kind,
         result,
         ...(createdMilestone ? { milestone: createdMilestone } : {}),
+        ...(createdOpportunity ? { opportunity: createdOpportunity } : {}),
       };
     }
 

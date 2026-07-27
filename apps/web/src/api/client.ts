@@ -247,6 +247,25 @@ export interface MilestoneApprovalFields {
   lastUpdated?: string | null;
 }
 
+export interface OpportunityApprovalFields {
+  opportunityName: string;
+  tpid?: string | null;
+  customerName?: string | null;
+  industry?: string | null;
+  solutionArea?: string | null;
+  salesStage?: string | null;
+  status?: string | null;
+  estimatedRevenue?: number | null;
+  closeDate?: string | null;
+  aeOwner?: string | null;
+  assignedSE?: string | null;
+  competitorName?: string | null;
+  consumptionPhase?: string | null;
+  businessProblem?: string | null;
+  nextStep?: string | null;
+  lastUpdated?: string | null;
+}
+
 export interface ApprovalRequest {
   id: string;
   approvalRequestBusinessId: string;
@@ -264,6 +283,7 @@ export interface ApprovalRequest {
     kind: string;
     milestoneStatus?: string | null;
     milestoneFields?: MilestoneApprovalFields;
+    opportunityFields?: OpportunityApprovalFields;
   } | null;
 }
 
