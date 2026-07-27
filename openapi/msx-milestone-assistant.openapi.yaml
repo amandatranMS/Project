@@ -126,10 +126,16 @@ paths:
     post:
       tags: [Milestones]
       summary: Create a milestone (connect to an opportunity by name)
+      description: >
+        Creating a milestone with milestoneStatus "Lost To Competitor" requires a
+        non-empty competitorName, otherwise the request is rejected with 422.
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/MilestoneInput' } } }
-      responses: { '201': { description: Created }, '400': { description: Validation error } }
+      responses:
+        '201': { description: Created }
+        '400': { description: Validation error }
+        '422': { description: A competitor is required to create the milestone as "Lost To Competitor" }
   /api/milestones/{id}:
     get:
       tags: [Milestones]
@@ -143,10 +149,14 @@ paths:
         Updating milestoneStatus to "Lost To Competitor" triggers an
         executive-summary email to the seller's manager when
         `acknowledgeManagerEmail` is true (best-effort; never blocks the update).
+        It also REQUIRES a competitor: pass `competitorName` or the milestone must
+        already have one, otherwise the request is rejected with 422.
       parameters: [{ $ref: '#/components/parameters/IdParam' }]
       requestBody:
         content: { application/json: { schema: { $ref: '#/components/schemas/MilestoneInput' } } }
-      responses: { '200': { description: Updated } }
+      responses:
+        '200': { description: Updated }
+        '422': { description: A competitor is required to move the milestone to "Lost To Competitor" }
     delete:
       tags: [Milestones]
       summary: Delete a milestone (status history is also removed)
@@ -166,7 +176,9 @@ paths:
         Changing newStatus to "Lost To Competitor" triggers an executive-summary
         email to the seller's manager when `acknowledgeManagerEmail` is true
         (resolved from Microsoft Entra, audited; best-effort, never blocks the
-        status change).
+        status change). It also REQUIRES a competitor: pass `competitorName` (or
+        the milestone must already have one), otherwise the request is rejected
+        with 422.
       requestBody:
         required: true
         content:
@@ -180,12 +192,20 @@ paths:
                 oldStatus: { type: string }
                 changedBy: { type: string }
                 reason: { type: string }
+                competitorName:
+                  type: string
+                  description: >
+                    Required when newStatus is "Lost To Competitor" and the
+                    milestone has no competitor yet. Saved onto the milestone along
+                    with the status change.
                 acknowledgeManagerEmail:
                   type: boolean
                   description: >
                     Human acknowledgement authorising the manager email when
                     newStatus is "Lost To Competitor".
-      responses: { '201': { description: Created } }
+      responses:
+        '201': { description: Created }
+        '422': { description: A competitor is required to move the milestone to "Lost To Competitor" }
 
   /api/recommendations:
     get:
@@ -264,6 +284,11 @@ paths:
                       description: >
                         For CreateMilestone, must be true when competitorName is empty,
                         confirming the user explicitly chose to leave Competitor blank.
+                        Ignored when milestoneStatus is "Lost To Competitor": that status
+                        always requires a non-empty competitorName and the request is
+                        rejected with 422 otherwise (for both CreateMilestone and
+                        UpdateMilestone, the latter checked against the target milestone's
+                        existing competitor at submit and execution time).
                     # Send actions
                     to: { type: string }
                     subject: { type: string }
@@ -347,7 +372,7 @@ paths:
       parameters: [{ $ref: '#/components/parameters/IdParam' }]
       requestBody:
         content: { application/json: { schema: { $ref: '#/components/schemas/DecisionInput' } } }
-      responses: { '200': { description: Approved (returns approval + created milestone or executed action) }, '409': { description: Already approved } }
+      responses: { '200': { description: Approved (returns approval + created milestone or executed action) }, '409': { description: Already approved }, '422': { description: A competitor is required to move the milestone to "Lost To Competitor" } }
   /api/approval-requests/{id}/reject:
     patch:
       tags: [Approval Requests]

@@ -107,6 +107,18 @@ _GOVERNANCE_RULE = (
     "claim a milestone was created — you cannot approve or reject requests yourself."
 )
 
+# Governance rule: "Lost To Competitor" always requires a competitor. Applies to
+# BOTH creating a milestone with that status and updating one into it.
+_LOST_TO_COMPETITOR_RULE = (
+    " COMPETITOR RULE: A milestone can only be set to 'Lost To Competitor' when a "
+    "competitor is recorded on it. Before proposing to create or update a milestone to "
+    "'Lost To Competitor', ensure competitorName is set — if the milestone has none and "
+    "the user hasn't given one, ask which competitor the deal was lost to and wait for "
+    "their answer. Never infer it, copy the opportunity competitor without explicit "
+    "confirmation, or invent one. The API rejects a 'Lost To Competitor' change with no "
+    "competitor."
+)
+
 _MCP_SERVER_PATH = os.path.join(os.path.dirname(__file__), "msx_mcp_server.py")
 
 
@@ -149,7 +161,7 @@ def build_subagents(client) -> list[Agent]:
                 "that opportunity's milestones. Report ids and names clearly. An identifier "
                 "beginning with MS- is a milestone business id. Use get_milestone and "
                 "update_milestone for it, including when changing competitorName; never treat an "
-                "MS- identifier as an opportunity." + _APPROVAL_RULE + _CONFIRM_RULE + _GROUNDING_RULE + _GOVERNANCE_RULE
+                "MS- identifier as an opportunity." + _APPROVAL_RULE + _CONFIRM_RULE + _GROUNDING_RULE + _GOVERNANCE_RULE + _LOST_TO_COMPETITOR_RULE
             ),
             tools=[list_milestones, get_milestone, propose_milestone_for_approval, update_milestone, delete_milestone],
         ),

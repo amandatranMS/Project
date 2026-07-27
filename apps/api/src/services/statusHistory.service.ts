@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma.js';
 import { HttpError } from '../lib/httpError.js';
 import { genId } from '../lib/ids.js';
+import { assertCompetitorForLostStatus } from '../lib/lostToCompetitor.js';
 import { maybeNotifyManager, type MilestoneNotifyContext } from './managerNotifications.service.js';
 import type { z } from 'zod';
 import type { createStatusHistorySchema } from '../validators/schemas.js';
@@ -25,10 +26,17 @@ export const statusHistoryService = {
     });
     if (!milestone) throw new HttpError(400, `Milestone "${input.milestoneBusinessId}" was not found.`);
 
+    // A competitor supplied here (from the "Lost To Competitor" pop-up) is saved
+    // onto the milestone alongside the status change. Guard against moving to
+    // "Lost To Competitor" without one, considering any competitor already set.
+    const competitorName = input.competitorName?.trim() ? input.competitorName.trim() : undefined;
+    const effectiveCompetitor = competitorName ?? milestone.competitorName;
+    assertCompetitorForLostStatus(input.newStatus, effectiveCompetitor);
+
     const [, history] = await prisma.$transaction([
       prisma.opportunityMilestone.update({
         where: { id: milestone.id },
-        data: { milestoneStatus: input.newStatus },
+        data: { milestoneStatus: input.newStatus, ...(competitorName ? { competitorName } : {}) },
       }),
       prisma.milestoneStatusHistory.create({
         data: {

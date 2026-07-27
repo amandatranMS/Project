@@ -293,6 +293,7 @@
           "Milestones"
         ],
         "summary": "Create a milestone (connect to an opportunity by name)",
+        "description": "Creating a milestone with milestoneStatus \"Lost To Competitor\" requires a non-empty competitorName, otherwise the request is rejected with 422.\n",
         "requestBody": {
           "required": true,
           "content": {
@@ -309,6 +310,9 @@
           },
           "400": {
             "description": "Validation error"
+          },
+          "422": {
+            "description": "A competitor is required to create the milestone as \"Lost To Competitor\""
           }
         }
       }
@@ -338,7 +342,7 @@
           "Milestones"
         ],
         "summary": "Update a milestone",
-        "description": "Updating milestoneStatus to \"Lost To Competitor\" triggers an executive-summary email to the seller's manager when `acknowledgeManagerEmail` is true (best-effort; never blocks the update).\n",
+        "description": "Updating milestoneStatus to \"Lost To Competitor\" triggers an executive-summary email to the seller's manager when `acknowledgeManagerEmail` is true (best-effort; never blocks the update). It also REQUIRES a competitor: pass `competitorName` or the milestone must already have one, otherwise the request is rejected with 422.\n",
         "parameters": [
           {
             "$ref": "#/components/parameters/IdParam"
@@ -356,6 +360,9 @@
         "responses": {
           "200": {
             "description": "Updated"
+          },
+          "422": {
+            "description": "A competitor is required to move the milestone to \"Lost To Competitor\""
           }
         }
       },
@@ -405,7 +412,7 @@
           "Status History"
         ],
         "summary": "Add a status change (moves the milestone to the new status)",
-        "description": "Changing newStatus to \"Lost To Competitor\" triggers an executive-summary email to the seller's manager when `acknowledgeManagerEmail` is true (resolved from Microsoft Entra, audited; best-effort, never blocks the status change).\n",
+        "description": "Changing newStatus to \"Lost To Competitor\" triggers an executive-summary email to the seller's manager when `acknowledgeManagerEmail` is true (resolved from Microsoft Entra, audited; best-effort, never blocks the status change). It also REQUIRES a competitor: pass `competitorName` (or the milestone must already have one), otherwise the request is rejected with 422.\n",
         "requestBody": {
           "required": true,
           "content": {
@@ -435,6 +442,10 @@
                   "reason": {
                     "type": "string"
                   },
+                  "competitorName": {
+                    "type": "string",
+                    "description": "Required when newStatus is \"Lost To Competitor\" and the milestone has no competitor yet. Saved onto the milestone along with the status change.\n"
+                  },
                   "acknowledgeManagerEmail": {
                     "type": "boolean",
                     "description": "Human acknowledgement authorising the manager email when newStatus is \"Lost To Competitor\".\n"
@@ -447,6 +458,9 @@
         "responses": {
           "201": {
             "description": "Created"
+          },
+          "422": {
+            "description": "A competitor is required to move the milestone to \"Lost To Competitor\""
           }
         }
       }
@@ -601,7 +615,7 @@
                       },
                       "competitorBlankConfirmed": {
                         "type": "boolean",
-                        "description": "For CreateMilestone, must be true when competitorName is empty, confirming the user explicitly chose to leave Competitor blank.\n"
+                        "description": "For CreateMilestone, must be true when competitorName is empty, confirming the user explicitly chose to leave Competitor blank. Ignored when milestoneStatus is \"Lost To Competitor\": that status always requires a non-empty competitorName and the request is rejected with 422 otherwise (for both CreateMilestone and UpdateMilestone, the latter checked against the target milestone's existing competitor at submit and execution time).\n"
                       },
                       "to": {
                         "type": "string"
@@ -845,6 +859,9 @@
           },
           "409": {
             "description": "Already approved"
+          },
+          "422": {
+            "description": "A competitor is required to move the milestone to \"Lost To Competitor\""
           }
         }
       }

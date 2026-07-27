@@ -244,7 +244,7 @@ def get_milestone(
 def update_milestone(
     id: Annotated[str, Field(description="The milestone id or business id (e.g. MS-001) to update.")],
     milestoneName: Annotated[str | None, Field(description="New name.")] = None,
-    milestoneStatus: Annotated[str | None, Field(description=f"One of: {MILESTONE_STATUSES}.")] = None,
+    milestoneStatus: Annotated[str | None, Field(description=f"One of: {MILESTONE_STATUSES}. Setting 'Lost To Competitor' REQUIRES a competitorName — ask the user which competitor if the milestone doesn't already have one.")] = None,
     milestoneCategory: Annotated[str | None, Field(description=f"One of: {MILESTONE_CATEGORIES}.")] = None,
     owner: Annotated[str | None, Field(description="New owner name.")] = None,
     workload: Annotated[str | None, Field(description=f"One of: {WORKLOADS}.")] = None,
@@ -302,15 +302,31 @@ def update_milestone(
     fields = {k: v for k, v in fields.items() if v is not None}
     if not fields:
         return {"error": "Provide at least one field to update."}
+
+    # Fetch the milestone once: used to name the opportunity on the approval and,
+    # for "Lost To Competitor", to check whether a competitor is already recorded.
+    milestone = None
+    try:
+        milestone = _mc.get(f"/api/milestones/{id}")
+    except Exception:
+        milestone = None
+
+    # HARD RULE: a milestone can only be marked "Lost To Competitor" with a
+    # competitor. If none is supplied and the milestone has none, ask the user
+    # which competitor before submitting anything for approval.
+    if fields.get("milestoneStatus") == "Lost To Competitor":
+        supplied = (competitorName or "").strip()
+        existing = (milestone.get("competitorName") or "").strip() if isinstance(milestone, dict) else ""
+        if not supplied and not existing:
+            return {
+                "error": 'A competitor is required to mark a milestone "Lost To Competitor".',
+                "requiredQuestion": "Which competitor was this milestone lost to?",
+            }
+
     changes = ", ".join(f"{k}={v}" for k, v in fields.items())
     action = {"kind": "UpdateMilestone", "milestoneId": id, **fields}
     try:
-        opp = None
-        try:
-            m = _mc.get(f"/api/milestones/{id}")
-            opp = (m.get("opportunity") or {}).get("opportunityName") if isinstance(m, dict) else None
-        except Exception:
-            opp = None
+        opp = (milestone.get("opportunity") or {}).get("opportunityName") if isinstance(milestone, dict) else None
         appr = _submit_action_approval(f"Update milestone {id}: {changes}", action, opportunity_name=opp)
         return {
             "submittedForApproval": True,

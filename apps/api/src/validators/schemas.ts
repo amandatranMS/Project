@@ -4,6 +4,7 @@ import {
   SALES_STAGES,
   OPPORTUNITY_STATUSES,
   MILESTONE_STATUSES,
+  LOST_TO_COMPETITOR,
   WORKLOADS,
   CUSTOMER_COMMITMENTS,
   DELIVERED_BY,
@@ -87,6 +88,9 @@ export const createStatusHistorySchema = z.object({
   oldStatus: z.enum(MILESTONE_STATUSES).optional().nullable(),
   changedBy: z.string().min(1),
   reason: nstr,
+  // Lets the "Lost To Competitor" pop-up record the competitor in the same
+  // request when the milestone has none yet (see statusHistoryService.create).
+  competitorName: nstr,
 });
 
 // ---- Recommendations ----
@@ -197,6 +201,22 @@ export const pendingActionSchema = z.discriminatedUnion('kind', [
       code: z.ZodIssueCode.custom,
       path: ['competitorBlankConfirmed'],
       message: 'Ask the user to confirm before leaving competitor empty.',
+    });
+  }
+  // A competitor is mandatory (never just "confirmed blank") whenever the
+  // milestone is being set to "Lost To Competitor". UpdateMilestone can't be
+  // fully checked here because the existing milestone may already carry a
+  // competitor — that case is enforced in approvalRequestsService.create and in
+  // milestonesService.update.
+  if (
+    action.kind === 'CreateMilestone' &&
+    action.milestoneStatus === LOST_TO_COMPETITOR &&
+    !action.competitorName?.trim()
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['competitorName'],
+      message: 'A competitor is required to create a milestone as "Lost To Competitor".',
     });
   }
 });

@@ -63,6 +63,8 @@ export default function MilestoneForm({ initial, defaultOpportunityName, onClose
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmingLost, setConfirmingLost] = useState(false);
+  const [requireCompetitor, setRequireCompetitor] = useState(false);
+  const [notifyManager, setNotifyManager] = useState(true);
   const [managerName, setManagerName] = useState<string | null>(null);
 
   useEffect(() => {
@@ -102,10 +104,11 @@ export default function MilestoneForm({ initial, defaultOpportunityName, onClose
     };
   }
 
-  async function doSave(acknowledgeManagerEmail: boolean) {
+  async function doSave(acknowledgeManagerEmail: boolean, competitorOverride?: string) {
     setBusy(true);
     setError(null);
     const body = buildBody();
+    if (competitorOverride) body.competitorName = competitorOverride;
     try {
       if (editing && initial) {
         await api.patch(`/milestones/${initial.id}`, { ...body, acknowledgeManagerEmail });
@@ -121,20 +124,37 @@ export default function MilestoneForm({ initial, defaultOpportunityName, onClose
     }
   }
 
+  /** Best-effort: name the manager in the pop-up (falls back to generic copy). */
+  function resolveManager() {
+    setManagerName(null);
+    api
+      .get<{ manager: GraphManager | null }>('/graph/manager')
+      .then((r) => setManagerName(r.manager?.displayName ?? r.manager?.mail ?? null))
+      .catch(() => setManagerName(null));
+  }
+
   function save() {
     setError(null);
+    const settingLost = clean(form.milestoneStatus) === LOST_TO_COMPETITOR;
+    const competitorMissing = !clean(form.competitorName);
     // A real transition INTO Lost To Competitor (edit only — creating a new
-    // milestone doesn't trigger the manager email) needs an acknowledgement.
-    const movingToLost =
-      editing &&
-      initial?.milestoneStatus !== LOST_TO_COMPETITOR &&
-      clean(form.milestoneStatus) === LOST_TO_COMPETITOR;
+    // milestone doesn't trigger the manager email) sends the manager email.
+    const movingToLost = editing && initial?.milestoneStatus !== LOST_TO_COMPETITOR && settingLost;
+
+    // A competitor is mandatory for Lost To Competitor. When it's missing, the
+    // pop-up must collect it (and also carry the manager-email ack on a real
+    // transition).
+    if (settingLost && competitorMissing) {
+      setRequireCompetitor(true);
+      setNotifyManager(movingToLost);
+      if (movingToLost) resolveManager();
+      setConfirmingLost(true);
+      return;
+    }
     if (movingToLost) {
-      setManagerName(null);
-      api
-        .get<{ manager: GraphManager | null }>('/graph/manager')
-        .then((r) => setManagerName(r.manager?.displayName ?? r.manager?.mail ?? null))
-        .catch(() => setManagerName(null));
+      setRequireCompetitor(false);
+      setNotifyManager(true);
+      resolveManager();
       setConfirmingLost(true);
       return;
     }
@@ -201,9 +221,11 @@ export default function MilestoneForm({ initial, defaultOpportunityName, onClose
       {confirmingLost && (
         <LostToCompetitorDialog
           managerName={managerName}
+          requireCompetitor={requireCompetitor}
+          notifyManager={notifyManager}
           busy={busy}
           onCancel={() => setConfirmingLost(false)}
-          onConfirm={() => void doSave(true)}
+          onConfirm={(competitor) => void doSave(notifyManager, competitor)}
         />
       )}
     </Modal>

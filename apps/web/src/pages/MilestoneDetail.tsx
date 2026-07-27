@@ -27,6 +27,7 @@ export default function MilestoneDetail() {
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [confirmingLost, setConfirmingLost] = useState(false);
+  const [requireCompetitor, setRequireCompetitor] = useState(false);
   const [managerName, setManagerName] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -58,6 +59,9 @@ export default function MilestoneDetail() {
     setNotice(null);
     setError(null);
     if (newStatus === LOST_TO_COMPETITOR) {
+      // A competitor is mandatory for this status — require it in the pop-up when
+      // the milestone doesn't already have one.
+      setRequireCompetitor(!data?.competitorName?.trim());
       // Best-effort: name the manager in the pop-up (falls back to generic copy).
       setManagerName(null);
       api
@@ -70,7 +74,7 @@ export default function MilestoneDetail() {
     void changeStatus(newStatus);
   }
 
-  async function changeStatus(newStatus: string, acknowledgeManagerEmail = false) {
+  async function changeStatus(newStatus: string, acknowledgeManagerEmail = false, competitorName?: string) {
     if (!data) return;
     setBusy(true);
     try {
@@ -80,6 +84,7 @@ export default function MilestoneDetail() {
         changedBy: signedInName,
         reason: 'Manual update from UI',
         acknowledgeManagerEmail,
+        ...(competitorName ? { competitorName } : {}),
       });
       setConfirmingLost(false);
       const outcome = res?.managerEmail;
@@ -189,9 +194,10 @@ export default function MilestoneDetail() {
       {confirmingLost && (
         <LostToCompetitorDialog
           managerName={managerName}
+          requireCompetitor={requireCompetitor}
           busy={busy}
           onCancel={() => setConfirmingLost(false)}
-          onConfirm={() => void changeStatus(LOST_TO_COMPETITOR, true)}
+          onConfirm={(competitor) => void changeStatus(LOST_TO_COMPETITOR, true, competitor)}
         />
       )}
 

@@ -3,6 +3,8 @@ import { HttpError } from '../lib/httpError.js';
 import { genId } from '../lib/ids.js';
 import { connectOpportunity, connectMilestone, connectRecommendation } from '../lib/connect.js';
 import { recordAgentAction } from '../lib/audit.js';
+import { assertCompetitorForLostStatus } from '../lib/lostToCompetitor.js';
+import { LOST_TO_COMPETITOR } from '@msx/shared';
 import type { AuthUser } from '../lib/entraAuth.js';
 import { currentOwnerId, ownerScopeWhere } from '../lib/requestContext.js';
 import { graphService } from './graph.service.js';
@@ -187,6 +189,24 @@ export const approvalRequestsService = {
 
   async create(input: CreateInput) {
     const { approvalRequestBusinessId, opportunityName, relatedRecommendationBusinessId, relatedMilestoneBusinessId, action, ...rest } = input;
+
+    // Fast-fail: refuse to even queue an UpdateMilestone that would move a
+    // milestone to "Lost To Competitor" without a competitor. The action may
+    // omit competitorName when the milestone already carries one, so fall back
+    // to the stored value. (CreateMilestone is enforced in the schema.)
+    if (action?.kind === 'UpdateMilestone' && action.milestoneStatus === LOST_TO_COMPETITOR) {
+      const supplied = action.competitorName?.trim() ? action.competitorName : undefined;
+      const existingCompetitor = supplied
+        ? undefined
+        : (
+            await prisma.opportunityMilestone.findFirst({
+              where: { OR: [{ id: action.milestoneId }, { milestoneBusinessId: action.milestoneId }] },
+              select: { competitorName: true },
+            })
+          )?.competitorName;
+      assertCompetitorForLostStatus(action.milestoneStatus, supplied ?? existingCompetitor);
+    }
+
     const row = await prisma.approvalRequest.create({
       data: {
         ...rest,

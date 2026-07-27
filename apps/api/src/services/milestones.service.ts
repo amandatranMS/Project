@@ -3,6 +3,7 @@ import { HttpError } from '../lib/httpError.js';
 import { genId } from '../lib/ids.js';
 import { connectOpportunity } from '../lib/connect.js';
 import { recordAgentAction } from '../lib/audit.js';
+import { assertCompetitorForLostStatus } from '../lib/lostToCompetitor.js';
 import { maybeNotifyManager, type MilestoneNotifyContext } from './managerNotifications.service.js';
 import type { z } from 'zod';
 import type { createMilestoneSchema, updateMilestoneSchema } from '../validators/schemas.js';
@@ -48,6 +49,9 @@ export const milestonesService = {
     const opportunity = await prisma.opportunity.findUnique({ where: { opportunityName } });
     if (!opportunity) throw new HttpError(400, `Opportunity "${opportunityName}" was not found.`);
 
+    // A milestone can only be created as "Lost To Competitor" with a competitor.
+    assertCompetitorForLostStatus(input.milestoneStatus, input.competitorName);
+
     const milestone = await prisma.opportunityMilestone.create({
       data: {
         ...rest,
@@ -77,6 +81,19 @@ export const milestonesService = {
       where: { OR: [{ id }, { milestoneBusinessId: id }] },
     });
     if (!existing) throw new HttpError(404, 'Milestone not found.');
+
+    // Enforce the "Lost To Competitor" competitor requirement on the resulting
+    // record — but only when this write actually touches the status or the
+    // competitor, so unrelated edits to a pre-existing lost milestone aren't
+    // blocked. `undefined` means "field not provided" (leave as-is).
+    const statusTouched = input.milestoneStatus !== undefined;
+    const competitorTouched = input.competitorName !== undefined;
+    if (statusTouched || competitorTouched) {
+      const resultingStatus = statusTouched ? input.milestoneStatus : existing.milestoneStatus;
+      const resultingCompetitor = competitorTouched ? input.competitorName : existing.competitorName;
+      assertCompetitorForLostStatus(resultingStatus, resultingCompetitor);
+    }
+
     const { estDate, blockedSince, expectedResolutionDate, lastUpdated, ...rest } = input;
     const milestone = await prisma.opportunityMilestone.update({
       where: { id: existing.id },
