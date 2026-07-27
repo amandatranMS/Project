@@ -8,11 +8,14 @@ import type { createDealTeamMemberSchema, updateDealTeamMemberSchema } from '../
 type CreateInput = z.infer<typeof createDealTeamMemberSchema>;
 type UpdateInput = z.infer<typeof updateDealTeamMemberSchema>;
 
+/** Owns deal-team membership changes and audits governed updates. */
 export const dealTeamMembersService = {
+  /** List members, optionally for one opportunity, in stable business-id order. */
   list(where: { opportunityId?: string }) {
     return prisma.dealTeamMember.findMany({ where, orderBy: { dealTeamMemberBusinessId: 'asc' } });
   },
 
+  /** Create a member only when the supplied opportunity name resolves uniquely. */
   async create(input: CreateInput) {
     const { dealTeamMemberBusinessId, opportunityName, addedDate, ...rest } = input;
     const opportunity = await prisma.opportunity.findUnique({ where: { opportunityName } });
@@ -27,6 +30,7 @@ export const dealTeamMembersService = {
     });
   },
 
+  /** Accept an internal or business id, apply partial fields, then audit what changed. */
   async update(id: string, input: UpdateInput, actor?: string) {
     const existing = await prisma.dealTeamMember.findFirst({
       where: { OR: [{ id }, { dealTeamMemberBusinessId: id }] },

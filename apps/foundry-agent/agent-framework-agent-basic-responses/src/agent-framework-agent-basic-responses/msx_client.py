@@ -57,7 +57,11 @@ class MsxClient:
         ).strip()
         agent_app_client_id = os.environ.get("AGENT_APP_CLIENT_ID", "").strip()
         if tenant and agent_app_client_id:
-            # Federate the hosted managed identity into the agent's Agent ID app.
+            # Federate the hosted managed identity into a *separate* Agent ID app.
+            # NOTE: not usable for Foundry-hosted agents -- their runtime identity is
+            # itself federation-derived, so Entra refuses to use it as a client
+            # assertion (AADSTS700231). Leave AGENT_APP_CLIENT_ID unset there and use
+            # the direct path below.
             managed_identity = DefaultAzureCredential()
             return ClientAssertionCredential(
                 tenant_id=tenant,
@@ -66,7 +70,8 @@ class MsxClient:
                     "api://AzureADTokenExchange/.default"
                 ).token,
             )
-        # Managed identity calls the API directly.
+        # The hosted managed identity (the agent's Agent ID) calls the API directly.
+        # Authorize it with an app role on the API and govern it with Conditional Access.
         return DefaultAzureCredential()
 
     def _apply_bearer(self) -> None:

@@ -14,6 +14,11 @@ import {
 } from '../../validators/schemas.js';
 import type { Tool } from './toolLoop.js';
 
+/**
+ * Adapter layer between model function calls and application services.
+ * Tool schemas constrain model arguments; Zod performs the final runtime check,
+ * and trimmed return shapes keep irrelevant database fields out of prompts.
+ */
 const s = (v: unknown) => (typeof v === 'string' && v ? v : undefined);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

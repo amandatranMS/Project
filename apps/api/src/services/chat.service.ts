@@ -9,6 +9,7 @@ import { HttpError } from '../lib/httpError.js';
 
 export type ChatEngine = 'in-app' | 'foundry';
 
+/** Coordinates one chat turn, user delegation, streaming, and audit attribution. */
 export const chatService = {
   /**
    * Runs one assistant turn.

@@ -22,7 +22,9 @@ const childInclude = {
   auditLogs: { orderBy: { createdAt: 'desc' } },
 } as const;
 
+/** Owns opportunity persistence, related-record views, broadcasts, and write auditing. */
 export const opportunitiesService = {
+  /** List filtered opportunities with milestone counts for summary screens. */
   list(where: { status?: string; salesStage?: string; solutionArea?: string }) {
     return prisma.opportunity.findMany({
       where,
@@ -31,6 +33,7 @@ export const opportunitiesService = {
     });
   },
 
+  /** Load the detail-screen projection by internal id or workbook business id. */
   get(id: string) {
     // Accept either the internal id or the business id (e.g. "OPP-002").
     return prisma.opportunity.findFirst({

@@ -17,7 +17,9 @@ type UpdateInput = z.infer<typeof updateMilestoneSchema>;
  */
 export type MilestoneUpdateContext = MilestoneNotifyContext;
 
+/** Owns milestone CRUD, relationship checks, write auditing, and status side effects. */
 export const milestonesService = {
+  /** List milestones with compact parent-opportunity context. */
   list(where: { opportunityId?: string; milestoneStatus?: string }) {
     return prisma.opportunityMilestone.findMany({
       where,
@@ -26,6 +28,7 @@ export const milestonesService = {
     });
   },
 
+  /** Load one milestone and the related records used by its detail screen. */
   get(id: string) {
     return prisma.opportunityMilestone.findFirst({
       where: { OR: [{ id }, { milestoneBusinessId: id }] },
@@ -39,6 +42,7 @@ export const milestonesService = {
     });
   },
 
+  /** Create under an existing opportunity and audit the completed write. */
   async create(input: CreateInput) {
     const { opportunityName, milestoneBusinessId, estDate, blockedSince, expectedResolutionDate, lastUpdated, ...rest } = input;
     const opportunity = await prisma.opportunity.findUnique({ where: { opportunityName } });
@@ -67,6 +71,7 @@ export const milestonesService = {
     return milestone;
   },
 
+  /** Apply a partial update, audit changed fields, then evaluate notification rules. */
   async update(id: string, input: UpdateInput, ctx?: MilestoneUpdateContext) {
     const existing = await prisma.opportunityMilestone.findFirst({
       where: { OR: [{ id }, { milestoneBusinessId: id }] },

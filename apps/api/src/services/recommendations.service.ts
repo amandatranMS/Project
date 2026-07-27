@@ -8,7 +8,9 @@ import type { createRecommendationSchema, updateRecommendationSchema } from '../
 type CreateInput = z.infer<typeof createRecommendationSchema>;
 type UpdateInput = z.infer<typeof updateRecommendationSchema>;
 
+/** Persists AI milestone proposals; recommendations do not perform milestone writeback themselves. */
 export const recommendationsService = {
+  /** List proposals with enough opportunity context for review screens. */
   list(where: { reviewStatus?: string; opportunityId?: string }) {
     return prisma.aiMilestoneRecommendation.findMany({
       where,
@@ -17,6 +19,7 @@ export const recommendationsService = {
     });
   },
 
+  /** Load one proposal together with the records needed for approval review. */
   get(id: string) {
     return prisma.aiMilestoneRecommendation.findUnique({
       where: { id },
@@ -24,6 +27,7 @@ export const recommendationsService = {
     });
   },
 
+  /** Create a proposal and resolve its optional opportunity and milestone links. */
   async create(input: CreateInput) {
     const { recommendationBusinessId, opportunityName, relatedMilestoneBusinessId, suggestedDueDate, ...rest } = input;
     return prisma.aiMilestoneRecommendation.create({
@@ -37,6 +41,7 @@ export const recommendationsService = {
     });
   },
 
+  /** Update reviewable fields without executing the proposed change. */
   async update(id: string, input: UpdateInput) {
     const existing = await prisma.aiMilestoneRecommendation.findUnique({ where: { id } });
     if (!existing) throw new HttpError(404, 'Recommendation not found.');

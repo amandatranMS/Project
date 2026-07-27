@@ -7,7 +7,9 @@ import type { createStatusHistorySchema } from '../validators/schemas.js';
 
 type CreateInput = z.infer<typeof createStatusHistorySchema>;
 
+/** Keeps a milestone's current status and append-only transition history consistent. */
 export const statusHistoryService = {
+  /** Return newest transitions, optionally limited to one milestone. */
   list(where: { milestoneId?: string }) {
     return prisma.milestoneStatusHistory.findMany({
       where,

@@ -5,6 +5,7 @@ import type { createSnapshotSchema } from '../validators/schemas.js';
 
 type CreateInput = z.infer<typeof createSnapshotSchema>;
 
+/** Computes live dashboard aggregates and stores optional historical snapshots. */
 export const dashboardService = {
   /** Live summary metrics computed from the imported workbook data. */
   async summary() {
@@ -31,6 +32,7 @@ export const dashboardService = {
     return prisma.dashboardMetricSnapshot.findMany({ orderBy: { snapshotName: 'asc' }, take: 200 });
   },
 
+  /** Persist caller-supplied metrics as a point-in-time snapshot stamped by the server. */
   createSnapshot(input: CreateInput) {
     const { snapshotName, ...rest } = input;
     return prisma.dashboardMetricSnapshot.create({
