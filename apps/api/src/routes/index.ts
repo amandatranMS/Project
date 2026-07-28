@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { dashboardController } from '../controllers/dashboard.controller.js';
+import { searchController } from '../controllers/search.controller.js';
 import opportunities from './opportunities.routes.js';
 import milestones from './milestones.routes.js';
 import statusHistory from './statusHistory.routes.js';
@@ -38,6 +39,9 @@ api.use('/agent-run-logs', agentRunLogs);
 api.use('/agent-action-audit-logs', agentActionAuditLogs);
 api.use('/chat', chat);
 api.use('/graph', graph);
+
+// Universal "look up ANY field" search across the global business records.
+api.get('/search', searchController.search);
 
 // Dashboard (two base paths per the spec).
 api.get('/dashboard/summary', dashboardController.summary);

@@ -34,6 +34,7 @@ from msx_capabilities import (
     list_pending_approvals,
     notify_teams,
     propose_milestone_for_approval,
+    search_records,
     send_email,
     update_deal_team_member,
     update_milestone,
@@ -119,8 +120,21 @@ _LOST_TO_COMPETITOR_RULE = (
     "competitor."
 )
 
-_MCP_SERVER_PATH = os.path.join(os.path.dirname(__file__), "msx_mcp_server.py")
+# Lookup rule: how to find a record by ANY field value (not just an id). This is
+# what lets the agent answer "look up TPID-1001", "find Contoso's opportunity",
+# "which milestone is owned by X" instead of failing an id-only lookup.
+_SEARCH_RULE = (
+    " LOOKUP BY ANY FIELD: when the user refers to a record by a value that is NOT an "
+    "OPP-/MS- id — a TPID (e.g. TPID-1001), customer, industry, sales stage, AE/SE or "
+    "owner, competitor, region, date, amount, or any other field — call search_records "
+    "with that value to find the matching record(s) across every field before doing "
+    "anything else. Only pass `entity` or `field` to narrow when the user clearly means "
+    "one record type or one field. Never claim a record does not exist until a "
+    "search_records call with the relevant term has returned no matches; report exactly "
+    "what it returned (each hit lists the _matchedFields that matched)."
+)
 
+_MCP_SERVER_PATH = os.path.join(os.path.dirname(__file__), "msx_mcp_server.py")
 
 def _dashboard_tools() -> list:
     """Return the dashboard specialist's tools.
@@ -146,7 +160,7 @@ def build_subagents(client) -> list[Agent]:
         Agent(
             client=client,
             name="milestone_specialist",
-            description="Owns the full milestone lifecycle: list, look up, and request creation, updates, and deletions of milestones (every change goes through human approval). Never creates or approves directly.",
+            description="Owns the full milestone lifecycle: list, search by ANY field, look up, and request creation, updates, and deletions of milestones (every change goes through human approval). Never creates or approves directly.",
             instructions=(
                 "You are the Milestone specialist for a SYNTHETIC MOCK MSX workspace. You own "
                 "the FULL milestone lifecycle: read EXISTING milestones, and REQUEST creations, "
@@ -158,12 +172,15 @@ def build_subagents(client) -> list[Agent]:
                 "recommendation and submits the milestone payload in a single step). When the user "
                 "asks about a specific opportunity's milestones, call list_milestones with "
                 "`opportunity` set to that opportunity's name or business id so you return exactly "
-                "that opportunity's milestones. Report ids and names clearly. An identifier "
+                "that opportunity's milestones. To find a milestone (or its parent opportunity) by "
+                "any field value other than an MS- id — an owner, workload, risk, competitor, "
+                "region, date, or the customer/opportunity it belongs to — use search_records. "
+                "Report ids and names clearly. An identifier "
                 "beginning with MS- is a milestone business id. Use get_milestone and "
                 "update_milestone for it, including when changing competitorName; never treat an "
-                "MS- identifier as an opportunity." + _APPROVAL_RULE + _CONFIRM_RULE + _GROUNDING_RULE + _GOVERNANCE_RULE + _LOST_TO_COMPETITOR_RULE
+                "MS- identifier as an opportunity." + _APPROVAL_RULE + _CONFIRM_RULE + _GROUNDING_RULE + _SEARCH_RULE + _GOVERNANCE_RULE + _LOST_TO_COMPETITOR_RULE
             ),
-            tools=[list_milestones, get_milestone, propose_milestone_for_approval, update_milestone, delete_milestone],
+            tools=[list_milestones, get_milestone, search_records, propose_milestone_for_approval, update_milestone, delete_milestone],
         ),
         Agent(
             client=client,
@@ -201,23 +218,28 @@ def build_subagents(client) -> list[Agent]:
         Agent(
             client=client,
             name="opportunity_specialist",
-            description="Handles opportunities and their deal team: list, look up, and request creation of opportunities or updates to opportunity/deal-team fields (creation and updates go through human approval). Never creates or approves records directly.",
+            description="Handles opportunities and their deal team: list, search by ANY field, look up, and request creation of opportunities or updates to opportunity/deal-team fields (creation and updates go through human approval). Never creates or approves records directly.",
             instructions=(
                 "You are the Opportunity specialist for a SYNTHETIC MOCK MSX workspace. Use your "
                 "tools to read opportunities, and to REQUEST creation of a new opportunity "
                 "(create_opportunity) or updates to ANY field of an opportunity "
                 "(update_opportunity) or of a deal team member (update_deal_team_member). "
                 "Creation and updates are NOT applied directly — they submit an approval "
-                "request that a human must approve in the Approvals log. To update a "
+                "request that a human must approve in the Approvals log. To FIND an opportunity "
+                "(or any related record) by any field other than its OPP- id — a TPID such as "
+                "TPID-1001, customer name, industry, sales stage, AE/SE owner, competitor, or "
+                "region — call search_records with that value; it matches across every field and "
+                "returns the full records. To update a "
                 "deal team member, first call list_deal_team (or get_opportunity) to find the "
                 "member's id, then call update_deal_team_member with only the fields to change. "
                 "Report ids and names clearly. Opportunity business ids begin with OPP-. Never "
                 "pass an MS- milestone business id to an opportunity tool; milestone competitor "
-                "updates belong to the milestone specialist." + _APPROVAL_RULE + _CONFIRM_RULE + _GROUNDING_RULE
+                "updates belong to the milestone specialist." + _APPROVAL_RULE + _CONFIRM_RULE + _GROUNDING_RULE + _SEARCH_RULE
             ),
             tools=[
                 list_opportunities,
                 get_opportunity,
+                search_records,
                 create_opportunity,
                 update_opportunity,
                 list_deal_team,

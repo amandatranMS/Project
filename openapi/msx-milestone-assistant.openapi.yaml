@@ -38,6 +38,7 @@ tags:
   - name: Agent Run Logs
   - name: Agent Action Audit Logs
   - name: Dashboard
+  - name: Search
 paths:
   /api/health:
     get: { tags: [Health], summary: Health check, security: [], responses: { '200': { description: OK } } }
@@ -114,6 +115,30 @@ paths:
         '200': { description: Envelope with delivery result (sent/simulated/skipped) }
         '400': { description: No Teams recipient configured }
         '404': { description: Not found }
+
+  /api/search:
+    get:
+      tags: [Search]
+      summary: >
+        Universal "look up ANY field" search across the global business records
+        (opportunities, milestones, status history, recommendations, collaboration
+        notes, deal team members, agent notifications, agent run logs, dashboard
+        snapshots). Matches q case-insensitively as a substring against every scalar
+        field of each record — ids, names, tpid, customer, industry, sales stage,
+        owners (AE/SE), competitor, region, dates, amounts, flags, free text — plus
+        each child row's parent opportunity/milestone. Returns the FULL matching
+        records grouped by entity, each tagged with the field paths that matched
+        (_matchedFields). Read-only, so it is not approval-gated or audited (like the
+        other list/get reads). ApprovalRequest and AgentActionAuditLog are
+        intentionally out of scope here (per-user scoped; use their own endpoints).
+      parameters:
+        - { in: query, name: q, required: true, schema: { type: string }, description: The value to search for (matched across every field). }
+        - { in: query, name: entity, schema: { type: string, enum: [opportunity, milestone, statusHistory, recommendation, note, dealTeam, notification, runLog, snapshot] }, description: Optional record type to restrict to; omit to search all. }
+        - { in: query, name: field, schema: { type: string }, description: 'Optional single field name to match on (e.g. tpid, customerName, aeOwner, competitorName).' }
+        - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 200 }, description: Optional max records returned per entity (default 25). }
+      responses:
+        '200': { description: 'Envelope with grouped results (query, entity, field, totalMatches, results[]).' }
+        '400': { description: Missing q or unknown entity. }
 
   /api/milestones:
     get:

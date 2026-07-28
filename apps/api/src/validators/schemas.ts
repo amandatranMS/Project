@@ -356,6 +356,20 @@ export const chatSchema = z.object({
   engine: z.enum(['in-app', 'foundry']).optional().default('foundry'),
 });
 
+// ---- Universal search ----
+/**
+ * Query params for GET /api/search — the "look up ANY field" capability.
+ * `q` is matched (case-insensitive substring) against every scalar field of the
+ * global business records. `entity` optionally restricts to one record type and
+ * `field` optionally restricts matching to a single field name.
+ */
+export const searchSchema = z.object({
+  q: z.string().trim().min(1, 'Provide a search term (q).'),
+  entity: z.string().trim().min(1).optional(),
+  field: z.string().trim().min(1).optional(),
+  limit: z.coerce.number().int().positive().max(200).optional(),
+});
+
 // ---- Microsoft Graph (send as user) ----
 export const sendMailSchema = z.object({
   to: z.string().email(),

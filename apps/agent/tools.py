@@ -16,6 +16,7 @@ MILESTONE_STATUSES = ["On Track", "At Risk", "Blocked", "Completed", "Cancelled"
 MILESTONE_CATEGORIES = ["Production", "Pilot", "Workshop", "Assessment", "Deployment", "Adoption"]
 SALES_STAGES = ["Listen & Consult", "Inspire & Design", "Empower & Achieve", "Realize Value", "Manage & Optimize"]
 OPPORTUNITY_STATUSES = ["Active", "On Hold", "Won", "Lost", "Closed"]
+SEARCH_ENTITIES = ["opportunity", "milestone", "statusHistory", "recommendation", "note", "dealTeam", "notification", "runLog", "snapshot"]
 
 
 def _trim_milestone(m: dict) -> dict:
@@ -169,8 +170,36 @@ def build_tool_groups(mc: MsxClient) -> dict[str, list[Tool]]:
              }, "required": ["opportunityName"]}, create_opportunity, destructive=True),
     ]
 
+    # ---- Search tool -----------------------------------------------------
+    def search_records(query: str, entity: str | None = None, field: str | None = None, limit: int | None = None) -> Any:
+        params: dict = {"q": query}
+        if entity:
+            params["entity"] = entity
+        if field:
+            params["field"] = field
+        if limit:
+            params["limit"] = limit
+        return mc.get("/api/search", params=params)
+
+    search_tool = Tool(
+        "search_records",
+        "Look up records by ANY field value and return the FULL matching records grouped by "
+        "entity. Matches the query case-insensitively as a substring across every field (ids, "
+        "names, tpid, customer, industry, owners/AE/SE, competitor, region, dates, amounts, "
+        "flags, free text) of the business records. Use it to find a record when you do not have "
+        "its OPP-/MS- id (e.g. a TPID like TPID-1001, a customer, a person, a competitor); always "
+        "try it before saying a record does not exist.",
+        {"type": "object", "properties": {
+            "query": {"type": "string", "description": "The value to search for (matched across every field)."},
+            "entity": {"type": "string", "enum": SEARCH_ENTITIES, "description": "Optional record type to restrict to. Omit to search all."},
+            "field": {"type": "string", "description": "Optional single field name to match on (e.g. tpid, customerName, aeOwner, competitorName)."},
+            "limit": {"type": "integer", "description": "Optional max records per entity (default 25)."},
+        }, "required": ["query"]},
+        search_records,
+    )
+
     return {
-        "milestone": milestone_tools,
+        "milestone": milestone_tools + [search_tool],
         "dashboard": dashboard_tools,
-        "opportunity": opportunity_tools,
+        "opportunity": opportunity_tools + [search_tool],
     }

@@ -7,6 +7,7 @@ import {
 import { milestonesService } from '../milestones.service.js';
 import { dashboardService } from '../dashboard.service.js';
 import { opportunitiesService } from '../opportunities.service.js';
+import { searchService } from '../search.service.js';
 import {
   createMilestoneSchema,
   updateMilestoneSchema,
@@ -169,5 +170,48 @@ export const opportunityTools: Tool[] = [
       // pass viaAgent=true to queue the approval-gated Teams broadcast (Path B).
       return trimOpportunity(await opportunitiesService.create(input, { kind: 'service' }, true));
     },
+  },
+];
+
+// ---- Search tools --------------------------------------------------------
+const toLimit = (v: unknown) => {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? Math.min(200, Math.trunc(n)) : undefined;
+};
+
+export const searchTools: Tool[] = [
+  {
+    name: 'search_records',
+    description:
+      'Look up records by ANY field value and return the FULL matching records. Matches the ' +
+      'query case-insensitively as a substring across every field (ids, names, tpid, customer, ' +
+      'industry, sales stage, owners/AE/SE, competitor, region, dates, amounts, flags, free text) ' +
+      'of the global business records (opportunities, milestones, status history, recommendations, ' +
+      'notes, deal team members, notifications, run logs, dashboard snapshots). Use this to find a ' +
+      'record when you do not have its OPP-/MS- id (e.g. a TPID like TPID-1001, a customer, a ' +
+      'person, a competitor). Always try it before saying a record does not exist.',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'The value to search for (matched across every field).' },
+        entity: {
+          type: 'string',
+          enum: searchService.entityKeys(),
+          description: 'Optional record type to restrict to. Omit to search all.',
+        },
+        field: {
+          type: 'string',
+          description: 'Optional single field name to match on (e.g. tpid, customerName, aeOwner, competitorName).',
+        },
+        limit: { type: 'number', description: 'Optional max records per entity (default 25).' },
+      },
+      required: ['query'],
+    },
+    run: (a) =>
+      searchService.search(String(a.query), {
+        entity: s(a.entity),
+        field: s(a.field),
+        limit: toLimit(a.limit),
+      }),
   },
 ];

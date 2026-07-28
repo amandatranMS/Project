@@ -85,11 +85,13 @@ export async function sendChatStream(
   messages: ChatTurn[],
   engine: ChatEngine,
   onDelta: (delta: string) => void,
+  signal?: AbortSignal,
 ): Promise<string> {
   const res = await fetch(`${BASE}/chat/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
-    body: JSON.stringify({ messages, engine }),
+    body: JSON.stringify({ messages: messages.map((m) => ({ role: m.role, content: m.content })), engine }),
+    signal,
   });
   if (!res.ok || !res.body) {
     let message = `Request failed (${res.status})`;

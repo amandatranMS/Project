@@ -38,6 +38,7 @@ _CAPABILITIES = (
     cap.get_opportunity,
     cap.create_opportunity,
     cap.update_opportunity,
+    cap.search_records,
     cap.list_deal_team,
     cap.update_deal_team_member,
     cap.create_recommendation,

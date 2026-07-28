@@ -376,8 +376,8 @@ def list_opportunities(
     return [_trim_opportunity(o) for o in data]
 
 
-def get_opportunity(id: Annotated[str, Field(description="The opportunity id.")]) -> Any:
-    """Get one opportunity's detail (includes its milestones) by id."""
+def get_opportunity(id: Annotated[str, Field(description="The opportunity id or business id (e.g. OPP-003).")]) -> Any:
+    """Get one opportunity's detail (includes its milestones) by id or business id."""
     return _mc.get(f"/api/opportunities/{id}")
 
 
@@ -469,6 +469,71 @@ def update_opportunity(
         }
     except Exception as e:
         return {"error": f"Failed to submit opportunity update for approval: {e}"}
+
+
+# ---- Universal search ----------------------------------------------------
+SEARCH_ENTITIES = [
+    "opportunity", "milestone", "statusHistory", "recommendation", "note",
+    "dealTeam", "notification", "runLog", "snapshot",
+]
+
+
+def search_records(
+    query: Annotated[
+        str,
+        Field(
+            description=(
+                "The value to look up. Matched case-insensitively as a SUBSTRING against "
+                "EVERY field of the records — ids, names, tpid, customer, industry, sales "
+                "stage, owners (AE/SE), competitor, region, dates, amounts, flags, and free "
+                "text. Use this whenever the user refers to a record by any value that is "
+                "not an OPP-/MS- id (e.g. a TPID like TPID-1001, a customer, a person, a "
+                "competitor)."
+            ),
+        ),
+    ],
+    entity: Annotated[
+        str | None,
+        Field(
+            description=(
+                "Optional record type to restrict to. One of: "
+                f"{SEARCH_ENTITIES}. Omit to search ALL of them."
+            ),
+        ),
+    ] = None,
+    field: Annotated[
+        str | None,
+        Field(
+            description=(
+                "Optional single field name to match on (e.g. tpid, customerName, aeOwner, "
+                "assignedSE, competitorName, preferredAzureRegion). Omit to match any field."
+            ),
+        ),
+    ] = None,
+    limit: Annotated[
+        int | None,
+        Field(description="Optional max records returned per entity (default 25)."),
+    ] = None,
+) -> Any:
+    """Look up records by ANY field value and return the FULL matching records.
+
+    This is the way to find a record when you do not have its OPP-/MS- id. It
+    searches across the global business records (opportunities, milestones,
+    status history, recommendations, notes, deal team members, notifications, run
+    logs, dashboard snapshots) and returns every record whose fields contain the
+    query, grouped by entity, each tagged with the `_matchedFields` that matched.
+    Always try this before telling the user a record does not exist. It is a
+    read: nothing is changed and no approval is needed. (Approval requests and the
+    audit log are not searched here — use the governance tools for those.)
+    """
+    params: dict = {"q": query}
+    if entity:
+        params["entity"] = entity
+    if field:
+        params["field"] = field
+    if limit:
+        params["limit"] = limit
+    return _mc.get("/api/search", params=params)
 
 
 def list_deal_team(

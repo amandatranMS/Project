@@ -67,10 +67,13 @@ def build_subagents(mc: MsxClient, client: OpenAI, model: str, confirm: ConfirmF
     return [
         SubAgent(
             name="milestone",
-            description="Handles milestones: list, look up, create, update, or delete milestones.",
+            description="Handles milestones: list, search by any field, look up, create, update, or delete milestones.",
             instructions=(
                 "You are the Milestone specialist for a mock MSX workspace. Use your tools to "
-                "read and modify milestones. When creating a milestone you need an existing "
+                "read and modify milestones. To find a milestone (or its parent opportunity) by "
+                "any field value other than an MS- id — an owner, workload, risk, competitor, "
+                "region, or the customer it belongs to — use search_records. When creating a "
+                "milestone you need an existing "
                 "opportunity name — if unsure, say so. Report ids and names clearly. Never invent data."
             ),
             tools=groups["milestone"],
@@ -93,10 +96,15 @@ def build_subagents(mc: MsxClient, client: OpenAI, model: str, confirm: ConfirmF
         ),
         SubAgent(
             name="opportunity",
-            description="Handles opportunities: list, look up, or create opportunities.",
+            description="Handles opportunities: list, search by any field, look up, or create opportunities.",
             instructions=(
                 "You are the Opportunity specialist for a mock MSX workspace. Use your tools to "
-                "read and create opportunities. Report ids and names clearly. Never invent data."
+                "read and create opportunities. To find an opportunity (or a related record) by "
+                "any field other than its OPP- id — a TPID such as TPID-1001, a customer, "
+                "industry, sales stage, AE/SE owner, competitor, or region — call search_records "
+                "with that value; it matches across every field and returns the full records. "
+                "Never say an opportunity does not exist until search_records comes back empty. "
+                "Report ids and names clearly. Never invent data."
             ),
             tools=groups["opportunity"],
             client=client,
