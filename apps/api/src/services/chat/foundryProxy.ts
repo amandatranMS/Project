@@ -39,7 +39,7 @@ function extractText(body: any): string {
 // Tunables (override via .env). The hosted agent + its tool callbacks can be
 // slow, so allow a generous timeout; retry only transient server errors.
 const REQUEST_TIMEOUT_MS = Number(process.env.FOUNDRY_TIMEOUT_MS) || 180_000;
-const MAX_ATTEMPTS = Math.max(1, Number(process.env.FOUNDRY_MAX_ATTEMPTS) || 3);
+const MAX_ATTEMPTS = Math.max(1, Number(process.env.FOUNDRY_MAX_ATTEMPTS) || 4);
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -48,6 +48,9 @@ interface CallResult {
   status: number;
   text: string;
   full?: string;
+  // Streaming failures set this explicitly to opt in/out of the retry loop
+  // (they only allow a retry when no tokens and no tool output were produced).
+  retryable?: boolean;
 }
 
 async function callAgentOnce(endpoint: string, token: string, body: string): Promise<CallResult> {
@@ -98,6 +101,9 @@ async function callAgentStreaming(
     const decoder = new TextDecoder();
     let buffer = '';
     let full = '';
+    // Set when an in-band `response.failed`/`error` event (or a partial answer we
+    // choose to keep) ends the stream early. The read loop breaks and returns it.
+    let streamResult: CallResult | null = null;
 
     const handleData = (data: string) => {
       if (!data || data === '[DONE]') return;
@@ -115,7 +121,37 @@ async function callAgentStreaming(
       } else if ((type === 'response.completed' || type === 'response.done') && !full) {
         full = extractText(evt.response ?? evt);
       } else if (type === 'error' || type === 'response.failed') {
-        throw new HttpError(502, `Foundry agent stream error: ${JSON.stringify(evt).slice(0, 200)}`);
+        // The hosted agent surfaces model throttling (429) and other backend
+        // failures as an in-band SSE event rather than an HTTP status. Turn it
+        // into a CallResult so runFoundryAgent can apply the SAME retry policy the
+        // non-streaming path uses — instead of failing the user instantly.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const resp: any = evt?.response ?? {};
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const errObj: any = resp?.error ?? evt?.error ?? {};
+        const msg: string =
+          (typeof errObj?.message === 'string' && errObj.message) ||
+          (typeof evt?.message === 'string' && evt.message) ||
+          JSON.stringify(evt).slice(0, 300);
+        const isRateLimit =
+          /rate.?limit|exceeded|too many requests|\b429\b/i.test(msg) ||
+          errObj?.code === 'rate_limit_exceeded' ||
+          errObj?.code === '429';
+        const toolsRan = Array.isArray(resp?.output) && resp.output.length > 0;
+        if (full) {
+          // We already streamed a partial answer to the client; re-running would
+          // duplicate it. Keep what we have rather than erroring out.
+          streamResult = { ok: true, status: res.status, text: '', full };
+        } else {
+          // Only auto-retry when nothing ran yet (no tokens AND no tool output), so
+          // a retry can never re-run a tool or duplicate an approval submission.
+          streamResult = {
+            ok: false,
+            status: isRateLimit ? 429 : 503,
+            text: msg,
+            retryable: !toolsRan,
+          };
+        }
       }
     };
 
@@ -128,10 +164,16 @@ async function callAgentStreaming(
         const line = buffer.slice(0, nl).trim();
         buffer = buffer.slice(nl + 1);
         if (line.startsWith('data:')) handleData(line.slice(5).trim());
+        if (streamResult) break;
       }
+      if (streamResult) break;
     }
-    if (buffer.startsWith('data:')) handleData(buffer.slice(5).trim());
+    if (!streamResult && buffer.startsWith('data:')) handleData(buffer.slice(5).trim());
 
+    if (streamResult) {
+      reader.cancel().catch(() => {});
+      return streamResult;
+    }
     return { ok: true, status: res.status, text: '', full: full || 'The hosted agent returned no text.' };
   } finally {
     clearTimeout(timer);
@@ -204,9 +246,10 @@ export async function runFoundryAgent(
       }
     }
 
-    // Only 5xx / 429 are transient and safe to retry: the model service errored
-    // before running any tools, so re-sending won't duplicate an action.
-    const retryable = result.status >= 500 || result.status === 429;
+    // Transient failures (5xx / 429) are safe to retry: the model service errored
+    // before running any tools, so re-sending won't duplicate an action. Streaming
+    // failures set `retryable` explicitly (they only opt in when nothing ran yet).
+    const retryable = result.retryable ?? (result.status >= 500 || result.status === 429);
     lastError = `Foundry agent responded ${result.status}: ${result.text.slice(0, 300)}`;
     if (!retryable || attempt === MAX_ATTEMPTS) {
       const hint =
@@ -214,13 +257,18 @@ export async function runFoundryAgent(
           ? 'This is a permissions problem: the API identity is not authorized to invoke the Foundry hosted agent. Check its Azure role assignments (e.g. Cognitive Services User / Foundry User).'
           : result.status === 404
             ? 'The Foundry agent endpoint or agent id could not be found — check FOUNDRY_AGENT_ENDPOINT.'
-            : 'This is usually a transient cloud issue — try again, or switch to the in-app engine.';
+            : result.status === 429
+              ? 'The assistant is temporarily busy — the model hit its per-minute rate limit. Wait a few seconds and send your message again.'
+              : 'This is usually a transient cloud issue — try again, or switch to the in-app engine.';
       throw new HttpError(
         502,
         `The Foundry hosted agent returned an error (${result.status}) after ${attempt} attempt(s). ${hint}`,
       );
     }
-    await sleep(600 * 2 ** (attempt - 1)); // 600ms, 1200ms, …
+    // Rate limits (429) need a longer pause to let the model's per-minute window
+    // recover; other transient errors back off faster. Jitter avoids retry storms.
+    const backoffBase = result.status === 429 ? 1200 : 600;
+    await sleep(backoffBase * 2 ** (attempt - 1) + Math.floor(Math.random() * 250));
   }
 
   throw new HttpError(502, lastError || 'Foundry agent request failed.');
