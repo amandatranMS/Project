@@ -36,6 +36,62 @@ function extractText(body: any): string {
   return parts.join('\n').trim() || 'The hosted agent returned no text.';
 }
 
+/**
+ * Azure's Responses endpoint reports a failure as `{ "error": { "code", "message" } }`
+ * (occasionally a bare `{ "message" }` or a plain string). Pull out a human-readable
+ * reason plus the machine `code` so a failed turn can explain WHY it was rejected
+ * instead of discarding the body behind a generic hint — a 400 in particular always
+ * carries the actual cause (content filter, context length, bad parameter, …).
+ */
+function parseAgentError(text: string): { code?: string; message?: string } {
+  const raw = (text ?? '').trim();
+  if (!raw) return {};
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const body: any = JSON.parse(raw);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const err: any = body?.error ?? body;
+    const code =
+      typeof err?.code === 'string' ? err.code : typeof err?.type === 'string' ? err.type : undefined;
+    const message =
+      (typeof err?.message === 'string' && err.message) ||
+      (typeof body?.message === 'string' && body.message) ||
+      undefined;
+    return { code, message: message ? message.slice(0, 500) : undefined };
+  } catch {
+    return { message: raw.slice(0, 300) };
+  }
+}
+
+/** Turn an upstream status + Azure error code into accurate, actionable guidance. */
+function hintForFailure(status: number, code?: string): string {
+  const c = (code ?? '').toLowerCase();
+  if (c.includes('content_filter') || c.includes('responsibleai') || c.includes('jailbreak')) {
+    return 'Your message (or the conversation) was blocked by the Azure content-safety filter. Rephrase and try again — resending the same text will fail the same way.';
+  }
+  if (
+    c.includes('context_length') ||
+    c.includes('maximum context') ||
+    c.includes('string_above_max_length') ||
+    c.includes('too_long')
+  ) {
+    return 'The conversation is too long for the model’s context window. Start a new chat (or shorten your message) and try again.';
+  }
+  if (status === 400) {
+    return 'The request was rejected as invalid (400) — this is a request/configuration problem, not a transient one, so retrying the same message will not help. Check FOUNDRY_AGENT_ENDPOINT (including its api-version) and the deployed model.';
+  }
+  if (status === 401 || status === 403) {
+    return 'This is a permissions problem: the API identity is not authorized to invoke the Foundry hosted agent. Check its Azure role assignments (e.g. Cognitive Services User / Foundry User).';
+  }
+  if (status === 404) {
+    return 'The Foundry agent endpoint or agent id could not be found — check FOUNDRY_AGENT_ENDPOINT.';
+  }
+  if (status === 429) {
+    return 'The assistant is temporarily busy — the model hit its per-minute rate limit. Wait a few seconds and send your message again.';
+  }
+  return 'This is usually a transient cloud issue — try again, or switch to the in-app engine.';
+}
+
 // Tunables (override via .env). The hosted agent + its tool callbacks can be
 // slow, so allow a generous timeout; retry only transient server errors.
 const REQUEST_TIMEOUT_MS = Number(process.env.FOUNDRY_TIMEOUT_MS) || 180_000;
@@ -250,19 +306,18 @@ export async function runFoundryAgent(
     // before running any tools, so re-sending won't duplicate an action. Streaming
     // failures set `retryable` explicitly (they only opt in when nothing ran yet).
     const retryable = result.retryable ?? (result.status >= 500 || result.status === 429);
-    lastError = `Foundry agent responded ${result.status}: ${result.text.slice(0, 300)}`;
+    const detail = parseAgentError(result.text);
+    lastError = `Foundry agent responded ${result.status}${detail.code ? ` [${detail.code}]` : ''}: ${
+      detail.message ?? '(no error body)'
+    }`;
     if (!retryable || attempt === MAX_ATTEMPTS) {
-      const hint =
-        result.status === 401 || result.status === 403
-          ? 'This is a permissions problem: the API identity is not authorized to invoke the Foundry hosted agent. Check its Azure role assignments (e.g. Cognitive Services User / Foundry User).'
-          : result.status === 404
-            ? 'The Foundry agent endpoint or agent id could not be found — check FOUNDRY_AGENT_ENDPOINT.'
-            : result.status === 429
-              ? 'The assistant is temporarily busy — the model hit its per-minute rate limit. Wait a few seconds and send your message again.'
-              : 'This is usually a transient cloud issue — try again, or switch to the in-app engine.';
+      const hint = hintForFailure(result.status, detail.code);
+      // Surface the upstream reason (content filter, bad parameter, context length,
+      // …) instead of swallowing it — an opaque 400 is impossible to act on.
+      const reason = detail.message ? ` Details: ${detail.message}` : '';
       throw new HttpError(
         502,
-        `The Foundry hosted agent returned an error (${result.status}) after ${attempt} attempt(s). ${hint}`,
+        `The Foundry hosted agent returned an error (${result.status}) after ${attempt} attempt(s). ${hint}${reason}`,
       );
     }
     // Rate limits (429) need a longer pause to let the model's per-minute window
