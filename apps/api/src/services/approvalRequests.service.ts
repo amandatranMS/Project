@@ -85,6 +85,7 @@ async function executeAction(
   actor: AuthUser,
   agentName: string,
   acknowledgeManagerEmail?: boolean,
+  skipBroadcast?: boolean,
 ): Promise<unknown> {
   switch (action.kind) {
     case 'CreateMilestone': {
@@ -92,11 +93,14 @@ async function executeAction(
       return milestonesService.create({ ...fields, createdBy: agentName });
     }
     case 'CreateOpportunity': {
-      // A human has now approved the creation, so perform the mock write. Keep
-      // viaAgent=true so the follow-on "notify the team" Teams broadcast stays
-      // its own approval-gated request (Path B) rather than sending directly.
+      // A human has now approved the creation, so perform the mock write. Broadcast mode
+      // depends on the reviewer's choice in the Approve dialog:
+      //   - default → 'send': post the "notify the team" Teams DM directly as part of THIS
+      //     approval (the dialog already warned them) — no separate NotifyTeams entry queued.
+      //   - "Create without posting" (skipBroadcast) → 'none': create the opportunity only,
+      //     no Teams post and no queued Teams approval.
       const { kind, ...fields } = action;
-      return opportunitiesService.create(fields, actor, true);
+      return opportunitiesService.create(fields, actor, skipBroadcast ? 'none' : 'send');
     }
     case 'SendOutlookMail':
       return graphService.sendMail(actor, {
@@ -317,6 +321,7 @@ export const approvalRequestsService = {
         actor ?? { kind: 'service' },
         agentName,
         input.acknowledgeManagerEmail,
+        input.skipBroadcast,
       );
       if (result === undefined) {
         throw new HttpError(500, 'The approval action returned no result and was not marked complete.');

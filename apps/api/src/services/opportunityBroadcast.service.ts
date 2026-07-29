@@ -10,16 +10,24 @@ import { graphService } from './graph.service.js';
 
 /**
  * "Notify the team when a new opportunity is created" — a visibility broadcast to
- * Microsoft Teams, split into two governance-preserving paths:
+ * Microsoft Teams. How the Teams message is gated depends on HOW the opportunity was
+ * created (the `mode` passed to `onOpportunityCreated`):
  *
- *  - **Human create (Path A):** the web app shows an inline consent modal right
+ *  - **Human create ('none'):** the web app shows an inline consent modal right
  *    after the opportunity is saved. On agree it calls `announce()` below, which
  *    posts the Teams DM (confirmed) and is audited by graphService.notifyTeams.
  *
- *  - **Agent create (Path B):** the agent never sends directly. `onOpportunityCreated`
- *    queues a Pending ApprovalRequest carrying a deferred `NotifyTeams` action, so
- *    the message only goes out when a human approves it in the Approvals tab
- *    (approvalRequestsService.decide executes + audits it).
+ *  - **Direct agent create ('queue'):** the in-app assistant and REST service creates
+ *    persist the opportunity immediately with no prior approval, so the agent must
+ *    never send directly. We queue a Pending ApprovalRequest carrying a deferred
+ *    `NotifyTeams` action; the message only goes out when a human approves it in the
+ *    Approvals tab (approvalRequestsService.decide executes + audits it).
+ *
+ *  - **Approved create ('send'):** the opportunity was created by a human APPROVING a
+ *    CreateOpportunity request. That approval already carries the human's consent (the
+ *    Approve dialog warns that a Teams message will be posted), so we post the Teams DM
+ *    directly (confirmed, audited) as part of that same approval — there is no second
+ *    approval entry to act on.
  *
  * Teams delivery is 1:1 (there is no channel-post capability), so the recipient is
  * a single teammate address configured via TEAMS_BROADCAST_TO. Nothing is delivered
@@ -27,6 +35,16 @@ import { graphService } from './graph.service.js';
  * undelivered send). No new tables/columns — the deferred action is stored on the
  * existing ApprovalRequest.errorMessage column.
  */
+
+/**
+ * How the "notify the team" Teams message is handled for a newly created opportunity:
+ *  - `none`  — in-app broadcast only (human form create; the web modal drives Teams).
+ *  - `queue` — in-app broadcast + queue an approval-gated NotifyTeams request (direct
+ *              agent create, which had no prior human approval to piggy-back on).
+ *  - `send`  — in-app broadcast + post the Teams DM directly (an already-approved
+ *              CreateOpportunity request; the human consented at approval time).
+ */
+export type BroadcastMode = 'none' | 'queue' | 'send';
 
 /**
  * Mirror of the tag used by approvalRequests.service. Deferred actions are stored
@@ -146,8 +164,8 @@ async function recordInAppBroadcast(opp: Opportunity, actor?: AuthUser) {
 }
 
 /**
- * Path B — queue a human-gated approval so the agent's message shows up in the
- * Approvals tab and is only delivered once a human approves it. Returns null (and
+ * Path B ('queue') — queue a human-gated approval so the agent's message shows up in
+ * the Approvals tab and is only delivered once a human approves it. Returns null (and
  * sends nothing) when no recipient is configured.
  */
 async function queueTeamsBroadcastApproval(opp: Opportunity) {
@@ -174,19 +192,38 @@ async function queueTeamsBroadcastApproval(opp: Opportunity) {
 }
 
 /**
+ * 'send' — post the visibility DM directly (confirmed, audited) for an opportunity that
+ * a human has just created by APPROVING a CreateOpportunity request. No second approval
+ * is queued: the human already consented to this send in the Approve dialog. Returns
+ * null (and sends nothing) when no recipient is configured.
+ */
+async function sendTeamsBroadcast(opp: Opportunity, actor?: AuthUser) {
+  const to = broadcastRecipient();
+  if (!to) return null;
+
+  return graphService.notifyTeams(actor ?? { kind: 'service' }, {
+    message: formatOpportunityMessage(opp),
+    to,
+    confirm: true,
+  });
+}
+
+/**
  * Called (best-effort) right after an opportunity is created.
  *
- * 1. ALWAYS record the in-app "all users" notification (both human and agent
- *    creates) — this is the always-on, mock-only visibility feed.
- * 2. Teams delivery stays consent-gated: human form creates are handled inline by
- *    the web modal (Path A → announce), so here we only queue the approval-gated
- *    Teams broadcast when an agent initiated the create (viaAgent → Path B). This
- *    covers both the in-app assistant and the Foundry hosted agent, regardless of
- *    whether the agent authenticates as a user (on-behalf-of) or a service.
+ * 1. ALWAYS record the in-app "all users" notification (every create path) — this is
+ *    the always-on, mock-only visibility feed.
+ * 2. Teams delivery depends on `mode` (see BroadcastMode):
+ *      - 'none'  → nothing here; the human web form drives Teams via the consent modal.
+ *      - 'queue' → queue an approval-gated Teams broadcast (direct agent create, no
+ *                  prior human approval to piggy-back on).
+ *      - 'send'  → post the Teams DM directly (the create came from an already-approved
+ *                  CreateOpportunity request, so the human consent is folded into that
+ *                  single approval — no second approval entry).
  *
  * Each step is isolated so one failing never blocks the other or the create.
  */
-async function onOpportunityCreated(opp: Opportunity, actor?: AuthUser, viaAgent = false) {
+async function onOpportunityCreated(opp: Opportunity, actor?: AuthUser, mode: BroadcastMode = 'none') {
   if (!notifyEnabled()) return;
 
   try {
@@ -195,11 +232,17 @@ async function onOpportunityCreated(opp: Opportunity, actor?: AuthUser, viaAgent
     console.error('[opportunityBroadcast] in-app notification failed:', err);
   }
 
-  if (viaAgent) {
+  if (mode === 'queue') {
     try {
       await queueTeamsBroadcastApproval(opp);
     } catch (err) {
       console.error('[opportunityBroadcast] queue Teams approval failed:', err);
+    }
+  } else if (mode === 'send') {
+    try {
+      await sendTeamsBroadcast(opp, actor);
+    } catch (err) {
+      console.error('[opportunityBroadcast] Teams broadcast failed:', err);
     }
   }
 }

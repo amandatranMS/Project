@@ -92,9 +92,13 @@ export default function Approvals() {
     return a.pendingAction?.kind === 'UpdateMilestone' && a.pendingAction.milestoneStatus === LOST_TO_COMPETITOR;
   }
 
-  /** True when approving this request will post a new-opportunity broadcast to Teams. */
-  function isTeamsBroadcast(a: ApprovalRequest): boolean {
-    return a.pendingAction?.kind === 'NotifyTeams';
+  /**
+   * True when approving this request CREATES a new opportunity. Approving it also posts
+   * the "notify the team" Teams message directly (folded into this single approval), so
+   * we warn about that send in the same confirm dialog.
+   */
+  function createsOpportunity(a: ApprovalRequest): boolean {
+    return a.pendingAction?.kind === 'CreateOpportunity';
   }
 
   function onApproveClick(a: ApprovalRequest) {
@@ -109,7 +113,7 @@ export default function Approvals() {
       setConfirmingLostId(a.id);
       return;
     }
-    if (isTeamsBroadcast(a)) {
+    if (createsOpportunity(a)) {
       setConfirmingTeamsId(a.id);
       return;
     }
@@ -120,6 +124,7 @@ export default function Approvals() {
     id: string,
     action: 'approve' | 'reject' | 'needs-changes',
     acknowledgeManagerEmail = false,
+    skipBroadcast = false,
   ) {
     setBusyId(id);
     setMessage(null);
@@ -132,7 +137,7 @@ export default function Approvals() {
           milestoneName?: string;
           managerEmail?: ManagerEmailOutcome;
         };
-      }>(`/approval-requests/${id}/${action}`, { reviewedBy, acknowledgeManagerEmail });
+      }>(`/approval-requests/${id}/${action}`, { reviewedBy, acknowledgeManagerEmail, skipBroadcast });
       setConfirmingLostId(null);
       setConfirmingTeamsId(null);
       if (action === 'approve') {
@@ -271,15 +276,20 @@ export default function Approvals() {
         />
       )}
 
-      {confirmingTeamsId && (
-        <ApproveTeamsBroadcastDialog
-          requestName={items.find((i) => i.id === confirmingTeamsId)?.requestName}
-          opportunityName={items.find((i) => i.id === confirmingTeamsId)?.opportunity?.opportunityName}
-          busy={busyId === confirmingTeamsId}
-          onCancel={() => setConfirmingTeamsId(null)}
-          onConfirm={() => void decide(confirmingTeamsId, 'approve')}
-        />
-      )}
+      {confirmingTeamsId && (() => {
+        const confirmingItem = items.find((i) => i.id === confirmingTeamsId);
+        return (
+          <ApproveTeamsBroadcastDialog
+            requestName={confirmingItem?.requestName}
+            opportunityName={confirmingItem?.opportunity?.opportunityName}
+            alsoCreatesOpportunity={confirmingItem?.pendingAction?.kind === 'CreateOpportunity'}
+            busy={busyId === confirmingTeamsId}
+            onCancel={() => setConfirmingTeamsId(null)}
+            onConfirm={() => void decide(confirmingTeamsId, 'approve')}
+            onConfirmWithoutBroadcast={() => void decide(confirmingTeamsId, 'approve', false, true)}
+          />
+        );
+      })()}
     </div>
   );
 }

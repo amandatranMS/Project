@@ -8,8 +8,8 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "concurrently -n api,web -c blue,green \"npm:dev:api\" \"npm:dev:web\"",
-    "dev:api": "tsx apps/api/src/server.ts",
+    "dev": "concurrently --raw -n api,web -c blue,green \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "tsx watch apps/api/src/server.ts",
     "dev:web": "npm run dev -w @msx/web",
     "build": "npm run build -w @msx/shared && npm run build -w @msx/api && npm run build -w @msx/web",
     "prisma:generate": "prisma generate",

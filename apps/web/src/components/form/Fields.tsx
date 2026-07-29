@@ -6,17 +6,25 @@ interface BaseProps {
   full?: boolean;
 }
 
-export function TextField({ label, value, onChange, required, full, placeholder }: BaseProps & {
+export function TextField({ label, value, onChange, required, full, placeholder, readOnly, hint }: BaseProps & {
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
+  readOnly?: boolean;
+  hint?: string;
 }) {
   return (
     <div className={`form-field${full ? ' full' : ''}`}>
       <label>
         {label} {required && <span className="req">*</span>}
       </label>
-      <input value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
+      <input
+        value={value}
+        placeholder={placeholder}
+        readOnly={readOnly}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      {hint && <small className="muted">{hint}</small>}
     </div>
   );
 }

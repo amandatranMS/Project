@@ -12,14 +12,16 @@ export default defineConfig(function (_a) {
     var mode = _a.mode;
     var env = loadEnv(mode, rootDir, '');
     var apiKey = env.API_KEY;
+    var target = env.API_PROXY_TARGET || 'http://localhost:4000';
     return {
         plugins: [react()],
         server: {
             port: 5173,
             proxy: {
                 '/api': {
-                    target: 'http://localhost:4000',
+                    target: target,
                     changeOrigin: true,
+                    secure: true,
                     headers: apiKey ? { 'x-api-key': apiKey } : undefined,
                 },
             },

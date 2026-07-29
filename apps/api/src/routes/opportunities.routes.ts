@@ -3,6 +3,7 @@ import { opportunitiesController as c } from '../controllers/opportunities.contr
 
 const router = Router();
 router.get('/', c.list);
+router.get('/next-tpid', c.nextTpid); // must precede '/:id' so it isn't captured as an id
 router.get('/:id', c.get);
 router.get('/:id/context', c.context);
 router.post('/', c.create);

@@ -260,6 +260,13 @@ export const approvalDecisionSchema = z.object({
    * flag is the human-in-the-loop confirm that authorises the send.
    */
   acknowledgeManagerEmail: z.boolean().optional(),
+  /**
+   * Set from the "Create without posting" button on the CreateOpportunity approval
+   * pop-up. When true, approving creates the opportunity but skips the Teams broadcast
+   * entirely (no post, no queued NotifyTeams approval). Ignored for actions that have
+   * no opportunity-create broadcast.
+   */
+  skipBroadcast: z.boolean().optional(),
 });
 
 // ---- Collaboration notes ----

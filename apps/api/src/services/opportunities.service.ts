@@ -3,12 +3,38 @@ import { HttpError } from '../lib/httpError.js';
 import { genId } from '../lib/ids.js';
 import { recordAgentAction } from '../lib/audit.js';
 import type { AuthUser } from '../lib/entraAuth.js';
-import { opportunityBroadcastService } from './opportunityBroadcast.service.js';
+import { opportunityBroadcastService, type BroadcastMode } from './opportunityBroadcast.service.js';
 import type { z } from 'zod';
 import type { createOpportunitySchema, updateOpportunitySchema } from '../validators/schemas.js';
 
 type CreateInput = z.infer<typeof createOpportunitySchema>;
 type UpdateInput = z.infer<typeof updateOpportunitySchema>;
+
+const TPID_PREFIX = 'TPID-';
+const TPID_START = 1001;
+
+/**
+ * Next sequential business TPID for a new opportunity (e.g. TPID-1001 → TPID-1002).
+ * Scans existing `TPID-<n>` values, takes the highest number, and returns the next
+ * one; numbering starts at TPID-1001 when none exist yet. Values in other formats
+ * are ignored. Not guaranteed collision-proof under truly concurrent creates
+ * (this is an effectively single-writer mock app), which is acceptable here.
+ */
+async function computeNextTpid(): Promise<string> {
+  const rows = await prisma.opportunity.findMany({
+    where: { tpid: { startsWith: TPID_PREFIX } },
+    select: { tpid: true },
+  });
+  let max = TPID_START - 1;
+  for (const { tpid } of rows) {
+    const match = /^TPID-(\d+)$/.exec(tpid ?? '');
+    if (match) {
+      const n = Number(match[1]);
+      if (Number.isFinite(n) && n > max) max = n;
+    }
+  }
+  return `${TPID_PREFIX}${max + 1}`;
+}
 
 const childInclude = {
   milestones: { orderBy: { milestoneBusinessId: 'asc' } },
@@ -56,23 +82,32 @@ export const opportunitiesService = {
     });
   },
 
-  async create(input: CreateInput, actor?: AuthUser, viaAgent = false) {
-    const { opportunityBusinessId, closeDate, lastUpdated, ...rest } = input;
+  /** Preview the next auto-assigned sequential TPID (used by the create form). */
+  nextTpid(): Promise<string> {
+    return computeNextTpid();
+  },
+
+  async create(input: CreateInput, actor?: AuthUser, broadcast: BroadcastMode = 'none') {
+    const { opportunityBusinessId, closeDate, lastUpdated, tpid, ...rest } = input;
     const created = await prisma.opportunity.create({
       data: {
         ...rest,
+        // Auto-assign the next sequential TPID when the caller didn't supply one, so
+        // every new opportunity is stamped TPID-<next> (e.g. TPID-1001 → TPID-1002).
+        tpid: tpid?.trim() ? tpid.trim() : await computeNextTpid(),
         opportunityBusinessId: opportunityBusinessId || genId('OPP'),
         closeDate: closeDate ? new Date(closeDate) : null,
         lastUpdated: lastUpdated ? new Date(lastUpdated) : null,
       },
     });
 
-    // Best-effort "notify the team of a new opportunity" broadcast. Always records
-    // the in-app notification; when an agent initiated the create (viaAgent) it also
-    // queues the approval-gated Teams message (Path B). Human form creates are
-    // handled by the web consent modal (Path A). Never let it block/fail creation.
+    // Best-effort "notify the team of a new opportunity" broadcast. Always records the
+    // in-app notification; the `broadcast` mode decides how Teams is handled — 'none'
+    // (human form, web modal drives it), 'queue' (direct agent create → approval-gated),
+    // or 'send' (already-approved CreateOpportunity → posted directly). Never let it
+    // block/fail creation.
     try {
-      await opportunityBroadcastService.onOpportunityCreated(created, actor, viaAgent);
+      await opportunityBroadcastService.onOpportunityCreated(created, actor, broadcast);
     } catch (err) {
       console.error('[opportunityBroadcast] notify-on-create failed:', err);
     }

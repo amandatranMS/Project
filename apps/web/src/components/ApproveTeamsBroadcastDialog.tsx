@@ -5,51 +5,83 @@ interface Props {
   requestName?: string | null;
   /** Opportunity the broadcast is about, when known. */
   opportunityName?: string | null;
+  /**
+   * When true, approving also CREATES the opportunity (the Teams post is a side
+   * effect folded into a single CreateOpportunity approval). When false, the
+   * approval only posts the Teams message (the opportunity already exists).
+   */
+  alsoCreatesOpportunity?: boolean;
   busy?: boolean;
   onCancel: () => void;
   onConfirm: () => void;
+  /**
+   * Approve WITHOUT posting to Teams. Only meaningful for a CreateOpportunity request
+   * (`alsoCreatesOpportunity`): the opportunity is still created, but no Teams message
+   * is posted. When omitted, only the standard cancel/approve actions are shown.
+   */
+  onConfirmWithoutBroadcast?: () => void;
 }
 
 /**
- * Human-in-the-loop pop-up shown in the Approvals tab before approving an
- * agent-submitted "notify the team of a new opportunity" request. Approving posts
- * the Microsoft Teams message to the configured teammate. Confirming here is the
- * explicit acknowledgement that authorises that send — nothing goes out until
- * a human approves.
+ * Human-in-the-loop pop-up shown in the Approvals tab before approving a request that
+ * posts a "new opportunity" visibility message to Microsoft Teams. Two shapes:
+ *  - a standalone NotifyTeams request (the opportunity already exists), or
+ *  - a CreateOpportunity request, where approving creates the opportunity AND posts
+ *    the Teams message in one step (`alsoCreatesOpportunity`).
+ * Confirming here is the explicit acknowledgement that authorises the send — nothing
+ * goes out until a human approves.
  */
 export default function ApproveTeamsBroadcastDialog({
   requestName,
   opportunityName,
+  alsoCreatesOpportunity,
   busy,
   onCancel,
   onConfirm,
+  onConfirmWithoutBroadcast,
 }: Props) {
+  const showSkip = alsoCreatesOpportunity && !!onConfirmWithoutBroadcast;
   return (
     <Modal
-      title="Post this opportunity to Teams?"
+      title={alsoCreatesOpportunity ? 'Create opportunity and post to Teams?' : 'Post this opportunity to Teams?'}
       onClose={onCancel}
       footer={
         <div className="btn-row">
           <button className="secondary" onClick={onCancel} disabled={busy}>
             Cancel
           </button>
+          {showSkip && (
+            <button className="secondary" onClick={onConfirmWithoutBroadcast} disabled={busy}>
+              {busy ? 'Creating…' : 'Create without posting'}
+            </button>
+          )}
           <button onClick={onConfirm} disabled={busy}>
-            {busy ? 'Sending…' : 'Approve & post to Teams'}
+            {busy
+              ? (alsoCreatesOpportunity ? 'Creating…' : 'Sending…')
+              : (alsoCreatesOpportunity ? 'Approve & create' : 'Approve & post to Teams')}
           </button>
         </div>
       }
     >
       <p>
-        Approving this request will post a Microsoft Teams message
+        {alsoCreatesOpportunity ? 'Approving this request will create the opportunity' : 'Approving this request will post a Microsoft Teams message'}
         {opportunityName ? (
           <>
             {' '}
-            about <strong>{opportunityName}</strong>
+            {alsoCreatesOpportunity ? '' : 'about '}<strong>{opportunityName}</strong>
           </>
-        ) : null}{' '}
-        for team visibility.
+        ) : null}
+        {alsoCreatesOpportunity
+          ? ' and post a Microsoft Teams message to your team for visibility.'
+          : ' for team visibility.'}
       </p>
       {requestName && <p className="muted">{requestName}</p>}
+      {showSkip && (
+        <p className="muted">
+          Choose <strong>Create without posting</strong> to create the opportunity without sending
+          the Teams message.
+        </p>
+      )}
       <p className="muted">
         The message was drafted by the agent from this opportunity’s data and is recorded in the
         audit log. This confirmation is the human-in-the-loop gate — the agent never sends on its

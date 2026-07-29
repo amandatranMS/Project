@@ -55,6 +55,9 @@
     },
     {
       "name": "Search"
+    },
+    {
+      "name": "Microsoft Graph"
     }
   ],
   "paths": {
@@ -111,7 +114,7 @@
         "tags": [
           "Opportunities"
         ],
-        "summary": "Create an opportunity. Side-effect: records an in-app \"all users\" notification and, when created by an agent (service principal) in live mode, queues a Pending NotifyTeams ApprovalRequest for human consent (Path B).\n",
+        "summary": "Create an opportunity. The TPID is auto-assigned as the next sequential number (e.g. TPID-1001 → TPID-1002) when the request omits it. Side-effect: records an in-app \"all users\" notification and, when created by an agent (service principal) in live mode, queues a Pending NotifyTeams ApprovalRequest for human consent (Path B).\n",
         "requestBody": {
           "required": true,
           "content": {
@@ -128,6 +131,19 @@
           },
           "400": {
             "description": "Validation error"
+          }
+        }
+      }
+    },
+    "/api/opportunities/next-tpid": {
+      "get": {
+        "tags": [
+          "Opportunities"
+        ],
+        "summary": "Preview the next auto-assigned sequential TPID for a new opportunity (e.g. TPID-1016). Used by the create form to display the number that will be stamped on save; the server assigns the authoritative value at create time.\n",
+        "responses": {
+          "200": {
+            "description": "Envelope with { tpid }"
           }
         }
       }
@@ -323,6 +339,118 @@
           },
           "400": {
             "description": "Missing q or unknown entity."
+          }
+        }
+      }
+    },
+    "/api/graph/outlook/messages": {
+      "get": {
+        "tags": [
+          "Microsoft Graph"
+        ],
+        "summary": "Read the acting user's recent Outlook email via Microsoft Graph (on-behalf-of). READ-ONLY and NOT approval-gated: returns only metadata + a short body preview (subject, sender, receivedDateTime, bodyPreview, webLink), never full bodies, and nothing is persisted into the mock tables. Every read is audited (recordAgentAction, ReadOutlook, security event). Works for a signed-in user (web app) OR the hosted agent when it presents a valid user session handle via the x-msx-session header; without a resolvable user the API returns 401.\n",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MsxSessionHeader"
+          },
+          {
+            "in": "query",
+            "name": "top",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            },
+            "description": "How many recent messages to return (default 10)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope with an array of message metadata/previews."
+          },
+          "401": {
+            "description": "No signed-in user or resolvable session handle."
+          },
+          "501": {
+            "description": "Microsoft Graph is not configured (AAD_CLIENT_SECRET / consent missing)."
+          }
+        }
+      }
+    },
+    "/api/graph/teams/chats": {
+      "get": {
+        "tags": [
+          "Microsoft Graph"
+        ],
+        "summary": "Read the acting user's recent Teams chats (metadata only — topic, chatType, lastUpdatedDateTime) via Microsoft Graph on-behalf-of. READ-ONLY, not approval-gated, audited (ReadTeams). Same auth as the Outlook read (signed-in user or x-msx-session handle). For the actual message content inside chats, use /api/graph/teams/messages.\n",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MsxSessionHeader"
+          },
+          {
+            "in": "query",
+            "name": "top",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            },
+            "description": "How many recent chats to return (default 10)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope with an array of chat metadata."
+          },
+          "401": {
+            "description": "No signed-in user or resolvable session handle."
+          },
+          "501": {
+            "description": "Microsoft Graph is not configured."
+          }
+        }
+      }
+    },
+    "/api/graph/teams/messages": {
+      "get": {
+        "tags": [
+          "Microsoft Graph"
+        ],
+        "summary": "Read the acting user's recent Teams chats WITH their recent messages — the actual content (sender + short text preview + timestamp) the agent needs to extract information. Lists the top chats, then reads up to perChat recent messages inside each. READ-ONLY, NOT approval-gated, audited (ReadTeams). Only short previews are returned; full message bodies are never persisted. Same auth as the other reads (signed-in user or x-msx-session handle).\n",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MsxSessionHeader"
+          },
+          {
+            "in": "query",
+            "name": "top",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            },
+            "description": "How many recent chats to scan (default 10)."
+          },
+          {
+            "in": "query",
+            "name": "perChat",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 20
+            },
+            "description": "How many recent messages to read per chat (default 10)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope with an array of { id, topic, chatType, lastUpdatedDateTime, messages[] }."
+          },
+          "401": {
+            "description": "No signed-in user or resolvable session handle."
+          },
+          "501": {
+            "description": "Microsoft Graph is not configured."
           }
         }
       }
@@ -1276,6 +1404,15 @@
         "schema": {
           "type": "string"
         }
+      },
+      "MsxSessionHeader": {
+        "in": "header",
+        "name": "x-msx-session",
+        "required": false,
+        "schema": {
+          "type": "string"
+        },
+        "description": "Opaque user session handle that lets the hosted agent (calling with the service key) run a Microsoft Graph read/send on-behalf-of the signed-in user. The web app injects it into the agent turn; the agent echoes it back on its tool callbacks. Ignored when a real user bearer token is present.\n"
       }
     },
     "schemas": {
@@ -1309,6 +1446,10 @@
           "acknowledgeManagerEmail": {
             "type": "boolean",
             "description": "Human acknowledgement (from the Approvals-tab pop-up) authorising the executive-summary email to the reviewer's manager when approving an action that moves a milestone to \"Lost To Competitor\". Ignored for any other action.\n"
+          },
+          "skipBroadcast": {
+            "type": "boolean",
+            "description": "Set from the \"Create without posting\" button on a CreateOpportunity approval pop-up. When true, approving creates the opportunity but skips the Teams broadcast entirely (no post, no queued NotifyTeams approval). Ignored for other actions.\n"
           }
         }
       },

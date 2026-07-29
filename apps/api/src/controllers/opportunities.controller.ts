@@ -26,6 +26,12 @@ export const opportunitiesController = {
     sendOk(res, data);
   }),
 
+  /** Preview the next auto-assigned sequential TPID for a new opportunity. */
+  nextTpid: asyncHandler(async (_req, res) => {
+    const tpid = await opportunitiesService.nextTpid();
+    sendOk(res, { tpid });
+  }),
+
   context: asyncHandler(async (req, res) => {
     const data = await opportunitiesService.context(req.params.id);
     if (!data) throw new HttpError(404, 'Opportunity not found.');
@@ -34,14 +40,14 @@ export const opportunitiesController = {
 
   create: asyncHandler(async (req, res) => {
     const input = createOpportunitySchema.parse(req.body);
-    // An agent-initiated create must queue the approval-gated Teams broadcast
-    // (Path B). The Foundry hosted agent calls back over the dev tunnel acting on
+    // An agent-initiated direct create must queue the approval-gated Teams broadcast
+    // ('queue'). The Foundry hosted agent calls back over the dev tunnel acting on
     // behalf of the user and echoes the x-msx-session handle (the web UI never
     // sends it); a key-based agent authenticates as a service principal. Either
     // signal marks this as an agent create. A human using the form has neither, so
-    // it stays Path A (the inline consent modal drives the send).
+    // it stays 'none' (the inline consent modal drives the send).
     const viaAgent = req.user?.kind === 'service' || Boolean(req.header('x-msx-session'));
-    const data = await opportunitiesService.create(input, req.user, viaAgent);
+    const data = await opportunitiesService.create(input, req.user, viaAgent ? 'queue' : 'none');
     sendOk(res, data, 201);
   }),
 

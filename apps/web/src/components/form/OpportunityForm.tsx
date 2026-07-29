@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { SOLUTION_AREAS, SALES_STAGES, OPPORTUNITY_STATUSES } from '@msx/shared';
 import { api, announceOpportunity, type Opportunity } from '../../api/client';
 import Modal from '../Modal';
@@ -44,13 +44,34 @@ export default function OpportunityForm({ initial, onClose, onSaved }: Props) {
 
   const set = (k: keyof typeof form) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
 
+  // On a NEW opportunity, TPID is assigned automatically by the server. Fetch a preview
+  // of the next sequential number to show in the (read-only) field; the server still
+  // owns the authoritative value at save time.
+  useEffect(() => {
+    if (editing) return;
+    let cancelled = false;
+    api
+      .get<{ tpid: string }>('/opportunities/next-tpid')
+      .then((r) => {
+        if (!cancelled) setForm((f) => ({ ...f, tpid: r.tpid }));
+      })
+      .catch(() => {
+        /* preview is best-effort; the server assigns the TPID regardless */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [editing]);
+
   async function save() {
     setBusy(true);
     setError(null);
     const body: Record<string, unknown> = {
       opportunityName: form.opportunityName.trim(),
       customerName: clean(form.customerName),
-      tpid: clean(form.tpid),
+      // On create the server auto-assigns the next sequential TPID, so don't send the
+      // previewed value (avoids the form dictating the number). On edit, keep it.
+      tpid: editing ? clean(form.tpid) : undefined,
       solutionArea: clean(form.solutionArea),
       salesStage: clean(form.salesStage),
       status: clean(form.status),
@@ -129,7 +150,18 @@ export default function OpportunityForm({ initial, onClose, onSaved }: Props) {
       <div className="form-grid">
         <TextField label="Opportunity name" value={form.opportunityName} onChange={set('opportunityName')} required full />
         <TextField label="Account (customer)" value={form.customerName} onChange={set('customerName')} />
-        <TextField label="TPID" value={form.tpid} onChange={set('tpid')} />
+        {editing ? (
+          <TextField label="TPID" value={form.tpid} onChange={set('tpid')} />
+        ) : (
+          <TextField
+            label="TPID"
+            value={form.tpid}
+            onChange={set('tpid')}
+            readOnly
+            placeholder="Auto-assigned on save"
+            hint="Assigned automatically — the next available number."
+          />
+        )}
         <SelectField label="Solution area" value={form.solutionArea} onChange={set('solutionArea')} options={SOLUTION_AREAS} />
         <SelectField label="Sales stage" value={form.salesStage} onChange={set('salesStage')} options={SALES_STAGES} />
         <SelectField label="Status" value={form.status} onChange={set('status')} options={OPPORTUNITY_STATUSES} />
