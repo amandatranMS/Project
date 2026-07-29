@@ -15,10 +15,12 @@ function requireUser(req: Request) {
 }
 
 /**
- * Resolve the principal for a send/notify action. A signed-in user (web app) or
- * a user session handle acts as that user. The service principal (the hosted
- * agent's x-api-key) is allowed too — the service layer only lets it perform
- * SIMULATED sends; live delivery still requires a real user.
+ * Resolve the principal for an on-behalf-of Graph action (read or send). A
+ * signed-in user (web app) or a user session handle acts as that user. The
+ * service principal (the hosted agent's x-api-key) is allowed too: for reads it
+ * still needs a valid session handle to resolve a user (Graph OBO has no user
+ * otherwise); for sends the service layer only lets it perform SIMULATED sends,
+ * with live delivery still requiring a real user.
  */
 function resolveActingUser(req: Request): AuthUser {
   if (req.user?.kind === 'user' && req.user.bearer) return req.user;
@@ -62,13 +64,20 @@ export const graphController = {
   }),
 
   messages: asyncHandler(async (req, res) => {
-    const user = requireUser(req);
+    const user = resolveActingUser(req);
     sendOk(res, await graphService.messages(user, topParam(req.query.top)));
   }),
 
   chats: asyncHandler(async (req, res) => {
-    const user = requireUser(req);
+    const user = resolveActingUser(req);
     sendOk(res, await graphService.chats(user, topParam(req.query.top)));
+  }),
+
+  /** Recent Teams chats WITH their recent messages (content, not just metadata). */
+  teamsMessages: asyncHandler(async (req, res) => {
+    const user = resolveActingUser(req);
+    const perChat = Math.min(20, Math.max(1, topParam(req.query.perChat)));
+    sendOk(res, await graphService.teamsMessages(user, topParam(req.query.top), perChat));
   }),
 
   sendMail: asyncHandler(async (req, res) => {

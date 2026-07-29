@@ -81,10 +81,13 @@ class MsxClient:
             token = self._credential.get_token(self._scope).token
             self.session.headers["Authorization"] = f"Bearer {token}"
 
-    def request(self, method: str, path: str, params: dict | None = None, json: dict | None = None):
+    def request(self, method: str, path: str, params: dict | None = None, json: dict | None = None, headers: dict | None = None):
         self._apply_bearer()
         url = f"{self.base}{path}"
-        resp = self.session.request(method, url, params=params, json=json, timeout=30)
+        # Per-call headers (e.g. x-msx-session for on-behalf-of reads) are merged on
+        # top of the session defaults for THIS request only — never stored on the
+        # shared session, so one user's handle can't leak into another's call.
+        resp = self.session.request(method, url, params=params, json=json, headers=headers, timeout=30)
         try:
             body = resp.json()
         except ValueError:
@@ -95,8 +98,8 @@ class MsxClient:
             raise MsxApiError(message or f"Request failed ({resp.status_code}).")
         return body.get("data")
 
-    def get(self, path: str, params: dict | None = None):
-        return self.request("GET", path, params=params)
+    def get(self, path: str, params: dict | None = None, headers: dict | None = None):
+        return self.request("GET", path, params=params, headers=headers)
 
     def post(self, path: str, json: dict | None = None):
         return self.request("POST", path, json=json)

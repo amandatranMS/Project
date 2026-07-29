@@ -384,17 +384,40 @@ def get_opportunity(id: Annotated[str, Field(description="The opportunity id or 
 def create_opportunity(
     opportunityName: Annotated[str, Field(description="Name of the new opportunity.")],
     customerName: Annotated[str | None, Field(description="Customer name.")] = None,
+    industry: Annotated[str | None, Field(description="Industry.")] = None,
+    solutionArea: Annotated[str | None, Field(description=f"One of: {SOLUTION_AREAS}.")] = None,
     salesStage: Annotated[str | None, Field(description=f"One of: {SALES_STAGES}.")] = None,
     status: Annotated[str | None, Field(description=f"One of: {OPPORTUNITY_STATUSES}.")] = None,
+    estimatedRevenue: Annotated[float | None, Field(description="Estimated revenue (number).")] = None,
+    closeDate: Annotated[str | None, Field(description="Close date (ISO, e.g. 2026-07-21).")] = None,
+    aeOwner: Annotated[str | None, Field(description="Account executive owner.")] = None,
+    assignedSE: Annotated[str | None, Field(description="Assigned solution engineer.")] = None,
+    competitorName: Annotated[str | None, Field(description="Competitor name.")] = None,
+    consumptionPhase: Annotated[str | None, Field(description="Consumption phase.")] = None,
+    businessProblem: Annotated[str | None, Field(description="Business problem.")] = None,
+    nextStep: Annotated[str | None, Field(description="Next step.")] = None,
+    lastUpdated: Annotated[str | None, Field(description="Last-updated date (ISO date).")] = None,
 ) -> Any:
     """Request creation of a new opportunity. This does NOT create anything — it
     submits an approval request that a human must approve in the Approvals log
-    before the opportunity is created."""
+    before the opportunity is created. The TPID is auto-assigned (next sequential
+    number) on creation, so do not ask the user for one unless they volunteer it."""
     fields = {
         "opportunityName": opportunityName,
         "customerName": customerName,
+        "industry": industry,
+        "solutionArea": solutionArea,
         "salesStage": salesStage,
         "status": status,
+        "estimatedRevenue": estimatedRevenue,
+        "closeDate": closeDate,
+        "aeOwner": aeOwner,
+        "assignedSE": assignedSE,
+        "competitorName": competitorName,
+        "consumptionPhase": consumptionPhase,
+        "businessProblem": businessProblem,
+        "nextStep": nextStep,
+        "lastUpdated": lastUpdated,
     }
     fields = {k: v for k, v in fields.items() if v is not None}
     action = {"kind": "CreateOpportunity", **fields}
@@ -953,3 +976,86 @@ def notify_teams(
         }
     except Exception as e:
         return {"error": f"Failed to submit Teams notification for approval: {e}"}
+
+
+# ---- Communications reads (Outlook / Teams — on behalf of the signed-in user) ----
+# READ-ONLY and deliberately NOT approval-gated: reading a user's own mail/chats
+# changes nothing and sends nothing, so there is no draft/confirm step. Every read
+# is audited on the API side (recordAgentAction, security event) and only
+# metadata/short previews are returned — full bodies are never persisted into the
+# 11 mock tables. These require the signed-in user's session handle
+# (MSX_SESSION_ID, provided to the agent as a system message) so the API can run
+# the read AS that user via Microsoft Graph on-behalf-of; without it the API
+# returns a clear "sign-in required" error.
+def _session_headers(session: str | None) -> dict | None:
+    """Per-call header carrying the user session handle for on-behalf-of reads."""
+    s = (session or "").strip()
+    return {"x-msx-session": s} if s else None
+
+
+def read_outlook(
+    top: Annotated[int, Field(description="How many recent messages to return (1-50).")] = 10,
+    session: Annotated[
+        str | None,
+        Field(
+            description="The MSX_SESSION_ID value from the system message. REQUIRED so the read runs as the signed-in user — pass it verbatim."
+        ),
+    ] = None,
+) -> Any:
+    """Read the signed-in user's recent Outlook email (subject, sender, date, and a
+    short body preview) so you can extract context to inform a decision.
+
+    READ-ONLY: nothing is sent and no approval is needed. Requires the user's
+    session handle (MSX_SESSION_ID). Returns only metadata/previews — never full
+    bodies, and nothing is stored."""
+    top = max(1, min(50, int(top or 10)))
+    try:
+        data = _mc.get(
+            "/api/graph/outlook/messages",
+            params={"top": top},
+            headers=_session_headers(session),
+        )
+    except Exception as e:
+        return {"error": f"Could not read Outlook: {e}"}
+    result = []
+    for m in data or []:
+        addr = (m.get("from") or {}).get("emailAddress") or {}
+        result.append(
+            {
+                "subject": m.get("subject") or "(no subject)",
+                "from": addr.get("name") or addr.get("address"),
+                "receivedDateTime": m.get("receivedDateTime"),
+                "preview": m.get("bodyPreview"),
+            }
+        )
+    return result
+
+
+def read_teams(
+    top: Annotated[int, Field(description="How many recent chats to scan (1-50).")] = 5,
+    perChat: Annotated[int, Field(description="How many recent messages to read per chat (1-20).")] = 5,
+    session: Annotated[
+        str | None,
+        Field(
+            description="The MSX_SESSION_ID value from the system message. REQUIRED so the read runs as the signed-in user — pass it verbatim."
+        ),
+    ] = None,
+) -> Any:
+    """Read the signed-in user's recent Teams chats WITH their recent messages
+    (sender + short text + timestamp) so you can extract context to inform a
+    decision.
+
+    READ-ONLY: nothing is posted and no approval is needed. Requires the user's
+    session handle (MSX_SESSION_ID). Returns only metadata/short previews, and
+    nothing is stored."""
+    top = max(1, min(50, int(top or 5)))
+    perChat = max(1, min(20, int(perChat or 5)))
+    try:
+        data = _mc.get(
+            "/api/graph/teams/messages",
+            params={"top": top, "perChat": perChat},
+            headers=_session_headers(session),
+        )
+    except Exception as e:
+        return {"error": f"Could not read Teams: {e}"}
+    return data or []

@@ -40,7 +40,35 @@ interface GraphChat {
   lastUpdatedDateTime?: string;
 }
 
+interface GraphChatMessage {
+  id: string;
+  messageType?: string;
+  createdDateTime?: string;
+  from?: { user?: { displayName?: string } | null } | null;
+  body?: { content?: string; contentType?: string };
+}
+
+/** A chat plus the recent messages inside it (content the agent can reason over). */
+interface TeamsChatThread {
+  id: string;
+  topic: string | null;
+  chatType?: string;
+  lastUpdatedDateTime?: string;
+  messages: { from: string; sentAt?: string; text: string }[];
+}
+
 const USER_SELECT = 'id,displayName,mail,userPrincipalName,jobTitle,department';
+
+/** Collapse Teams HTML message content to a short plain-text preview. */
+function toPreview(body?: { content?: string; contentType?: string }, max = 400): string {
+  const raw = body?.content ?? '';
+  const text =
+    body?.contentType === 'html'
+      ? raw.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ')
+      : raw;
+  const clean = text.replace(/\s+/g, ' ').trim();
+  return clean.length > max ? `${clean.slice(0, max)}…` : clean;
+}
 
 /** 'live' delivers via Microsoft Graph; anything else simulates (no admin needed). */
 function sendMode(): 'live' | 'simulate' {
@@ -190,6 +218,61 @@ export const graphService = {
         `/me/chats?$top=${top}&$orderby=lastMessagePreview/createdDateTime desc`,
       );
       return { data: list.value, outputSummary: `returned ${list.value.length} chats` };
+    });
+  },
+
+  /**
+   * Recent Teams chats WITH the last few messages inside each — the actual
+   * content the agent needs to extract information from. Lists the top chats,
+   * then reads up to `perChat` recent messages per chat (sender + short text
+   * preview + timestamp). Only metadata/previews are returned and audited; full
+   * bodies are never persisted into the mock tables.
+   */
+  teamsMessages(user: AuthUser, topChats: number, perChat: number) {
+    const token = assertion(user);
+    return audited(user, 'ReadTeams', `GET /me/chats messages top=${topChats} perChat=${perChat}`, async () => {
+      const chats = (
+        await graphGet<GraphList<GraphChat>>(
+          token,
+          `/me/chats?$top=${topChats}&$orderby=lastMessagePreview/createdDateTime desc`,
+        )
+      ).value;
+
+      const threads: TeamsChatThread[] = [];
+      let totalMessages = 0;
+      for (const chat of chats) {
+        let messages: TeamsChatThread['messages'] = [];
+        try {
+          const raw = await graphGet<GraphList<GraphChatMessage>>(
+            token,
+            `/me/chats/${chat.id}/messages?$top=${perChat}`,
+          );
+          messages = raw.value
+            .filter((m) => (m.messageType ?? 'message') === 'message')
+            .map((m) => ({
+              from: m.from?.user?.displayName ?? 'unknown',
+              sentAt: m.createdDateTime,
+              text: toPreview(m.body),
+            }))
+            .filter((m) => m.text.length > 0);
+        } catch {
+          // A single chat that can't be read (e.g. a meeting/system chat) must not
+          // fail the whole read — skip its messages and keep going.
+          messages = [];
+        }
+        totalMessages += messages.length;
+        threads.push({
+          id: chat.id,
+          topic: chat.topic ?? null,
+          chatType: chat.chatType,
+          lastUpdatedDateTime: chat.lastUpdatedDateTime,
+          messages,
+        });
+      }
+      return {
+        data: threads,
+        outputSummary: `returned ${totalMessages} messages across ${threads.length} chats`,
+      };
     });
   },
 

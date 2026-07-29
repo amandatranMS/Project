@@ -34,6 +34,8 @@ from msx_capabilities import (
     list_pending_approvals,
     notify_teams,
     propose_milestone_for_approval,
+    read_outlook,
+    read_teams,
     search_records,
     send_email,
     update_deal_team_member,
@@ -249,10 +251,21 @@ def build_subagents(client) -> list[Agent]:
         Agent(
             client=client,
             name="communications_specialist",
-            description="Drafts Outlook email and Teams notifications, lets the user edit them, then submits them for human approval.",
+            description="Reads the user's Outlook email and Teams messages (read-only, no approval) to gather context, and drafts Outlook email and Teams notifications, then submits them for human approval.",
             instructions=(
-                "You are the Communications specialist for a SYNTHETIC MOCK MSX workspace. You "
-                "draft Outlook email (send_email) and Teams notifications (notify_teams). "
+                "You are the Communications specialist for a SYNTHETIC MOCK MSX workspace. You do "
+                "two kinds of work:\n"
+                "A) READING the signed-in user's real Outlook email (read_outlook) and Teams "
+                "messages (read_teams) to gather context. These are READ-ONLY: they change "
+                "nothing, send nothing, and need NO approval and NO draft/confirm step — just call "
+                "them and summarize what actually came back. They require the user session handle: "
+                "pass the MSX_SESSION_ID value (given to you in the instruction / system context) "
+                "verbatim as the `session` argument on EVERY read_outlook/read_teams call. If no "
+                "MSX_SESSION_ID is available, say the user must be signed in to read their mail or "
+                "Teams instead of guessing. Report ONLY messages the tool returned — never invent "
+                "senders, subjects, dates, or content, and never fabricate a message. If a read "
+                "returns an error or nothing, say so plainly.\n"
+                "B) DRAFTING Outlook email (send_email) and Teams notifications (notify_teams). "
                 "You have NO memory of earlier turns. Each time you are called, decide what to do "
                 "based ONLY on what THIS instruction tells you:\n"
                 "- If the instruction asks you to DRAFT, PREVIEW, PREPARE, or REVISE a message (or "
@@ -276,6 +289,6 @@ def build_subagents(client) -> list[Agent]:
                 "Never say a message was sent — say it was drafted, or submitted for approval. "
                 "Keep messages concise and professional."
             ),
-            tools=[send_email, notify_teams],
+            tools=[read_outlook, read_teams, send_email, notify_teams],
         ),
     ]

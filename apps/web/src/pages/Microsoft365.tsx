@@ -33,25 +33,25 @@ interface GraphChat {
   chatType?: string;
   lastUpdatedDateTime?: string;
 }
+interface TeamsChatMessage {
+  from: string;
+  sentAt?: string;
+  text: string;
+}
+interface TeamsChatThread {
+  id: string;
+  topic: string | null;
+  chatType?: string;
+  lastUpdatedDateTime?: string;
+  messages: TeamsChatMessage[];
+}
 interface Hierarchy {
   me: GraphUser;
   manager: GraphUser | null;
   directReports: GraphUser[];
   colleagues: GraphUser[];
 }
-interface SendOutcome {
-  sent: boolean;
-  simulated?: boolean;
-  requiresConfirmation?: boolean;
-  mode?: string;
-  to?: string;
-  subject?: string;
-  message?: string;
-  note?: string;
-  preview?: { to?: string; subject?: string; body?: string; message?: string };
-}
-
-type ResultKind = 'profile' | 'hierarchy' | 'email' | 'chats' | 'send';
+type ResultKind = 'profile' | 'hierarchy' | 'email' | 'chats' | 'teamsMessages';
 interface ResultState {
   kind: ResultKind;
   label: string;
@@ -80,12 +80,6 @@ export default function Microsoft365() {
   const [error, setError] = useState<string | null>(null);
   const [showRaw, setShowRaw] = useState(false);
   const resultRef = useRef<HTMLDivElement>(null);
-
-  const [to, setTo] = useState('');
-  const [subject, setSubject] = useState('');
-  const [body, setBody] = useState('');
-  const [teamsTo, setTeamsTo] = useState('');
-  const [teamsMsg, setTeamsMsg] = useState('');
 
   const scrollToResult = () =>
     requestAnimationFrame(() =>
@@ -123,16 +117,6 @@ export default function Microsoft365() {
     });
   };
 
-  const sendEmail = (confirm: boolean) =>
-    run('send', confirm ? 'Send email (as me)' : 'Preview email', () =>
-      api.post('/graph/outlook/send', { to, subject, body, confirm }),
-    );
-
-  const notifyTeams = (confirm: boolean) =>
-    run('send', confirm ? 'Send Teams notification' : 'Preview Teams notification', () =>
-      api.post('/graph/teams/notify', { message: teamsMsg, to: teamsTo || undefined, confirm }),
-    );
-
   const anyBusy = busy !== null;
   const label = (text: string) => (busy === text ? 'Loading…' : text);
 
@@ -157,8 +141,8 @@ export default function Microsoft365() {
         return <EmailList messages={result.data as GraphMessage[]} />;
       case 'chats':
         return <ChatList chats={result.data as GraphChat[]} />;
-      case 'send':
-        return <SendView data={result.data as SendOutcome} />;
+      case 'teamsMessages':
+        return <TeamsMessagesView threads={result.data as TeamsChatThread[]} />;
       default:
         return <pre className="m365-output">{JSON.stringify(result.data, null, 2)}</pre>;
     }
@@ -196,39 +180,9 @@ export default function Microsoft365() {
           <button className="btn" disabled={anyBusy} onClick={() => run('chats', 'Recent Teams chats', () => api.get('/graph/teams/chats?top=5'))}>
             {label('Recent Teams chats')}
           </button>
-        </div>
-      </section>
-
-      <section className="m365-section">
-        <h3>3 · Send email (as you)</h3>
-        <div className="m365-form">
-          <input placeholder="To (email address)" value={to} onChange={(e) => setTo(e.target.value)} />
-          <input placeholder="Subject" value={subject} onChange={(e) => setSubject(e.target.value)} />
-          <textarea placeholder="Body" rows={4} value={body} onChange={(e) => setBody(e.target.value)} />
-          <div className="m365-actions">
-            <button className="btn" disabled={anyBusy || !to || !subject || !body} onClick={() => sendEmail(false)}>
-              Preview
-            </button>
-            <button className="btn btn-primary" disabled={anyBusy || !to || !subject || !body} onClick={() => sendEmail(true)}>
-              Send as me
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <section className="m365-section">
-        <h3>4 · Notify a teammate on Teams</h3>
-        <div className="m365-form">
-          <input placeholder="To (email, optional)" value={teamsTo} onChange={(e) => setTeamsTo(e.target.value)} />
-          <textarea placeholder="Message" rows={3} value={teamsMsg} onChange={(e) => setTeamsMsg(e.target.value)} />
-          <div className="m365-actions">
-            <button className="btn" disabled={anyBusy || !teamsMsg} onClick={() => notifyTeams(false)}>
-              Preview
-            </button>
-            <button className="btn btn-primary" disabled={anyBusy || !teamsMsg} onClick={() => notifyTeams(true)}>
-              Send notification
-            </button>
-          </div>
+          <button className="btn" disabled={anyBusy} onClick={() => run('teamsMessages', 'Recent Teams messages', () => api.get('/graph/teams/messages?top=5&perChat=5'))}>
+            {label('Recent Teams messages')}
+          </button>
         </div>
       </section>
 
@@ -346,36 +300,36 @@ function ChatList({ chats }: { chats: GraphChat[] }) {
   );
 }
 
-function SendView({ data }: { data: SendOutcome }) {
-  if (data.requiresConfirmation) {
-    return (
-      <>
-        <div className="m365-status info">Preview only — nothing was sent. Click the Send button to actually send.</div>
-        <div className="m365-card">
-          {data.preview?.to && <div><strong>To:</strong> {data.preview.to}</div>}
-          {data.preview?.subject && <div><strong>Subject:</strong> {data.preview.subject}</div>}
-          {data.preview?.body && <div className="m365-item-preview">{data.preview.body}</div>}
-          {data.preview?.message && <div className="m365-item-preview">{data.preview.message}</div>}
-        </div>
-      </>
-    );
-  }
-  if (data.sent) {
-    return (
-      <>
-        <div className={`m365-status ${data.simulated ? 'warn' : 'success'}`}>
-          {data.simulated
-            ? '✓ Simulated — recorded & audited, but not actually delivered.'
-            : '✓ Sent for real.'}
-        </div>
-        <div className="m365-card">
-          {data.to && <div><strong>To:</strong> {data.to}</div>}
-          {data.subject && <div><strong>Subject:</strong> {data.subject}</div>}
-          {data.message && <div className="m365-item-preview">{data.message}</div>}
-          {data.note && <div className="muted">{data.note}</div>}
-        </div>
-      </>
-    );
-  }
-  return <pre className="m365-output">{JSON.stringify(data, null, 2)}</pre>;
+function TeamsMessagesView({ threads }: { threads: TeamsChatThread[] }) {
+  if (!threads.length) return <p className="muted">No recent chats.</p>;
+  const threadTitle = (t: TeamsChatThread) =>
+    t.topic ||
+    (t.chatType === 'oneOnOne' ? 'One-on-one chat' : t.chatType === 'group' ? 'Group chat' : 'Chat');
+  return (
+    <ul className="m365-list">
+      {threads.map((t) => (
+        <li key={t.id} className="m365-item">
+          <div className="m365-item-top">
+            <span className="m365-item-title">{threadTitle(t)}</span>
+            <span className="m365-item-date">{fmtDate(t.lastUpdatedDateTime)}</span>
+          </div>
+          {t.messages.length ? (
+            <div className="m365-thread">
+              {t.messages.map((m, i) => (
+                <div key={i} className="m365-msg">
+                  <div className="m365-msg-head">
+                    <span className="m365-msg-from">{m.from}</span>
+                    <span className="m365-item-date">{fmtDate(m.sentAt)}</span>
+                  </div>
+                  <div className="m365-item-preview">{m.text}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="m365-item-sub muted">No readable messages in this chat.</div>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
 }

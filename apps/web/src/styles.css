@@ -434,6 +434,16 @@ a:hover { color: var(--brand-shade); text-decoration: none; }
   white-space: pre-wrap;
   word-break: break-word;
 }
+.m365-thread { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
+.m365-msg {
+  padding: 8px 10px;
+  border-left: 3px solid var(--brand-primary, #0f6cbd);
+  background: var(--surface-2, #f6f8fc);
+  border-radius: 6px;
+}
+.m365-msg-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.m365-msg-from { font-size: 13px; font-weight: 600; color: var(--text, #17203a); }
+.m365-msg .m365-item-preview { margin-top: 4px; }
 .m365-link {
   display: inline-block;
   margin-top: 8px;
