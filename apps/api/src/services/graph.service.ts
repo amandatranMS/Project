@@ -70,9 +70,13 @@ function toPreview(body?: { content?: string; contentType?: string }, max = 400)
   return clean.length > max ? `${clean.slice(0, max)}…` : clean;
 }
 
-/** 'live' delivers via Microsoft Graph; anything else simulates (no admin needed). */
+/**
+ * Delivery mode. Defaults to 'live' — real Microsoft Graph delivery — so email and
+ * Teams are actually sent (after the human confirm gate). Set GRAPH_SEND_MODE=simulate
+ * to explicitly opt back into recorded-but-undelivered sends (e.g. for tests/demos).
+ */
 function sendMode(): 'live' | 'simulate' {
-  return process.env.GRAPH_SEND_MODE === 'live' ? 'live' : 'simulate';
+  return process.env.GRAPH_SEND_MODE === 'simulate' ? 'simulate' : 'live';
 }
 
 /**
@@ -280,8 +284,8 @@ export const graphService = {
    * Send an Outlook email AS the signed-in user (delegated Mail.Send).
    * Confirm gate: without `confirm: true`, nothing is sent — we return a preview
    * so the agent must restate the email and get an explicit go-ahead first.
-   * Honors GRAPH_SEND_MODE: 'simulate' (default, no admin — records but does not
-   * deliver) or 'live' (real Graph send, needs admin-consented Mail.Send).
+   * Honors GRAPH_SEND_MODE: 'live' (default — real Graph send via admin-consented
+   * Mail.Send) or 'simulate' (records but does not deliver; no admin needed).
    */
   async sendMail(
     user: AuthUser,
@@ -338,11 +342,11 @@ export const graphService = {
   },
 
   /**
-   * Post a Teams notification. Confirm-gated like email. In 'simulate' mode
-   * (default) it records the action without delivering — no admin needed. In
-   * 'live' mode it sends AS the signed-in user (delegated): it resolves the
-   * recipient, opens or reuses a 1:1 chat, and posts the message. Requires the
-   * delegated Chat.ReadWrite + ChatMessage.Send scopes and a `to` recipient.
+   * Post a Teams notification. Confirm-gated like email. In 'live' mode (default)
+   * it sends AS the signed-in user (delegated): it resolves the recipient, opens
+   * or reuses a 1:1 chat, and posts the message. In 'simulate' mode it records the
+   * action without delivering — no admin needed. Live requires the delegated
+   * Chat.ReadWrite + ChatMessage.Send scopes and a `to` recipient.
    */
   async notifyTeams(
     user: AuthUser,

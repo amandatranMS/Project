@@ -154,8 +154,8 @@ export default function Microsoft365() {
       <p className="muted">
         Real Microsoft Graph, on your behalf. Reads use your login; the org chart also
         needs a one-time admin consent. Sending is gated: Preview first, then Send. Email
-        and Teams run in <strong>simulate</strong> mode by default (recorded &amp; audited,
-        not delivered) — switch to live delivery later once an admin consents.
+        and Teams run in <strong>live</strong> mode (real delivery, recorded &amp; audited)
+        — every send still needs your explicit confirm before it goes out.
       </p>
 
       <section className="m365-section">
