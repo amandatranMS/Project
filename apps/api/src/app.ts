@@ -10,6 +10,10 @@ import { sendOk } from './lib/responses.js';
 export function createApp() {
   const app = express();
 
+  // Trust the dev proxy / tunnel / ingress so req.ip reflects the real client
+  // IP (used as source_ip in the Defender/Purview user-security context).
+  app.set('trust proxy', true);
+
   app.use(
     cors({
       origin: process.env.WEB_ORIGIN?.split(',') ?? '*',

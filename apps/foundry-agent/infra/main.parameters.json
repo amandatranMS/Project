@@ -47,6 +47,9 @@
       "enableAgentIdentity": {
         "value": "${ENABLE_AGENT_IDENTITY=true}"
       },
+      "enableDefenderForAI": {
+        "value": "${ENABLE_DEFENDER_FOR_AI=false}"
+      },
       "enableHostedAgents": {
         "value": "${ENABLE_HOSTED_AGENTS=false}"
       },

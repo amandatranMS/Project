@@ -137,16 +137,26 @@ executed only after a human approves, and recorded in the `AgentActionAuditLog`.
 
 ## Security controls
 
-Real Microsoft governance controls I want to integrate on top of the app-level
-approval + audit gate:
+Real Microsoft governance layered on top of the app-level approval + audit gate.
+See **[docs/security.md](docs/security.md)** for the enable + test runbook.
 
-- **Microsoft Entra ID** — automatically onboard/register agents and enforce
-  **conditional access policies** (e.g. geographic and IP-address restrictions) so
-  agents authenticate as governed identities with least-privilege access.
-- **Microsoft Purview** — **DLP policies for PII and PCI** to prevent sensitive data
-  from being exposed in agent context or output.
-- **Microsoft Defender** — _in progress_: runtime threat protection and monitoring for
-  agent activity.
+- **Microsoft Entra ID** — agents authenticate as governed identities (managed
+  identity / workload-identity federation), so **conditional access** (e.g.
+  geographic and IP-address restrictions) and least-privilege apply.
+- **Microsoft Defender for Cloud → Defender XDR** — threat protection for AI
+  services, enabled via `ENABLE_DEFENDER_FOR_AI` (Bicep) or
+  `az security pricing create -n AI --tier Standard`. Raises jailbreak /
+  data-leakage / credential-theft alerts on the AIServices account, so it covers
+  **both** the hosted agent and the direct engine. The direct engine also stamps
+  each model call with the signed-in user's `user_security_context` so alerts are
+  attributable to the real seller.
+- **Microsoft Purview (DLP for AI)** — the Defender "data security for AI
+  interactions" bridge shares **model-level** prompts/responses with Purview, so DLP
+  for PII/PCI applies to the **direct** engine *and* to the model calls the Foundry
+  agent makes under the hood. Needs a Purview license. _Note:_ Purview does not yet
+  capture the **agent as its own entity** (identity, tool calls, orchestration), and
+  PII/PCI matches surface in the **Purview portal** (DSPM for AI / DLP alerts), not in
+  Defender for Cloud. See [docs/security.md](docs/security.md).
 
 ## Previous Approaches
 

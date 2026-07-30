@@ -1,4 +1,5 @@
 import { getAiClient } from '../../lib/aiClient.js';
+import { getUserSecurityContext } from '../../lib/requestContext.js';
 import { runToolLoop, type ChatMessage, type TokenSink } from './toolLoop.js';
 import { milestoneTools, dashboardTools, opportunityTools, searchTools } from './msxTools.js';
 
@@ -35,5 +36,17 @@ const ALL_TOOLS = [...milestoneTools, ...dashboardTools, ...opportunityTools, ..
 /** Runs one assistant turn over the supplied conversation history. */
 export async function runOrchestrator(messages: ChatMessage[], onToken?: TokenSink): Promise<string> {
   const { client, deployment } = getAiClient();
-  return runToolLoop(client, deployment, ASSISTANT_INSTRUCTIONS, messages, ALL_TOOLS, 8, onToken);
+  // Attribute Defender for AI alerts to the signed-in seller and let Purview Data
+  // Security policies apply to this direct model call (explicit user context).
+  const userSecurityContext = getUserSecurityContext();
+  return runToolLoop(
+    client,
+    deployment,
+    ASSISTANT_INSTRUCTIONS,
+    messages,
+    ALL_TOOLS,
+    8,
+    onToken,
+    userSecurityContext,
+  );
 }

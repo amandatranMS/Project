@@ -25,8 +25,12 @@ export const chatService = {
    * governed action.
    */
   async send(messages: ChatMessage[], engine: ChatEngine, user?: AuthUser, onToken?: TokenSink) {
-    // The in-app engine is disabled — all chat turns go to the Foundry hosted agent.
-    if (engine === 'in-app') {
+    // The in-app (direct Azure OpenAI) engine is off by default — the demo routes
+    // every turn to the Foundry hosted agent. Set IN_APP_ENGINE_ENABLED=true to
+    // re-enable it: it is the ONLY path Microsoft Purview Data Security / DLP can
+    // govern (Purview does not cover Foundry agents), and it carries the signed-in
+    // user's Defender/Purview user-security context on each model call.
+    if (engine === 'in-app' && process.env.IN_APP_ENGINE_ENABLED !== 'true') {
       throw new HttpError(403, 'The in-app engine is disabled. Use the Foundry hosted agent.');
     }
     if (engine === 'foundry') {

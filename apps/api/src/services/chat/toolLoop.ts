@@ -31,12 +31,20 @@ export async function runToolLoop(
   tools: Tool[],
   maxSteps = 8,
   onToken?: TokenSink,
+  userSecurityContext?: Record<string, string>,
 ): Promise<string> {
   const toolMap = new Map(tools.map((t) => [t.name, t]));
   const openaiTools = tools.map((t) => ({
     type: 'function' as const,
     function: { name: t.name, description: t.description, parameters: t.parameters },
   }));
+
+  // Microsoft Defender for Cloud / Purview end-user context. Sent as an extra body
+  // field via a spread of a variable so the openai SDK's excess-property check is
+  // bypassed while the known params stay type-checked. Empty when no signed-in user.
+  const securityContext: Record<string, unknown> = userSecurityContext
+    ? { user_security_context: userSecurityContext }
+    : {};
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const convo: any[] = [{ role: 'system', content: systemPrompt }, ...messages];
@@ -79,6 +87,7 @@ export async function runToolLoop(
         tools: openaiTools.length ? openaiTools : undefined,
         tool_choice: openaiTools.length ? 'auto' : undefined,
         stream: true,
+        ...securityContext,
       });
       let content = '';
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -111,6 +120,7 @@ export async function runToolLoop(
       messages: convo,
       tools: openaiTools.length ? openaiTools : undefined,
       tool_choice: openaiTools.length ? 'auto' : undefined,
+      ...securityContext,
     });
     const msg = resp.choices[0].message;
 

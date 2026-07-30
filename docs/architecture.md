@@ -114,6 +114,22 @@ Every branch writes to `AgentActionAuditLog`, so the full history —
 `ReadContext → CreateRecommendation → SubmitApproval → Denied → CreateMilestone` —
 is queryable via `GET /api/agent/audit` and visible on the Agent Audit Log page.
 
+## Cloud security governance (Defender + Purview)
+
+The app-level approval + audit gate above is complemented by real Microsoft cloud
+controls on the **AI model interactions** (never on the mock tables). See
+[security.md](security.md) for the enable/test runbook.
+
+- **Microsoft Defender for Cloud (→ Defender XDR)** attaches to the shared
+  Foundry `AIServices` account, so it covers **both** engines — the Foundry hosted
+  agent (`services/chat/foundryProxy.ts`) and the direct Azure OpenAI engine
+  (`orchestrator.ts` → `toolLoop.ts`). Enabled via the `enableDefenderForAI` Bicep
+  param.
+- **Microsoft Purview DLP** governs the **direct engine only** — Purview does not
+  cover Foundry agents yet. `toolLoop.ts` stamps each direct call with the signed-in
+  user's `user_security_context` (built in `lib/requestContext.ts`), which is what
+  lets Purview classify and enforce per real user.
+
 ## Validation & error handling
 
 - All request bodies are validated with **Zod** schemas (`apps/api/src/schemas.ts`).

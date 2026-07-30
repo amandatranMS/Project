@@ -92,6 +92,9 @@ param enableMonitoring bool
 @description('Create a user-assigned managed identity for the hosted agent to federate onto its Entra Agent ID blueprint.')
 param enableAgentIdentity bool = true
 
+@description('Enable Microsoft Defender for Cloud threat protection for AI services on the subscription (Defender XDR alerts for the AI workload/agent). Requires Owner/Contributor at subscription scope; billed per the Defender for AI Services plan (30-day free trial).')
+param enableDefenderForAI bool = false
+
 @description('When true, skip Foundry project/role/connection provisioning and reference the existing project read-only. Use when pointing at an existing Foundry project via --project-id.')
 param useExistingAiProject bool = false
 
@@ -130,6 +133,17 @@ resource rg 'Microsoft.Resources/resourceGroups@2021-04-01' = {
   name: resourceGroupName
   location: location
   tags: tags
+}
+
+// Microsoft Defender for Cloud — threat protection for AI services. Subscription
+// scoped (not tied to the resource group), so the plan protects the AIServices
+// account regardless of where it lives. Off by default; opt in with
+// ENABLE_DEFENDER_FOR_AI=true. Alerts integrate with Defender XDR.
+module defenderForAI 'core/security/defender-for-ai.bicep' = if (enableDefenderForAI) {
+  name: 'defender-for-ai'
+  params: {
+    pricingTier: 'Standard'
+  }
 }
 
 // Build dependent resources array conditionally
@@ -270,3 +284,6 @@ output AZURE_AGENT_IDENTITY_NAME string = enableAgentIdentity ? agentIdentity.ou
 output AZURE_AGENT_IDENTITY_PRINCIPAL_ID string = enableAgentIdentity ? agentIdentity.outputs.principalId : ''
 output AZURE_AGENT_IDENTITY_CLIENT_ID string = enableAgentIdentity ? agentIdentity.outputs.clientId : ''
 output AZURE_AGENT_IDENTITY_RESOURCE_ID string = enableAgentIdentity ? agentIdentity.outputs.resourceId : ''
+
+// Defender for Cloud — AI threat protection plan status (empty when not enabled).
+output DEFENDER_FOR_AI_PRICING_TIER string = enableDefenderForAI ? defenderForAI.outputs.pricingTier : ''

@@ -34,6 +34,8 @@ export interface AuthUser {
   kind: 'user' | 'service';
   /** Entra object id (stable per user). */
   oid?: string;
+  /** Entra tenant id (tid claim) — end_user_tenant_id for Defender/Purview context. */
+  tenantId?: string;
   /** Display name from the token, if present. */
   name?: string;
   /** UPN / email from the token, if present. */
@@ -111,6 +113,7 @@ async function verifyBearer(token: string): Promise<AuthUser> {
   return {
     kind: 'user',
     oid: typeof payload.oid === 'string' ? payload.oid : undefined,
+    tenantId: typeof payload.tid === 'string' ? payload.tid : undefined,
     name: typeof payload.name === 'string' ? payload.name : undefined,
     email:
       (typeof payload.preferred_username === 'string' && payload.preferred_username) ||
