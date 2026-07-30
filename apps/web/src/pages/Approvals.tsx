@@ -136,6 +136,22 @@ export default function Approvals() {
           milestoneBusinessId?: string;
           milestoneName?: string;
           managerEmail?: ManagerEmailOutcome;
+          sent?: boolean;
+          simulated?: boolean;
+          recipientCount?: number;
+          deliveredCount?: number;
+          failedCount?: number;
+          error?: string;
+          note?: string;
+          teamsBroadcast?: {
+            sent: boolean;
+            simulated: boolean;
+            recipientCount: number;
+            deliveredCount: number;
+            failedCount: number;
+            error?: string;
+            note?: string;
+          } | null;
         };
       }>(`/approval-requests/${id}/${action}`, { reviewedBy, acknowledgeManagerEmail, skipBroadcast });
       setConfirmingLostId(null);
@@ -156,7 +172,34 @@ export default function Approvals() {
               : email?.attempted && !email.sent
                 ? ` Manager email not sent — ${email.skippedReason ?? 'unknown reason'}.`
                 : '';
-          setMessage(`Approved — action executed: ${result.action} (simulated where applicable, recorded in the audit log).${emailNote}`);
+          const teams =
+            result.result?.teamsBroadcast ??
+            (result.action === 'NotifyTeams' &&
+            typeof result.result?.recipientCount === 'number' &&
+            typeof result.result.deliveredCount === 'number' &&
+            typeof result.result.failedCount === 'number'
+              ? {
+                  sent: result.result.sent ?? false,
+                  simulated: result.result.simulated ?? false,
+                  recipientCount: result.result.recipientCount,
+                  deliveredCount: result.result.deliveredCount,
+                  failedCount: result.result.failedCount,
+                  error: result.result.error,
+                  note: result.result.note,
+                }
+              : null);
+          const teamsNote = teams
+            ? teams.simulated
+              ? ' Tenant-wide Teams broadcast was simulated, not delivered.'
+              : teams.error
+                ? ` Tenant-wide Teams broadcast failed: ${teams.error}`
+                : teams.failedCount > 0
+                  ? teams.deliveredCount > 0
+                    ? ` Teams delivery was partial: ${teams.deliveredCount}/${teams.recipientCount} recipients; ${teams.failedCount} failed.${teams.note ? ` ${teams.note}` : ''}`
+                    : ` Teams delivery failed: 0/${teams.recipientCount} recipients; ${teams.failedCount} failed.${teams.note ? ` ${teams.note}` : ''}`
+                  : ` Teams message delivered to all ${teams.deliveredCount} eligible tenant members.`
+            : '';
+          setMessage(`Approved — action executed: ${result.action} (simulated where applicable, recorded in the audit log).${emailNote}${teamsNote}`);
         } else {
           setMessage('Approved.');
         }

@@ -64,7 +64,7 @@ export default function ApproveTeamsBroadcastDialog({
       }
     >
       <p>
-        {alsoCreatesOpportunity ? 'Approving this request will create the opportunity' : 'Approving this request will post a Microsoft Teams message'}
+        {alsoCreatesOpportunity ? 'Approving this request will create the opportunity' : 'Approving this request will post Microsoft Teams messages'}
         {opportunityName ? (
           <>
             {' '}
@@ -72,20 +72,20 @@ export default function ApproveTeamsBroadcastDialog({
           </>
         ) : null}
         {alsoCreatesOpportunity
-          ? ' and post a Microsoft Teams message to your team for visibility.'
-          : ' for team visibility.'}
+          ? ' and send a Microsoft Teams message to every enabled member of your tenant for visibility.'
+          : ' to every enabled member of your tenant for visibility.'}
       </p>
       {requestName && <p className="muted">{requestName}</p>}
       {showSkip && (
         <p className="muted">
           Choose <strong>Create without posting</strong> to create the opportunity without sending
-          the Teams message.
+          tenant-wide Teams messages.
         </p>
       )}
       <p className="muted">
-        The message was drafted by the agent from this opportunity’s data and is recorded in the
-        audit log. This confirmation is the human-in-the-loop gate — the agent never sends on its
-        own.
+        The message was drafted by the agent from this opportunity’s data and will be sent from
+        your signed-in Microsoft account. Recipient enumeration and delivery are recorded in the
+        audit log. This confirmation is the human-in-the-loop gate — the agent never sends on its own.
       </p>
     </Modal>
   );

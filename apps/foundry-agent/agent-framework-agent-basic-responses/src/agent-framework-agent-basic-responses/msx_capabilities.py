@@ -23,7 +23,7 @@ from msx_client import MsxClient
 # Controlled choice values (mirror packages/shared) so the model emits values the
 # API's Zod validation will accept.
 MILESTONE_STATUSES = [
-    "On Track", "At Risk", "Blocked", "Completed",
+    "---", "On Track", "At Risk", "Blocked", "Completed",
     "Cancelled", "Lost To Competitor", "Hygiene/Duplicate",
 ]
 MILESTONE_CATEGORIES = ["Production", "Pilot", "Workshop", "Assessment", "Deployment", "Adoption"]
@@ -383,6 +383,7 @@ def get_opportunity(id: Annotated[str, Field(description="The opportunity id or 
 
 def create_opportunity(
     opportunityName: Annotated[str, Field(description="Name of the new opportunity.")],
+    userConfirmed: Annotated[bool, Field(description="True only after the user explicitly confirmed the complete displayed draft.")],
     customerName: Annotated[str | None, Field(description="Customer name.")] = None,
     industry: Annotated[str | None, Field(description="Industry.")] = None,
     solutionArea: Annotated[str | None, Field(description=f"One of: {SOLUTION_AREAS}.")] = None,
@@ -402,6 +403,11 @@ def create_opportunity(
     submits an approval request that a human must approve in the Approvals log
     before the opportunity is created. The TPID is auto-assigned (next sequential
     number) on creation, so do not ask the user for one unless they volunteer it."""
+    if not userConfirmed:
+        return {
+            "error": "Explicit confirmation required before submission.",
+            "requiredAction": "Present the complete editable opportunity draft and ask the user to edit or confirm it.",
+        }
     fields = {
         "opportunityName": opportunityName,
         "customerName": customerName,
@@ -764,6 +770,7 @@ def propose_milestone_for_approval(
     competitorName: Annotated[str | None, Field(description="User-confirmed milestone competitor. Never copy Opportunity.competitorName without explicit milestone-specific confirmation.")],
     competitorBlankConfirmed: Annotated[bool, Field(description="True only after the user explicitly confirmed Competitor should be blank.")],
     suggestedDescription: Annotated[str, Field(description="Complete milestone description/comments confirmed by the user.")],
+    userConfirmed: Annotated[bool, Field(description="True only after the user explicitly confirmed the complete displayed draft.")],
     milestoneCategory: Annotated[str | None, Field(description=f"One of: {MILESTONE_CATEGORIES}.")] = None,
     owner: Annotated[str | None, Field(description="User-confirmed milestone owner.")] = None,
     estDate: Annotated[str | None, Field(description="User-confirmed estimated date (ISO).")]= None,
@@ -792,6 +799,11 @@ def propose_milestone_for_approval(
 ) -> Any:
     """In one tool call, record a recommendation and submit its complete milestone payload
     for human approval. No milestone is created until a human approves the request."""
+    if not userConfirmed:
+        return {
+            "error": "Explicit confirmation required before submission.",
+            "requiredAction": "Present the complete editable milestone draft and ask the user to edit or confirm it.",
+        }
     if not (competitorName or "").strip() and not competitorBlankConfirmed:
         return {
             "error": "Competitor confirmation required before submission.",

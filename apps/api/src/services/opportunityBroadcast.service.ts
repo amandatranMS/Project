@@ -25,15 +25,14 @@ import { graphService } from './graph.service.js';
  *
  *  - **Approved create ('send'):** the opportunity was created by a human APPROVING a
  *    CreateOpportunity request. That approval already carries the human's consent (the
- *    Approve dialog warns that a Teams message will be posted), so we post the Teams DM
+ *    Approve dialog warns that Teams messages will be posted), so we send the tenant broadcast
  *    directly (confirmed, audited) as part of that same approval — there is no second
  *    approval entry to act on.
  *
- * Teams delivery is 1:1 (there is no channel-post capability), so the recipient is
- * a single teammate address configured via TEAMS_BROADCAST_TO. Nothing is delivered
- * unless GRAPH_SEND_MODE=live (otherwise notifyTeams records a simulated, audited,
- * undelivered send). No new tables/columns — the deferred action is stored on the
- * existing ApprovalRequest.errorMessage column.
+ * Teams delivery uses one 1:1 chat per enabled tenant member because there is no
+ * tenant-wide channel-post capability. Nothing is delivered unless
+ * GRAPH_SEND_MODE=live (otherwise the send is simulated and audited). No new
+ * tables/columns — the deferred action is stored on ApprovalRequest.errorMessage.
  */
 
 /**
@@ -52,12 +51,6 @@ export type BroadcastMode = 'none' | 'queue' | 'send';
  * decodeAction() reads the same prefix and executes the action on approval.
  */
 const ACTION_TAG = 'MSX_ACTION::';
-
-/** Recipient for the Teams visibility DM (a teammate — 1:1 chat only). */
-function broadcastRecipient(): string | undefined {
-  const v = process.env.TEAMS_BROADCAST_TO?.trim();
-  return v || undefined;
-}
 
 /** Master switch for the auto notify-on-create behaviour (default ON). */
 function notifyEnabled(): boolean {
@@ -112,17 +105,8 @@ async function announce(id: string, actor: AuthUser | undefined, confirm: boolea
   });
   if (!opp) throw new HttpError(404, 'Opportunity not found.');
 
-  const to = broadcastRecipient();
-  if (!to) {
-    throw new HttpError(
-      400,
-      'No Teams broadcast recipient is configured. Set TEAMS_BROADCAST_TO to a teammate\u2019s email address.',
-    );
-  }
-
-  return graphService.notifyTeams(actor ?? { kind: 'service' }, {
+  return graphService.notifyTenantTeams(actor ?? { kind: 'service' }, {
     message: formatOpportunityMessage(opp),
-    to,
     confirm,
   });
 }
@@ -165,23 +149,19 @@ async function recordInAppBroadcast(opp: Opportunity, actor?: AuthUser) {
 
 /**
  * Path B ('queue') — queue a human-gated approval so the agent's message shows up in
- * the Approvals tab and is only delivered once a human approves it. Returns null (and
- * sends nothing) when no recipient is configured.
+ * the Approvals tab and is only delivered once a human approves it.
  */
 async function queueTeamsBroadcastApproval(opp: Opportunity) {
-  const to = broadcastRecipient();
-  if (!to) return null;
-
   const action: PendingAction = {
     kind: 'NotifyTeams',
     message: formatOpportunityMessage(opp),
-    to,
+    audience: 'tenant',
   };
 
-  return prisma.approvalRequest.create({
+  const approval = await prisma.approvalRequest.create({
     data: {
       approvalRequestBusinessId: genId('APR'),
-      requestName: `Notify team of new opportunity ${opp.opportunityBusinessId} via Teams (${to})`,
+      requestName: `Notify all tenant users of new opportunity ${opp.opportunityBusinessId} via Teams`,
       approvalStatus: 'Pending',
       requestStatus: 'Submitted',
       requestedBy: 'OpportunityBroadcast (agent)',
@@ -189,27 +169,27 @@ async function queueTeamsBroadcastApproval(opp: Opportunity) {
       opportunity: connectOpportunity(opp.opportunityName),
     },
   });
+  return {
+    queued: true,
+    approvalRequestBusinessId: approval.approvalRequestBusinessId,
+    approvalStatus: approval.approvalStatus,
+  };
 }
 
 /**
  * 'send' — post the visibility DM directly (confirmed, audited) for an opportunity that
  * a human has just created by APPROVING a CreateOpportunity request. No second approval
- * is queued: the human already consented to this send in the Approve dialog. Returns
- * null (and sends nothing) when no recipient is configured.
+ * is queued: the human already consented to this send in the Approve dialog.
  */
 async function sendTeamsBroadcast(opp: Opportunity, actor?: AuthUser) {
-  const to = broadcastRecipient();
-  if (!to) return null;
-
-  return graphService.notifyTeams(actor ?? { kind: 'service' }, {
+  return graphService.notifyTenantTeams(actor ?? { kind: 'service' }, {
     message: formatOpportunityMessage(opp),
-    to,
     confirm: true,
   });
 }
 
 /**
- * Called (best-effort) right after an opportunity is created.
+ * Called right after an opportunity is created.
  *
  * 1. ALWAYS record the in-app "all users" notification (every create path) — this is
  *    the always-on, mock-only visibility feed.
@@ -221,30 +201,43 @@ async function sendTeamsBroadcast(opp: Opportunity, actor?: AuthUser) {
  *                  CreateOpportunity request, so the human consent is folded into that
  *                  single approval — no second approval entry).
  *
- * Each step is isolated so one failing never blocks the other or the create.
+ * The in-app notification remains best-effort. A Graph delivery failure is returned
+ * to the approver so the UI cannot claim that tenant delivery succeeded.
  */
 async function onOpportunityCreated(opp: Opportunity, actor?: AuthUser, mode: BroadcastMode = 'none') {
-  if (!notifyEnabled()) return;
+  if (!notifyEnabled()) return { inAppNotification: null, teamsBroadcast: null };
 
+  let inAppNotification = null;
   try {
-    await recordInAppBroadcast(opp, actor);
+    inAppNotification = await recordInAppBroadcast(opp, actor);
   } catch (err) {
     console.error('[opportunityBroadcast] in-app notification failed:', err);
   }
 
+  let teamsBroadcast = null;
   if (mode === 'queue') {
     try {
-      await queueTeamsBroadcastApproval(opp);
+      teamsBroadcast = await queueTeamsBroadcastApproval(opp);
     } catch (err) {
       console.error('[opportunityBroadcast] queue Teams approval failed:', err);
     }
   } else if (mode === 'send') {
     try {
-      await sendTeamsBroadcast(opp, actor);
+      teamsBroadcast = await sendTeamsBroadcast(opp, actor);
     } catch (err) {
       console.error('[opportunityBroadcast] Teams broadcast failed:', err);
+      teamsBroadcast = {
+        sent: false,
+        simulated: false,
+        recipientCount: 0,
+        deliveredCount: 0,
+        failedCount: 0,
+        error: err instanceof Error ? err.message : String(err),
+        note: 'The opportunity was created, but the tenant-wide Teams broadcast failed.',
+      };
     }
   }
+  return { inAppNotification, teamsBroadcast };
 }
 
 export const opportunityBroadcastService = {

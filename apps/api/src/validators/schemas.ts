@@ -173,6 +173,7 @@ export const pendingActionSchema = z.discriminatedUnion('kind', [
     kind: z.literal('NotifyTeams'),
     message: z.string().min(1),
     to: z.string().email().optional(),
+    audience: z.literal('tenant').optional(),
   }),
   // Full-parity updates: the agent may propose changes to EVERY editable field on
   // the three business entities (composed from the update schemas below so this

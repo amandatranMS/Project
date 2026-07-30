@@ -114,7 +114,7 @@
         "tags": [
           "Opportunities"
         ],
-        "summary": "Create an opportunity. The TPID is auto-assigned as the next sequential number (e.g. TPID-1001 → TPID-1002) when the request omits it. Side-effect: records an in-app \"all users\" notification and, when created by an agent (service principal) in live mode, queues a Pending NotifyTeams ApprovalRequest for human consent (Path B).\n",
+        "summary": "Create an opportunity. The TPID is auto-assigned as the next sequential number (e.g. TPID-1001 → TPID-1002) when the request omits it. Side-effect: records an in-app \"all users\" notification and, when created by an agent (service principal), queues a Pending NotifyTeams ApprovalRequest for human consent. An approved live broadcast enumerates enabled tenant members and sends each member except the sender a 1:1 Teams message.\n",
         "requestBody": {
           "required": true,
           "content": {
@@ -244,7 +244,7 @@
         "tags": [
           "Opportunities"
         ],
-        "summary": "Send the \"new opportunity\" visibility message to the configured teammate over Microsoft Teams (Path A, human consent). Called from the create-confirm popup after a human agrees. Honors GRAPH_SEND_MODE (simulate vs live) and requires TEAMS_BROADCAST_TO to be set; audited via recordAgentAction.\n",
+        "summary": "Send the \"new opportunity\" visibility message to every enabled member of the signed-in user's tenant except the sender, using 1:1 Microsoft Teams chats (Path A, human consent). Called from the create-confirm popup after a human agrees. Honors GRAPH_SEND_MODE (simulate vs live); tenant enumeration and delivery are audited via recordAgentAction.\n",
         "parameters": [
           {
             "$ref": "#/components/parameters/IdParam"
@@ -271,7 +271,10 @@
             "description": "Envelope with delivery result (sent/simulated/skipped)"
           },
           "400": {
-            "description": "No Teams recipient configured"
+            "description": "Invalid confirmation or recipient state"
+          },
+          "403": {
+            "description": "Missing admin-consented Graph permissions"
           },
           "404": {
             "description": "Not found"
@@ -790,7 +793,7 @@
                   },
                   "action": {
                     "type": "object",
-                    "description": "Optional deferred action executed on approval. The carried fields depend on `kind`: send actions use to/subject/body/message; CreateMilestone uses a complete MilestoneInput payload plus competitorBlankConfirmed; CreateOpportunity uses an OpportunityInput payload (opportunityName required); UpdateMilestone uses milestoneId + any MilestoneInput fields; UpdateOpportunity uses opportunityId + any OpportunityInput fields; UpdateDealTeamMember uses dealTeamMemberId + any DealTeamMemberInput fields; DeleteMilestone uses milestoneId.\n",
+                    "description": "Optional deferred action executed on approval. The carried fields depend on `kind`: send actions use to/subject/body/message; NotifyTeams may set audience=tenant for all enabled tenant members; CreateMilestone uses a complete MilestoneInput payload plus competitorBlankConfirmed; CreateOpportunity uses an OpportunityInput payload (opportunityName required); UpdateMilestone uses milestoneId + any MilestoneInput fields; UpdateOpportunity uses opportunityId + any OpportunityInput fields; UpdateDealTeamMember uses dealTeamMemberId + any DealTeamMemberInput fields; DeleteMilestone uses milestoneId.\n",
                     "required": [
                       "kind"
                     ],
@@ -823,6 +826,13 @@
                       },
                       "message": {
                         "type": "string"
+                      },
+                      "audience": {
+                        "type": "string",
+                        "enum": [
+                          "tenant"
+                        ],
+                        "description": "For NotifyTeams, broadcast to all enabled tenant members except the sender."
                       },
                       "milestoneId": {
                         "type": "string"
@@ -1449,7 +1459,7 @@
           },
           "skipBroadcast": {
             "type": "boolean",
-            "description": "Set from the \"Create without posting\" button on a CreateOpportunity approval pop-up. When true, approving creates the opportunity but skips the Teams broadcast entirely (no post, no queued NotifyTeams approval). Ignored for other actions.\n"
+            "description": "Set from the \"Create without posting\" button on a CreateOpportunity approval pop-up. When true, approving creates the opportunity but skips the tenant-wide Teams broadcast entirely (no post, no queued NotifyTeams approval). Ignored for other actions.\n"
           }
         }
       },

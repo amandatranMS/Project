@@ -22,7 +22,14 @@ ORCHESTRATOR_INSTRUCTIONS = (
     "specific person or role, partner, date, risk rating, count, or pipeline metric unless a "
     "tool returned it for that scope. Do not mix dashboard metrics into a single-opportunity "
     "answer unless the user explicitly requests pipeline context. Keep recommendations concise "
-    "and tied to the stated blocker or objective."
+    "and tied to the stated blocker or objective. For a NEW milestone recommendation or "
+    "opportunity, delegate first to retrieve available context and prepare a complete editable "
+    "draft. Infer reasonably inferable values from that context and controlled choices instead "
+    "of requiring the user to manually supply every field. Label every field [Known], "
+    "[Assumption—High/Medium/Low], or [Not applicable—assumed], and call out low-confidence "
+    "fields. Ask the user to edit or explicitly confirm the whole draft. The initial request is "
+    "never confirmation. Submit through the specialist's approval-gated tool only after a later "
+    "explicit confirmation, with userConfirmed=true and every exact draft value."
 )
 
 

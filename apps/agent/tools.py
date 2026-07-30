@@ -12,10 +12,19 @@ from msx_client import MsxClient
 
 # Controlled choice values (mirrors packages/shared) — embedded in descriptions so
 # the model produces values the API's validation will accept.
-MILESTONE_STATUSES = ["On Track", "At Risk", "Blocked", "Completed", "Cancelled", "Lost To Competitor", "Hygiene/Duplicate"]
+MILESTONE_STATUSES = ["---", "On Track", "At Risk", "Blocked", "Completed", "Cancelled", "Lost To Competitor", "Hygiene/Duplicate"]
 MILESTONE_CATEGORIES = ["Production", "Pilot", "Workshop", "Assessment", "Deployment", "Adoption"]
 SALES_STAGES = ["Listen & Consult", "Inspire & Design", "Empower & Achieve", "Realize Value", "Manage & Optimize"]
 OPPORTUNITY_STATUSES = ["Active", "On Hold", "Won", "Lost", "Closed"]
+SOLUTION_AREAS = ["Modern Work", "Security", "Azure", "AI Apps"]
+WORKLOADS = ["M365 Copilot for Microsoft 365", "Microsoft Sentinel", "Microsoft Purview", "Azure Migration", "Copilot Studio", "Defender XDR", "Teams Premium"]
+CUSTOMER_COMMITMENTS = ["Uncommitted", "Verbal", "Committed", "Contracted"]
+DELIVERED_BY = ["Microsoft", "Partner", "Customer", "Joint"]
+AZURE_CAPACITY_TYPES = ["---", "Azure Commit", "MACC", "Open", "CSP", "EA"]
+PREFERRED_AZURE_REGIONS = ["Canada Central", "Canada East", "East US", "West US", "West Europe", "North Europe"]
+RISK_IMPACTS = ["High", "Medium", "Low"]
+PRIORITIES = ["High", "Medium", "Low"]
+CONFIDENCE_LEVELS = ["High", "Medium", "Low"]
 SEARCH_ENTITIES = ["opportunity", "milestone", "statusHistory", "recommendation", "note", "dealTeam", "notification", "runLog", "snapshot"]
 
 
@@ -59,21 +68,98 @@ def build_tool_groups(mc: MsxClient) -> dict[str, list[Tool]]:
     def create_milestone(
         milestoneName: str,
         opportunityName: str,
+        userConfirmed: bool,
+        competitorBlankConfirmed: bool,
+        workload: str | None = None,
+        customerCommitment: str | None = None,
+        deliveredBy: str | None = None,
+        partnerName: str | None = None,
         milestoneStatus: str | None = None,
         milestoneCategory: str | None = None,
         owner: str | None = None,
         riskDescription: str | None = None,
+        statusReason: str | None = None,
+        estDate: str | None = None,
+        fitCharge: float | None = None,
+        nonRecurring: bool | None = None,
+        comments: str | None = None,
+        riskImpact: str | None = None,
+        mitigationPlan: str | None = None,
+        blockedReason: str | None = None,
+        blockedOwner: str | None = None,
+        blockedSince: str | None = None,
+        expectedResolutionDate: str | None = None,
+        escalated: bool | None = None,
+        competitorName: str | None = None,
+        azureCapacityType: str | None = None,
+        preferredAzureRegion: str | None = None,
+        lastUpdated: str | None = None,
+        priority: str | None = None,
+        confidence: str | None = None,
     ) -> Any:
-        payload = {
+        if not userConfirmed:
+            return {"error": "Explicit confirmation required; present the complete editable draft first."}
+        recommendation = mc.post("/api/recommendations", json={
+            "recommendedMilestoneTitle": milestoneName,
+            "opportunityName": opportunityName,
+            "suggestedDescription": comments,
+            "suggestedOwnerRole": owner,
+            "suggestedDueDate": estDate,
+            "priority": priority,
+            "riskOrDependency": riskDescription or blockedReason,
+            "confidence": confidence,
+            "humanReviewRequired": True,
+            "reviewStatus": "Pending",
+            "readyForMockCreation": False,
+            "createdByAgent": True,
+        })
+        fields = {
             "milestoneName": milestoneName,
             "opportunityName": opportunityName,
+            "workload": workload,
+            "customerCommitment": customerCommitment,
+            "deliveredBy": deliveredBy,
+            "partnerName": partnerName,
             "milestoneStatus": milestoneStatus,
             "milestoneCategory": milestoneCategory,
             "owner": owner,
             "riskDescription": riskDescription,
+            "statusReason": statusReason,
+            "estDate": estDate,
+            "fitCharge": fitCharge,
+            "nonRecurring": nonRecurring,
+            "comments": comments,
+            "riskImpact": riskImpact,
+            "mitigationPlan": mitigationPlan,
+            "blockedReason": blockedReason,
+            "blockedOwner": blockedOwner,
+            "blockedSince": blockedSince,
+            "expectedResolutionDate": expectedResolutionDate,
+            "escalated": escalated,
+            "competitorName": competitorName,
+            "azureCapacityType": azureCapacityType,
+            "preferredAzureRegion": preferredAzureRegion,
+            "lastUpdated": lastUpdated,
         }
-        payload = {k: v for k, v in payload.items() if v is not None}
-        return _trim_milestone(mc.post("/api/milestones", json=payload))
+        fields = {k: v for k, v in fields.items() if v is not None}
+        approval = mc.post("/api/approval-requests", json={
+            "requestName": f"Create milestone: {milestoneName}",
+            "opportunityName": opportunityName,
+            "relatedRecommendationBusinessId": recommendation.get("recommendationBusinessId"),
+            "requestedBy": "LegacyAgent",
+            "action": {
+                "kind": "CreateMilestone",
+                "competitorBlankConfirmed": competitorBlankConfirmed,
+                **fields,
+            },
+        })
+        return {
+            "submittedForApproval": True,
+            "recommendationBusinessId": recommendation.get("recommendationBusinessId"),
+            "approvalRequestBusinessId": approval.get("approvalRequestBusinessId"),
+            "approvalStatus": approval.get("approvalStatus"),
+            "note": "Pending human approval. The milestone does not exist until approved.",
+        }
 
     def update_milestone(
         id: str,
@@ -99,15 +185,39 @@ def build_tool_groups(mc: MsxClient) -> dict[str, list[Tool]]:
              {"type": "object", "properties": {"milestoneStatus": {"type": "string", "enum": MILESTONE_STATUSES}}}, list_milestones),
         Tool("get_milestone", "Get one milestone's full detail by its id.",
              {"type": "object", "properties": {"id": {"type": "string"}}, "required": ["id"]}, get_milestone),
-        Tool("create_milestone", "Create a milestone under an existing opportunity (by opportunity name).",
+        Tool("create_milestone", "After explicit whole-draft confirmation, record a recommendation and submit a milestone for human approval.",
              {"type": "object", "properties": {
+                 "userConfirmed": {"type": "boolean"},
                  "milestoneName": {"type": "string"},
                  "opportunityName": {"type": "string", "description": "Must match an existing opportunity name."},
-                 "milestoneStatus": {"type": "string", "enum": MILESTONE_STATUSES},
-                 "milestoneCategory": {"type": "string", "enum": MILESTONE_CATEGORIES},
-                 "owner": {"type": "string"},
-                 "riskDescription": {"type": "string"},
-             }, "required": ["milestoneName", "opportunityName"]}, create_milestone, destructive=True),
+                 "competitorBlankConfirmed": {"type": "boolean"},
+                 "workload": {"type": ["string", "null"], "enum": WORKLOADS + [None]},
+                 "customerCommitment": {"type": ["string", "null"], "enum": CUSTOMER_COMMITMENTS + [None]},
+                 "deliveredBy": {"type": ["string", "null"], "enum": DELIVERED_BY + [None]},
+                 "partnerName": {"type": ["string", "null"]},
+                 "milestoneStatus": {"type": ["string", "null"], "enum": MILESTONE_STATUSES + [None]},
+                 "milestoneCategory": {"type": ["string", "null"], "enum": MILESTONE_CATEGORIES + [None]},
+                 "owner": {"type": ["string", "null"]},
+                 "riskDescription": {"type": ["string", "null"]},
+                 "statusReason": {"type": ["string", "null"]},
+                 "estDate": {"type": ["string", "null"]},
+                 "fitCharge": {"type": ["number", "null"]},
+                 "nonRecurring": {"type": ["boolean", "null"]},
+                 "comments": {"type": ["string", "null"]},
+                 "riskImpact": {"type": ["string", "null"], "enum": RISK_IMPACTS + [None]},
+                 "mitigationPlan": {"type": ["string", "null"]},
+                 "blockedReason": {"type": ["string", "null"]},
+                 "blockedOwner": {"type": ["string", "null"]},
+                 "blockedSince": {"type": ["string", "null"]},
+                 "expectedResolutionDate": {"type": ["string", "null"]},
+                 "escalated": {"type": ["boolean", "null"]},
+                 "competitorName": {"type": ["string", "null"]},
+                 "azureCapacityType": {"type": ["string", "null"], "enum": AZURE_CAPACITY_TYPES + [None]},
+                 "preferredAzureRegion": {"type": ["string", "null"], "enum": PREFERRED_AZURE_REGIONS + [None]},
+                 "lastUpdated": {"type": ["string", "null"]},
+                 "priority": {"type": ["string", "null"], "enum": PRIORITIES + [None]},
+                 "confidence": {"type": ["string", "null"], "enum": CONFIDENCE_LEVELS + [None]},
+             }, "required": ["userConfirmed", "milestoneName", "opportunityName", "competitorBlankConfirmed"]}, create_milestone, destructive=True),
         Tool("update_milestone", "Update fields on an existing milestone by id.",
              {"type": "object", "properties": {
                  "id": {"type": "string"},
@@ -140,18 +250,53 @@ def build_tool_groups(mc: MsxClient) -> dict[str, list[Tool]]:
 
     def create_opportunity(
         opportunityName: str,
+        userConfirmed: bool,
         customerName: str | None = None,
+        industry: str | None = None,
+        solutionArea: str | None = None,
         salesStage: str | None = None,
         status: str | None = None,
+        estimatedRevenue: float | None = None,
+        closeDate: str | None = None,
+        aeOwner: str | None = None,
+        assignedSE: str | None = None,
+        competitorName: str | None = None,
+        consumptionPhase: str | None = None,
+        businessProblem: str | None = None,
+        nextStep: str | None = None,
+        lastUpdated: str | None = None,
     ) -> Any:
-        payload = {
+        if not userConfirmed:
+            return {"error": "Explicit confirmation required; present the complete editable draft first."}
+        fields = {
             "opportunityName": opportunityName,
             "customerName": customerName,
+            "industry": industry,
+            "solutionArea": solutionArea,
             "salesStage": salesStage,
             "status": status,
+            "estimatedRevenue": estimatedRevenue,
+            "closeDate": closeDate,
+            "aeOwner": aeOwner,
+            "assignedSE": assignedSE,
+            "competitorName": competitorName,
+            "consumptionPhase": consumptionPhase,
+            "businessProblem": businessProblem,
+            "nextStep": nextStep,
+            "lastUpdated": lastUpdated,
         }
-        payload = {k: v for k, v in payload.items() if v is not None}
-        return _trim_opportunity(mc.post("/api/opportunities", json=payload))
+        fields = {k: v for k, v in fields.items() if v is not None}
+        approval = mc.post("/api/approval-requests", json={
+            "requestName": f"Create opportunity {opportunityName}",
+            "requestedBy": "LegacyAgent",
+            "action": {"kind": "CreateOpportunity", **fields},
+        })
+        return {
+            "submittedForApproval": True,
+            "approvalRequestBusinessId": approval.get("approvalRequestBusinessId"),
+            "approvalStatus": approval.get("approvalStatus"),
+            "note": "Pending human approval. The opportunity does not exist until approved.",
+        }
 
     opportunity_tools = [
         Tool("list_opportunities", "List opportunities, optionally filtered by status or sales stage.",
@@ -161,13 +306,25 @@ def build_tool_groups(mc: MsxClient) -> dict[str, list[Tool]]:
              }}, list_opportunities),
         Tool("get_opportunity", "Get one opportunity's detail (includes its milestones) by id.",
              {"type": "object", "properties": {"id": {"type": "string"}}, "required": ["id"]}, get_opportunity),
-        Tool("create_opportunity", "Create a new opportunity.",
+        Tool("create_opportunity", "After explicit whole-draft confirmation, submit a new opportunity for human approval.",
              {"type": "object", "properties": {
+                 "userConfirmed": {"type": "boolean"},
                  "opportunityName": {"type": "string"},
-                 "customerName": {"type": "string"},
-                 "salesStage": {"type": "string", "enum": SALES_STAGES},
-                 "status": {"type": "string", "enum": OPPORTUNITY_STATUSES},
-             }, "required": ["opportunityName"]}, create_opportunity, destructive=True),
+                 "customerName": {"type": ["string", "null"]},
+                 "industry": {"type": ["string", "null"]},
+                 "solutionArea": {"type": ["string", "null"], "enum": SOLUTION_AREAS + [None]},
+                 "salesStage": {"type": ["string", "null"], "enum": SALES_STAGES + [None]},
+                 "status": {"type": ["string", "null"], "enum": OPPORTUNITY_STATUSES + [None]},
+                 "estimatedRevenue": {"type": ["number", "null"]},
+                 "closeDate": {"type": ["string", "null"]},
+                 "aeOwner": {"type": ["string", "null"]},
+                 "assignedSE": {"type": ["string", "null"]},
+                 "competitorName": {"type": ["string", "null"]},
+                 "consumptionPhase": {"type": ["string", "null"]},
+                 "businessProblem": {"type": ["string", "null"]},
+                 "nextStep": {"type": ["string", "null"]},
+                 "lastUpdated": {"type": ["string", "null"]},
+             }, "required": ["userConfirmed", "opportunityName"]}, create_opportunity, destructive=True),
     ]
 
     # ---- Search tool -----------------------------------------------------

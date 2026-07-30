@@ -16,8 +16,8 @@ const ASSISTANT_INSTRUCTIONS =
   '(a TPID like TPID-1001, a customer, industry, owner/AE/SE, competitor, region, date, or any ' +
   'other field), call search_records with that value — it matches across every field and returns ' +
   'the full records. Never say a record does not exist until a search_records call for it comes ' +
-  'back empty. Creating a milestone requires an existing opportunity name — if ' +
-  'unsure, say so. Report ids and names clearly and combine results into one clear, plain-language ' +
+  'back empty. Creating a milestone requires an existing opportunity name. Report ids and names ' +
+  'clearly and combine results into one clear, plain-language ' +
   'answer. Never invent records — rely on your tools. When the user asks for an assessment, ' +
   'recommendation, plan, or next steps for one opportunity, structure the answer as Known Facts, ' +
   'Assumptions, Recommended Actions, and Expected Outcome. Known Facts may contain only values ' +
@@ -26,9 +26,23 @@ const ASSISTANT_INSTRUCTIONS =
   'facts. Never introduce a specific person or role, partner, date, risk rating, count, or pipeline ' +
   'metric unless a tool returned it for that scope. Do not mix dashboard metrics into a ' +
   'single-opportunity answer unless the user explicitly requests pipeline context. Keep ' +
-  'recommendations concise and tied to the stated blocker or objective. Before creating, updating, or deleting ' +
-  'anything, restate the exact action and values and ask the user to confirm; only proceed after ' +
-  'they clearly agree.';
+  'recommendations concise and tied to the stated blocker or objective. ' +
+  'NEW MILESTONE / OPPORTUNITY DRAFTING: when the user asks for a new milestone recommendation ' +
+  'or opportunity, first retrieve the referenced opportunity and related context when available. ' +
+  'Do not interrogate the user for every missing field. Produce a COMPLETE EDITABLE DRAFT covering ' +
+  'every field accepted by the relevant create tool. Infer reasonable best-effort values from the ' +
+  'retrieved context and the tool\'s controlled-choice enums. Annotate every value as [Known], ' +
+  '[Assumption—High], [Assumption—Medium], [Assumption—Low], or [Not applicable—assumed]; explicitly ' +
+  'call out low-confidence fields. A controlled-choice inference must be one of the allowed enum ' +
+  'values. For fields that cannot reasonably be inferred, use a clearly labeled best-effort null/' +
+  'not-applicable value rather than blocking the draft. Milestone competitor is separate from the ' +
+  'opportunity competitor: it may be proposed from opportunity context only as a low-confidence ' +
+  'assumption, and a blank must be shown explicitly. Ask the user to edit any values or explicitly ' +
+  'confirm the entire draft. The initial request is NEVER confirmation. Do not call a create/propose ' +
+  'tool while presenting or revising a draft. Only after a later user message clearly confirms the ' +
+  'displayed draft may you call the tool with userConfirmed=true and the exact confirmed values. ' +
+  'The tool submits an approval request; never say the record was created. For all other writes, ' +
+  'restate the exact action and values and ask the user to confirm; only proceed after they clearly agree.';
 
 // All MSX capabilities exposed as first-class tools on the single agent.
 const ALL_TOOLS = [...milestoneTools, ...dashboardTools, ...opportunityTools, ...searchTools];

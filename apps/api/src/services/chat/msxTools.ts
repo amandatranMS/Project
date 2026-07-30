@@ -3,15 +3,26 @@ import {
   MILESTONE_CATEGORIES,
   SALES_STAGES,
   OPPORTUNITY_STATUSES,
+  SOLUTION_AREAS,
+  WORKLOADS,
+  CUSTOMER_COMMITMENTS,
+  DELIVERED_BY,
+  AZURE_CAPACITY_TYPES,
+  PREFERRED_AZURE_REGIONS,
+  RISK_IMPACTS,
+  PRIORITIES,
+  CONFIDENCE_LEVELS,
 } from '@msx/shared';
 import { milestonesService } from '../milestones.service.js';
 import { dashboardService } from '../dashboard.service.js';
 import { opportunitiesService } from '../opportunities.service.js';
+import { recommendationsService } from '../recommendations.service.js';
+import { approvalRequestsService } from '../approvalRequests.service.js';
 import { searchService } from '../search.service.js';
 import {
-  createMilestoneSchema,
   updateMilestoneSchema,
-  createOpportunitySchema,
+  createRecommendationSchema,
+  createApprovalSchema,
 } from '../../validators/schemas.js';
 import type { Tool } from './toolLoop.js';
 
@@ -21,6 +32,13 @@ import type { Tool } from './toolLoop.js';
  * and trimmed return shapes keep irrelevant database fields out of prompts.
  */
 const s = (v: unknown) => (typeof v === 'string' && v ? v : undefined);
+const nullableString = (v: unknown) => (typeof v === 'string' ? v : null);
+
+function requireExplicitConfirmation(args: Record<string, unknown>) {
+  if (args.userConfirmed !== true) {
+    throw new Error('Explicit user confirmation is required. Present the complete editable draft first.');
+  }
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function trimMilestone(m: any) {
@@ -71,22 +89,79 @@ export const milestoneTools: Tool[] = [
   },
   {
     name: 'create_milestone',
-    description: 'Create a milestone under an existing opportunity (by opportunity name).',
+    description:
+      'After the user explicitly confirms a complete displayed draft, record its recommendation and submit the milestone for human approval. Never call while drafting.',
     parameters: {
       type: 'object',
       properties: {
+        userConfirmed: { type: 'boolean', description: 'True only after a later user message explicitly confirms the displayed draft.' },
         milestoneName: { type: 'string' },
         opportunityName: { type: 'string', description: 'Must match an existing opportunity name.' },
-        milestoneStatus: { type: 'string', enum: [...MILESTONE_STATUSES] },
-        milestoneCategory: { type: 'string', enum: [...MILESTONE_CATEGORIES] },
-        owner: { type: 'string' },
-        riskDescription: { type: 'string' },
+        workload: { type: ['string', 'null'], enum: [...WORKLOADS, null] },
+        customerCommitment: { type: ['string', 'null'], enum: [...CUSTOMER_COMMITMENTS, null] },
+        deliveredBy: { type: ['string', 'null'], enum: [...DELIVERED_BY, null] },
+        partnerName: { type: ['string', 'null'] },
+        milestoneStatus: { type: ['string', 'null'], enum: [...MILESTONE_STATUSES, null] },
+        milestoneCategory: { type: ['string', 'null'], enum: [...MILESTONE_CATEGORIES, null] },
+        statusReason: { type: ['string', 'null'] },
+        estDate: { type: ['string', 'null'] },
+        fitCharge: { type: ['number', 'null'] },
+        nonRecurring: { type: ['boolean', 'null'] },
+        comments: { type: ['string', 'null'] },
+        riskDescription: { type: ['string', 'null'] },
+        riskImpact: { type: ['string', 'null'], enum: [...RISK_IMPACTS, null] },
+        mitigationPlan: { type: ['string', 'null'] },
+        blockedReason: { type: ['string', 'null'] },
+        blockedOwner: { type: ['string', 'null'] },
+        blockedSince: { type: ['string', 'null'] },
+        expectedResolutionDate: { type: ['string', 'null'] },
+        escalated: { type: ['boolean', 'null'] },
+        competitorName: { type: ['string', 'null'] },
+        competitorBlankConfirmed: { type: 'boolean' },
+        azureCapacityType: { type: ['string', 'null'], enum: [...AZURE_CAPACITY_TYPES, null] },
+        preferredAzureRegion: { type: ['string', 'null'], enum: [...PREFERRED_AZURE_REGIONS, null] },
+        owner: { type: ['string', 'null'] },
+        lastUpdated: { type: ['string', 'null'] },
+        priority: { type: ['string', 'null'], enum: [...PRIORITIES, null] },
+        confidence: { type: ['string', 'null'], enum: [...CONFIDENCE_LEVELS, null] },
       },
-      required: ['milestoneName', 'opportunityName'],
+      required: ['userConfirmed', 'milestoneName', 'opportunityName', 'competitorBlankConfirmed'],
     },
     run: async (a) => {
-      const input = createMilestoneSchema.parse(a);
-      return trimMilestone(await milestonesService.create(input));
+      requireExplicitConfirmation(a);
+      const recommendation = await recommendationsService.create(
+        createRecommendationSchema.parse({
+          recommendedMilestoneTitle: a.milestoneName,
+          opportunityName: a.opportunityName,
+          suggestedDescription: nullableString(a.comments),
+          suggestedOwnerRole: nullableString(a.owner),
+          suggestedDueDate: nullableString(a.estDate),
+          priority: a.priority ?? null,
+          riskOrDependency: nullableString(a.riskDescription) ?? nullableString(a.blockedReason),
+          confidence: a.confidence ?? null,
+          humanReviewRequired: true,
+          reviewStatus: 'Pending',
+          readyForMockCreation: false,
+          createdByAgent: true,
+        }),
+      );
+      const { userConfirmed: _confirmed, priority: _priority, confidence: _confidence, ...fields } = a;
+      const approval = await approvalRequestsService.create(
+        createApprovalSchema.parse({
+          requestName: `Create milestone: ${String(a.milestoneName)}`,
+          opportunityName: a.opportunityName,
+          relatedRecommendationBusinessId: recommendation.recommendationBusinessId,
+          requestedBy: 'InAppAgent',
+          action: { kind: 'CreateMilestone', ...fields },
+        }),
+      );
+      return {
+        submittedForApproval: true,
+        recommendationBusinessId: recommendation.recommendationBusinessId,
+        approvalRequestBusinessId: approval.approvalRequestBusinessId,
+        approvalStatus: approval.approvalStatus,
+        note: 'Pending human approval. The milestone does not exist until approved.',
+      };
     },
   },
   {
@@ -153,22 +228,46 @@ export const opportunityTools: Tool[] = [
   },
   {
     name: 'create_opportunity',
-    description: 'Create a new opportunity.',
+    description:
+      'After the user explicitly confirms a complete displayed draft, submit a new opportunity for human approval. Never call while drafting.',
     parameters: {
       type: 'object',
       properties: {
+        userConfirmed: { type: 'boolean', description: 'True only after a later user message explicitly confirms the displayed draft.' },
         opportunityName: { type: 'string' },
-        customerName: { type: 'string' },
-        salesStage: { type: 'string', enum: [...SALES_STAGES] },
-        status: { type: 'string', enum: [...OPPORTUNITY_STATUSES] },
+        customerName: { type: ['string', 'null'] },
+        industry: { type: ['string', 'null'] },
+        solutionArea: { type: ['string', 'null'], enum: [...SOLUTION_AREAS, null] },
+        salesStage: { type: ['string', 'null'], enum: [...SALES_STAGES, null] },
+        status: { type: ['string', 'null'], enum: [...OPPORTUNITY_STATUSES, null] },
+        estimatedRevenue: { type: ['number', 'null'] },
+        closeDate: { type: ['string', 'null'] },
+        aeOwner: { type: ['string', 'null'] },
+        assignedSE: { type: ['string', 'null'] },
+        competitorName: { type: ['string', 'null'] },
+        consumptionPhase: { type: ['string', 'null'] },
+        businessProblem: { type: ['string', 'null'] },
+        nextStep: { type: ['string', 'null'] },
+        lastUpdated: { type: ['string', 'null'] },
       },
-      required: ['opportunityName'],
+      required: ['userConfirmed', 'opportunityName'],
     },
     run: async (a) => {
-      const input = createOpportunitySchema.parse(a);
-      // The in-app assistant IS the agent and creates directly (no prior approval),
-      // so pass broadcast='queue' to keep the Teams broadcast approval-gated.
-      return trimOpportunity(await opportunitiesService.create(input, { kind: 'service' }, 'queue'));
+      requireExplicitConfirmation(a);
+      const { userConfirmed: _confirmed, ...fields } = a;
+      const approval = await approvalRequestsService.create(
+        createApprovalSchema.parse({
+          requestName: `Create opportunity ${String(a.opportunityName)}`,
+          requestedBy: 'InAppAgent',
+          action: { kind: 'CreateOpportunity', ...fields },
+        }),
+      );
+      return {
+        submittedForApproval: true,
+        approvalRequestBusinessId: approval.approvalRequestBusinessId,
+        approvalStatus: approval.approvalStatus,
+        note: 'Pending human approval. The opportunity does not exist until approved.',
+      };
     },
   },
 ];

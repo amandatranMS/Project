@@ -67,7 +67,9 @@ function summarizeAction(action: PendingAction): string {
     case 'SendOutlookMail':
       return `Send email to ${action.to} — "${action.subject}"`;
     case 'NotifyTeams':
-      return `Post Teams message${action.to ? ` to ${action.to}` : ''}`;
+      return action.audience === 'tenant'
+        ? 'Post Teams message to all enabled tenant members'
+        : `Post Teams message${action.to ? ` to ${action.to}` : ''}`;
     case 'UpdateMilestone':
       return `Update milestone ${action.milestoneId}`;
     case 'UpdateOpportunity':
@@ -110,7 +112,9 @@ async function executeAction(
         confirm: true,
       });
     case 'NotifyTeams':
-      return graphService.notifyTeams(actor, { message: action.message, to: action.to, confirm: true });
+      return action.audience === 'tenant'
+        ? graphService.notifyTenantTeams(actor, { message: action.message, confirm: true })
+        : graphService.notifyTeams(actor, { message: action.message, to: action.to, confirm: true });
     case 'UpdateMilestone': {
       // Pass through every proposed milestone field; stamp the agent as author.
       // The approver acts as the seller, so a transition to Lost To Competitor

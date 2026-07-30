@@ -59,8 +59,9 @@ paths:
         Create an opportunity. The TPID is auto-assigned as the next sequential
         number (e.g. TPID-1001 → TPID-1002) when the request omits it. Side-effect:
         records an in-app "all users" notification and, when created by an agent
-        (service principal) in live mode, queues a Pending NotifyTeams
-        ApprovalRequest for human consent (Path B).
+        (service principal), queues a Pending NotifyTeams ApprovalRequest for
+        human consent. An approved live broadcast enumerates enabled tenant
+        members and sends each member except the sender a 1:1 Teams message.
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/OpportunityInput' } } }
@@ -109,10 +110,11 @@ paths:
     post:
       tags: [Opportunities]
       summary: >
-        Send the "new opportunity" visibility message to the configured teammate
-        over Microsoft Teams (Path A, human consent). Called from the create-confirm
-        popup after a human agrees. Honors GRAPH_SEND_MODE (simulate vs live) and
-        requires TEAMS_BROADCAST_TO to be set; audited via recordAgentAction.
+        Send the "new opportunity" visibility message to every enabled member of
+        the signed-in user's tenant except the sender, using 1:1 Microsoft Teams
+        chats (Path A, human consent). Called from the create-confirm popup after
+        a human agrees. Honors GRAPH_SEND_MODE (simulate vs live); tenant
+        enumeration and delivery are audited via recordAgentAction.
       parameters: [{ $ref: '#/components/parameters/IdParam' }]
       requestBody:
         required: false
@@ -124,7 +126,8 @@ paths:
                 confirm: { type: boolean, description: Human consent to deliver (default true) }
       responses:
         '200': { description: Envelope with delivery result (sent/simulated/skipped) }
-        '400': { description: No Teams recipient configured }
+        '400': { description: Invalid confirmation or recipient state }
+        '403': { description: Missing admin-consented Graph permissions }
         '404': { description: Not found }
 
   /api/search:
@@ -360,6 +363,7 @@ paths:
                   description: >
                     Optional deferred action executed on approval. The carried fields
                     depend on `kind`: send actions use to/subject/body/message;
+                    NotifyTeams may set audience=tenant for all enabled tenant members;
                     CreateMilestone uses a complete MilestoneInput payload plus
                     competitorBlankConfirmed;
                     CreateOpportunity uses an OpportunityInput payload (opportunityName required);
@@ -387,6 +391,10 @@ paths:
                     subject: { type: string }
                     body: { type: string }
                     message: { type: string }
+                    audience:
+                      type: string
+                      enum: [tenant]
+                      description: For NotifyTeams, broadcast to all enabled tenant members except the sender.
                     # Target identifiers
                     milestoneId: { type: string }
                     opportunityId: { type: string }
@@ -612,7 +620,7 @@ components:
           description: >
             Set from the "Create without posting" button on a CreateOpportunity
             approval pop-up. When true, approving creates the opportunity but skips
-            the Teams broadcast entirely (no post, no queued NotifyTeams approval).
+            the tenant-wide Teams broadcast entirely (no post, no queued NotifyTeams approval).
             Ignored for other actions.
     OpportunityInput:
       type: object

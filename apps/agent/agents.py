@@ -74,7 +74,16 @@ def build_subagents(mc: MsxClient, client: OpenAI, model: str, confirm: ConfirmF
                 "any field value other than an MS- id — an owner, workload, risk, competitor, "
                 "region, or the customer it belongs to — use search_records. When creating a "
                 "milestone you need an existing "
-                "opportunity name — if unsure, say so. Report ids and names clearly. Never invent data."
+                "opportunity name. On the initial request, retrieve its context and show a COMPLETE "
+                "EDITABLE DRAFT covering every create_milestone field. Infer reasonable best-effort "
+                "values from context and controlled choices; label each [Known], [Assumption—High/"
+                "Medium/Low], or [Not applicable—assumed], and identify low-confidence fields. "
+                "Opportunity competitor is separate and may only be proposed as a low-confidence "
+                "milestone assumption. Ask the user to edit or explicitly confirm the whole draft. "
+                "Do not call create_milestone until a later explicit confirmation; then pass "
+                "userConfirmed=true and the exact draft. The tool only records a recommendation and "
+                "submits an approval request; never claim the milestone was created. Report ids and "
+                "names clearly. Never invent existing records."
             ),
             tools=groups["milestone"],
             client=client,
@@ -104,7 +113,14 @@ def build_subagents(mc: MsxClient, client: OpenAI, model: str, confirm: ConfirmF
                 "industry, sales stage, AE/SE owner, competitor, or region — call search_records "
                 "with that value; it matches across every field and returns the full records. "
                 "Never say an opportunity does not exist until search_records comes back empty. "
-                "Report ids and names clearly. Never invent data."
+                "For a NEW opportunity, show a COMPLETE EDITABLE DRAFT covering every "
+                "create_opportunity field. Infer reasonable best-effort values from available "
+                "context and controlled choices; label each [Known], [Assumption—High/Medium/Low], "
+                "or [Not applicable—assumed], and identify low-confidence fields. Ask the user to "
+                "edit or explicitly confirm the whole draft. Do not call create_opportunity until "
+                "a later explicit confirmation; then pass userConfirmed=true and the exact draft. "
+                "The tool submits an approval request and never creates directly. Report ids and "
+                "names clearly. Never invent existing records."
             ),
             tools=groups["opportunity"],
             client=client,

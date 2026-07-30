@@ -101,18 +101,14 @@ export const opportunitiesService = {
       },
     });
 
-    // Best-effort "notify the team of a new opportunity" broadcast. Always records the
+    // "Notify the team of a new opportunity" broadcast. Always records the
     // in-app notification; the `broadcast` mode decides how Teams is handled — 'none'
     // (human form, web modal drives it), 'queue' (direct agent create → approval-gated),
-    // or 'send' (already-approved CreateOpportunity → posted directly). Never let it
-    // block/fail creation.
-    try {
-      await opportunityBroadcastService.onOpportunityCreated(created, actor, broadcast);
-    } catch (err) {
-      console.error('[opportunityBroadcast] notify-on-create failed:', err);
-    }
-
-    return created;
+    // or 'send' (already-approved CreateOpportunity → posted directly). Delivery
+    // outcomes are returned so the approval UI can distinguish live, simulated,
+    // partial, and failed broadcasts.
+    const broadcastResult = await opportunityBroadcastService.onOpportunityCreated(created, actor, broadcast);
+    return { ...created, teamsBroadcast: broadcastResult.teamsBroadcast };
   },
 
   async update(id: string, input: UpdateInput, actor?: string) {

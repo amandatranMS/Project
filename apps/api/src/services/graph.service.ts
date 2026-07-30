@@ -1,5 +1,5 @@
 import type { AuthUser } from '../lib/entraAuth.js';
-import { graphGet, graphPost, GraphError } from '../lib/graph.js';
+import { createGraphSession, graphGet, graphPost, GraphError, type GraphSession } from '../lib/graph.js';
 import { recordAgentAction } from '../lib/audit.js';
 import { HttpError } from '../lib/httpError.js';
 
@@ -17,6 +17,8 @@ interface GraphUser {
   userPrincipalName?: string;
   jobTitle?: string;
   department?: string;
+  accountEnabled?: boolean;
+  userType?: string;
 }
 export type { GraphUser };
 
@@ -58,6 +60,8 @@ interface TeamsChatThread {
 }
 
 const USER_SELECT = 'id,displayName,mail,userPrincipalName,jobTitle,department';
+const TENANT_USER_SELECT = `${USER_SELECT},accountEnabled,userType`;
+const TENANT_BROADCAST_CONCURRENCY = 2;
 
 /** Collapse Teams HTML message content to a short plain-text preview. */
 function toPreview(body?: { content?: string; contentType?: string }, max = 400): string {
@@ -99,6 +103,44 @@ function assertion(user: AuthUser): string {
 /** Who to record as the actor: the user's email, or the service principal. */
 function actorOf(user: AuthUser): string {
   return user.email ?? (user.kind === 'service' ? 'foundry-agent (service)' : 'unknown');
+}
+
+async function sendTeamsChat(session: GraphSession, senderId: string, recipientId: string, message: string) {
+  const chat = await session.post<{ id: string }>('/chats', {
+    chatType: 'oneOnOne',
+    members: [
+      {
+        '@odata.type': '#microsoft.graph.aadUserConversationMember',
+        roles: ['owner'],
+        'user@odata.bind': `https://graph.microsoft.com/v1.0/users('${senderId}')`,
+      },
+      {
+        '@odata.type': '#microsoft.graph.aadUserConversationMember',
+        roles: ['owner'],
+        'user@odata.bind': `https://graph.microsoft.com/v1.0/users('${recipientId}')`,
+      },
+    ],
+  });
+  if (!chat?.id) throw new HttpError(502, 'Could not open a Teams chat with the recipient.');
+  await session.post(`/chats/${chat.id}/messages`, { body: { content: message } });
+}
+
+async function mapConcurrent<T, R>(
+  values: T[],
+  concurrency: number,
+  work: (value: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(values.length);
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, values.length) }, async () => {
+      while (next < values.length) {
+        const index = next++;
+        results[index] = await work(values[index]);
+      }
+    }),
+  );
+  return results;
 }
 
 /** Run a Graph read, auditing success/failure as a security event. */
@@ -447,5 +489,119 @@ export const graphService = {
         };
       },
     );
+  },
+
+  /**
+   * Broadcast a Teams DM to every enabled member account in the signed-in user's
+   * tenant. Guests, disabled accounts, accounts without an address, and the sender
+   * are excluded. The directory read and aggregate delivery result are both audited.
+   */
+  async notifyTenantTeams(user: AuthUser, input: { message: string; confirm?: boolean }) {
+    const mode = sendMode();
+    if (mode === 'live') assertion(user);
+    if (!input.confirm && !autoConfirmEnabled()) {
+      return {
+        sent: false,
+        requiresConfirmation: true,
+        mode,
+        preview: { audience: 'All enabled tenant members', message: input.message },
+        note: 'Not sent. Re-submit with confirm=true to post this tenant-wide Teams notification.',
+      };
+    }
+
+    if (mode === 'simulate') {
+      return audited(user, 'NotifyTeamsTenantBroadcast', 'tenant-wide Teams broadcast mode=simulate', async () => ({
+        data: {
+          sent: true,
+          simulated: true,
+          audience: 'tenant',
+          recipientCount: 0,
+          deliveredCount: 0,
+          failedCount: 0,
+          message: input.message,
+          note: 'Simulated tenant-wide Teams notification — not delivered.',
+        },
+        outputSummary: 'SIMULATED tenant-wide Teams notification (not delivered)',
+      }));
+    }
+
+    const token = assertion(user);
+    let directory;
+    try {
+      directory = await audited(
+        user,
+        'ReadTenantUsers',
+        'GET /users for tenant-wide Teams broadcast',
+        async () => {
+          const graph = await createGraphSession(token);
+          const [meUser, users] = await Promise.all([
+            graph.get<{ id: string }>('/me?$select=id'),
+            graph.getAll<GraphUser>(`/users?$select=${TENANT_USER_SELECT}&$top=999`),
+          ]);
+          const eligible = users.filter(
+            (candidate) =>
+              candidate.id !== meUser.id &&
+              candidate.accountEnabled !== false &&
+              candidate.userType !== 'Guest' &&
+              Boolean(candidate.mail || candidate.userPrincipalName),
+          );
+          return {
+            data: { session: graph, me: meUser, recipients: eligible },
+            outputSummary: `resolved ${eligible.length} enabled tenant member recipients`,
+          };
+        },
+      );
+    } catch (err) {
+      if (err instanceof GraphError && err.status === 403) {
+        throw new HttpError(
+          403,
+          'Tenant-wide Teams broadcast requires administrator consent for User.Read.All, Chat.ReadWrite, and ChatMessage.Send. Ask a tenant administrator to grant consent, then sign in again.',
+        );
+      }
+      throw err;
+    }
+    const { session, me, recipients } = directory;
+
+    const deliveries = await mapConcurrent(recipients, TENANT_BROADCAST_CONCURRENCY, async (recipient) => {
+      try {
+        await sendTeamsChat(session, me.id, recipient.id, input.message);
+        return { sent: true as const };
+      } catch (err) {
+        return { sent: false as const };
+      }
+    });
+    const failures = deliveries.filter((delivery) => !delivery.sent);
+    const deliveredCount = deliveries.length - failures.length;
+
+    await recordAgentAction({
+      agentName: 'GraphConnector',
+      actionType: 'NotifyTeamsTenantBroadcast',
+      actor: actorOf(user),
+      inputSummary: `tenant-wide Teams broadcast recipients=${recipients.length} mode=live`,
+      outputSummary:
+        failures.length === 0
+          ? `sent Teams message to all ${deliveredCount} eligible tenant members`
+          : `sent=${deliveredCount}, failed=${failures.length}, eligible=${recipients.length}`,
+      securityEvent: true,
+      result: failures.length === 0 ? 'Success' : 'Failed',
+    });
+
+    return {
+      sent: failures.length === 0,
+      simulated: false,
+      audience: 'tenant',
+      recipientCount: recipients.length,
+      deliveredCount,
+      failedCount: failures.length,
+      message: input.message,
+      ...(failures.length > 0
+        ? {
+            note:
+              deliveredCount > 0
+                ? 'Teams delivery was partially successful. Some eligible tenant members did not receive the message; verify Chat.ReadWrite and ChatMessage.Send consent and retry if needed.'
+                : 'No Teams messages were delivered. Verify administrator consent for Chat.ReadWrite and ChatMessage.Send, then sign in again and retry.',
+          }
+        : {}),
+    };
   },
 };
