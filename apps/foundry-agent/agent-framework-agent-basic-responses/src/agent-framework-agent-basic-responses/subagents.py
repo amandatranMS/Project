@@ -46,7 +46,8 @@ from msx_capabilities import (
 _CONFIRM_RULE = (
     " Before requesting any create, update, delete, or send, restate the exact action and "
     "values and ask the user to confirm; only proceed after they clearly agree. "
-    "Never invent data — rely on your tools."
+    "Never invent existing data — rely on your tools. Labeled assumptions in a requested "
+    "new-record draft are proposals and are allowed."
 )
 
 # Read/reporting rule: the model must never embellish a tool result. This is what
@@ -62,7 +63,9 @@ _GROUNDING_RULE = (
     "and Expected Outcome. Put only retrieved values in Known Facts, label every inference as "
     "an Assumption, and present generic best practice only as a proposed action. Never supply "
     "a specific owner, stakeholder, partner, date, risk rating, or metric unless the tool "
-    "returned it for the requested record. If a tool returns nothing, say there are none."
+    "returned it for the requested record. Exception: in a requested NEW milestone or opportunity "
+    "draft, propose sensible values as explicitly labeled assumptions; never present them as known "
+    "facts. If a tool returns nothing, say there are none."
 )
 
 # Governance rule: NO agent action that changes data or sends a message happens
@@ -89,12 +92,18 @@ _GOVERNANCE_RULE = (
     "risk impact/description/mitigation, blocker owner/reason/dates/escalation, Azure capacity "
     "type, preferred region, last-updated date, recommendation priority, and confidence. Infer "
     "every reasonably inferable value from tool-returned context and the controlled-choice lists. "
+    "The request to help recommend or create a new milestone is permission to draft NOW. Call "
+    "get_opportunity for an OPP- id (or search_records when needed), then return the complete draft "
+    "in this same response. Never ask whether to proceed with drafting. Never ask for competitor, "
+    "owner, category, date, workload, status, risk, or another field before showing the draft. "
     "Label each field [Known], [Assumption—High], [Assumption—Medium], [Assumption—Low], or "
     "[Not applicable—assumed], and explicitly list low-confidence fields. Use a labeled null/not-"
     "applicable best effort when inference is unreasonable instead of asking a long questionnaire. "
-    "Opportunity and milestone competitor are separate: you may propose the opportunity competitor "
-    "only as [Assumption—Low], and must display a blank explicitly. Ask the user to edit or "
-    "explicitly confirm the entire draft. Do not call propose_milestone_for_approval while drafting "
+    "Opportunity and milestone competitor are separate: either propose the opportunity competitor "
+    "as [Assumption—Low] or show an explicit blank [Not applicable—assumed]; make that choice in the "
+    "draft instead of asking the user first. Return all fields, not context plus an offer to draft "
+    "later. Ask the user only to edit or explicitly confirm the entire displayed draft. Do not call "
+    "propose_milestone_for_approval while drafting "
     "or revising. The initial request is never confirmation. Only after a later user message "
     "explicitly confirms the displayed draft may you call propose_milestone_for_approval exactly "
     "once with userConfirmed=true and the exact draft values. Whole-draft confirmation counts as "
@@ -177,7 +186,7 @@ def build_subagents(client) -> list[Agent]:
                 "update_milestone for it, including when changing competitorName; never treat an "
                 "MS- identifier as an opportunity." + _APPROVAL_RULE + _CONFIRM_RULE + _GROUNDING_RULE + _SEARCH_RULE + _GOVERNANCE_RULE + _LOST_TO_COMPETITOR_RULE
             ),
-            tools=[list_milestones, get_milestone, search_records, propose_milestone_for_approval, update_milestone, delete_milestone],
+            tools=[list_milestones, get_milestone, get_opportunity, search_records, propose_milestone_for_approval, update_milestone, delete_milestone],
         ),
         Agent(
             client=client,
