@@ -11,7 +11,7 @@ approval gate + `AgentActionAuditLog` — it does not replace them.
 
 | Path in the app | Code | Defender XDR | Purview DLP |
 | --- | --- | --- | --- |
-| Foundry **hosted agent** | `services/chat/foundryProxy.ts` | ✅ Yes | ❌ Not supported for Foundry agents yet |
+| Foundry **hosted agent** | `services/chat/foundryProxy.ts` + `services/chat/defenderScreen.ts` | ✅ Yes — via screening shim (§1d) | ❌ Not supported for Foundry agents yet |
 | **Direct** Azure OpenAI engine | `services/chat/orchestrator.ts` → `toolLoop.ts` | ✅ Yes | ✅ Yes (with user context) |
 
 Both engines call the same Azure AI Foundry `AIServices` account, so **Defender
@@ -85,6 +85,36 @@ The direct engine stamps every model call with a Defender/Purview
 alerts attributable to the real user instead of the app identity. (The hosted-agent
 Responses path cannot carry it — Defender still detects at the resource level.)
 
+### 1d. Surfacing hosted-agent jailbreaks in Defender (screening shim)
+
+Defender's jailbreak alert keys off the model returning a **synchronous HTTP 400
+`content_filter`** block. The direct engine (`chat/completions`) does exactly that,
+so its blocks always alert. The **Foundry hosted agent**, however, reaches the model
+over the **streaming Responses API**: a content-filter block comes back as an in-band
+`response.failed` SSE event (or an HTTP 200 with `status: failed`), **never** the
+synchronous 400 — so a jailbreak typed into the agent UI is *blocked for the user*
+but produces **no Defender signal** on its own.
+
+To close that gap, every chat turn is mirrored to a tiny, fire-and-forget
+**screening call** — a synchronous `chat/completions` request to the *same* model
+deployment (`apps/api/src/services/chat/defenderScreen.ts`, wired at the top of
+`send()` in `chat.service.ts`). If the turn is a jailbreak, that call trips the input
+Prompt Shield → HTTP 400 → the normal Defender alert + email. It runs in parallel, so
+it adds no user-visible latency and never changes the agent's own response.
+
+Enable it with two env vars (already set on the deployed API):
+
+```bash
+DEFENDER_SCREEN_ENABLED="true"
+DEFENDER_SCREEN_ENDPOINT="https://<your-aiservices-account>.cognitiveservices.azure.com/openai/deployments/<deployment>/chat/completions?api-version=2025-01-01-preview"
+# optional: DEFENDER_SCREEN_TIMEOUT_MS (default 15000), DEFENDER_SCREEN_MAX_CHARS (default 8000)
+```
+
+The API's identity needs **Cognitive Services OpenAI User** on the AIServices
+account. All screening errors are swallowed, so screening can never break a chat.
+Note Defender **deduplicates** jailbreak alerts per resource for ~30–40 min, so a
+rapid series of attacks surfaces as roughly one alert.
+
 ---
 
 ## Part 2 — Purview DLP on the direct engine (Option 2)
@@ -142,6 +172,9 @@ The PII/PCI path is a **Purview** capability, so it does **not** appear in Defen
 for Cloud or `az security alert list` — check the Purview portal.
 
 ### Defender XDR (covers the hosted agent too)
+
+> The hosted-agent path surfaces in Defender via the **screening shim** (§1d); the
+> direct engine alerts natively on its 400. Both attach to the same AIServices resource.
 
 1. Open the app, keep the default **Foundry hosted agent** engine.
 2. Send a jailbreak-style probe, e.g.:

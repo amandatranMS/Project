@@ -47,6 +47,12 @@ resource seqDeployments 'Microsoft.CognitiveServices/accounts/deployments@2025-0
     name: dep.name
     properties: {
       model: dep.model
+      // Bind a Responsible AI (content filter) policy so Prompt Shields / jailbreak
+      // detection stays active on every provision. Without this, azd re-creates the
+      // deployment with an empty raiPolicyName and Defender for Cloud AI alerts stop
+      // firing. Falls back to the system DefaultV2 policy (includes Prompt Shields)
+      // when a deployment doesn't specify its own policy.
+      raiPolicyName: dep.?raiPolicyName ?? 'Microsoft.DefaultV2'
     }
     sku: dep.sku
   }
@@ -137,4 +143,7 @@ type deploymentsType = {
     @description('The capacity of the resource model definition representing SKU.')
     capacity: int
   }
+
+  @description('Optional. Name of the Responsible AI (content filter) policy to bind to the deployment. Keeps Prompt Shields / jailbreak detection active so Defender for Cloud AI alerts keep firing. Defaults to the system Microsoft.DefaultV2 policy when omitted.')
+  raiPolicyName: string?
 }[]?

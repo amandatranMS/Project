@@ -1,5 +1,6 @@
 import { runOrchestrator } from './chat/orchestrator.js';
 import { runFoundryAgent } from './chat/foundryProxy.js';
+import { screenForDefender } from './chat/defenderScreen.js';
 import type { ChatMessage, TokenSink } from './chat/toolLoop.js';
 import { prisma } from '../lib/prisma.js';
 import { runWithAgentContext, type AgentTurnContext } from '../lib/agentContext.js';
@@ -25,6 +26,18 @@ export const chatService = {
    * governed action.
    */
   async send(messages: ChatMessage[], engine: ChatEngine, user?: AuthUser, onToken?: TokenSink) {
+    // Mirror the user's latest message to the model's synchronous content filter so
+    // Microsoft Defender for Cloud can raise jailbreak / prompt-injection alerts. The
+    // hosted agent's streaming Responses path swallows content-filter blocks (it never
+    // returns the HTTP 400 Defender keys off), so without this a malicious prompt is
+    // blocked but never surfaces in Defender. Fire-and-forget: never blocks or throws.
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'user') {
+        screenForDefender(messages[i].content);
+        break;
+      }
+    }
+
     // The in-app (direct Azure OpenAI) engine is off by default — the demo routes
     // every turn to the Foundry hosted agent. Set IN_APP_ENGINE_ENABLED=true to
     // re-enable it: it is the ONLY path Microsoft Purview Data Security / DLP can
