@@ -48,8 +48,10 @@ export function currentOwnerId(): string | undefined {
  * Returns undefined when no signed-in user is present (agent/service or local
  * dev), in which case the call is sent without the block.
  *
- * NOTE: only the *direct* engine (aiClient.ts) can carry this — the hosted-agent
- * Responses path can't, and Purview does not cover Foundry agents today.
+ * NOTE: only the *direct* engine (aiClient.ts) carries this body param — the
+ * hosted-agent Responses path can't. The hosted agent instead gets Purview DLP
+ * enforcement from the delegated user token it is invoked with (On-Behalf-Of; see
+ * `lib/foundryAuth.ts`), not from this context block.
  */
 export function getUserSecurityContext(): Record<string, string> | undefined {
   const ctx = getRequestContext();

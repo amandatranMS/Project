@@ -1,5 +1,9 @@
-import { DefaultAzureCredential } from '@azure/identity';
 import { HttpError } from '../../lib/httpError.js';
+import {
+  foundryUserContextEnabled,
+  getFoundryAppToken,
+  getFoundryUserToken,
+} from '../../lib/foundryAuth.js';
 import type { ChatMessage, TokenSink } from './toolLoop.js';
 
 /**
@@ -7,21 +11,56 @@ import type { ChatMessage, TokenSink } from './toolLoop.js';
  * agent via its OpenAI Responses endpoint. Requires FOUNDRY_AGENT_ENDPOINT and
  * an Azure login; the hosted agent reaches the app's data through the dev tunnel.
  */
-const SCOPES = ['https://ai.azure.com/.default', 'https://cognitiveservices.azure.com/.default'];
 
-const credential = new DefaultAzureCredential();
+/**
+ * Choose the identity for the Foundry model call. Prefer the signed-in user's
+ * delegated token (via On-Behalf-Of) so Microsoft Purview DLP *enforces* per
+ * seller; fall back to the app-only identity when no user is present or the
+ * exchange can't run — but warn, because DLP only audits (never alerts) on an
+ * app-only / managed-identity token.
+ */
+/** Best-effort: pull the signed-in user's UPN from the delegated assertion for log attribution. */
+function assertionUpn(assertion?: string): string {
+  if (!assertion) return 'unknown-user';
+  try {
+    const payload = assertion.split('.')[1];
+    if (!payload) return 'unknown-user';
+    const json = Buffer.from(payload.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
+    const c = JSON.parse(json);
+    return c.upn || c.preferred_username || c.unique_name || c.email || c.oid || 'unknown-user';
+  } catch {
+    return 'unknown-user';
+  }
+}
 
-async function getToken(): Promise<string> {
-  let lastErr: unknown;
-  for (const scope of SCOPES) {
-    try {
-      const t = await credential.getToken(scope);
-      if (t?.token) return t.token;
-    } catch (err) {
-      lastErr = err;
+async function resolveToken(userAssertion?: string): Promise<string> {
+  if (userAssertion) {
+    const who = assertionUpn(userAssertion);
+    if (!foundryUserContextEnabled) {
+      console.warn(
+        `[foundry] A signed-in user (${who}) is driving this turn but user-context (OBO) is not configured ` +
+          '(missing AAD_CLIENT_SECRET). Calling Foundry with the app-only identity — Purview DLP will ' +
+          'audit but NOT enforce. Configure OBO to get per-user DLP alerts.',
+      );
+    } else {
+      try {
+        const userToken = await getFoundryUserToken(userAssertion);
+        console.info(
+          `[foundry] Calling the hosted agent on-behalf-of ${who} — Purview DLP is ` +
+            'enforced for this turn (per-seller user context).',
+        );
+        return userToken;
+      } catch (err) {
+        console.warn(
+          `[foundry] On-Behalf-Of exchange for ${who} (Azure AI data-plane scope) failed; falling back to the ` +
+            'app-only identity. Purview DLP will NOT enforce for this turn. Grant the delegated Azure AI ' +
+            'permission (admin consent) and give the user the "Cognitive Services User" role on the Foundry account. ' +
+            `Cause: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
     }
   }
-  throw new Error(`Could not acquire an Azure token: ${lastErr instanceof Error ? lastErr.message : lastErr}`);
+  return getFoundryAppToken();
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -240,6 +279,7 @@ export async function runFoundryAgent(
   messages: ChatMessage[],
   onToken?: TokenSink,
   sessionId?: string,
+  userAssertion?: string,
 ): Promise<string> {
   const endpoint = process.env.FOUNDRY_AGENT_ENDPOINT;
   if (!endpoint) {
@@ -250,7 +290,7 @@ export async function runFoundryAgent(
     );
   }
 
-  const token = await getToken();
+  const token = await resolveToken(userAssertion);
 
   // Send the entire conversation as Responses input items. The hosted agent runs
   // statelessly (store:false), so each request must carry the full history —

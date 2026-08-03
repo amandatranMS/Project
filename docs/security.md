@@ -11,15 +11,19 @@ approval gate + `AgentActionAuditLog` — it does not replace them.
 
 | Path in the app | Code | Defender XDR | Purview DLP |
 | --- | --- | --- | --- |
-| Foundry **hosted agent** | `services/chat/foundryProxy.ts` + `services/chat/defenderScreen.ts` | ✅ Yes — via screening shim (§1d) | ❌ Not supported for Foundry agents yet |
+| Foundry **hosted agent** | `services/chat/foundryProxy.ts` + `services/chat/defenderScreen.ts` | ✅ Yes — via screening shim (§1d) | ✅ Yes — when the model call runs as the signed-in user (OBO); app-only tokens are audited, not enforced |
 | **Direct** Azure OpenAI engine | `services/chat/orchestrator.ts` → `toolLoop.ts` | ✅ Yes | ✅ Yes (with user context) |
 
 Both engines call the same Azure AI Foundry `AIServices` account, so **Defender
-attaches once at that account and covers both**. Purview's data-security
-integration for Microsoft Foundry **explicitly excludes Foundry agents today**
-([Microsoft docs](https://learn.microsoft.com/azure/defender-for-cloud/ai-onboarding)),
-so Purview DLP is wired to the **direct engine**, which this app can send with the
-signed-in user's context.
+attaches once at that account and covers both**. **Microsoft Purview DLP now covers
+the Foundry hosted agent too** — but its policies are only *enforced* (and only
+raise alerts) when the model call carries a **delegated Entra user-context token**.
+An app-only token (the deployed app's **managed identity**, or any service principal
+via `DefaultAzureCredential`) is captured in Purview Audit / DSPM Activity Explorer
+but is **audited, not enforced**, so no DLP alert fires. This app therefore calls
+Foundry **On-Behalf-Of the signed-in seller** (`lib/foundryAuth.ts` →
+`services/chat/foundryProxy.ts`); see **Part 2 → "Enforce DLP on the Foundry hosted
+agent"** for the app-registration and per-user role prerequisites.
 
 ---
 
@@ -157,6 +161,50 @@ classify and enforce.
 > (`9ec59623-ce40-4dc8-a635-ed0275b5d58a`) exists in your tenant — see the
 > [onboarding doc](https://learn.microsoft.com/azure/defender-for-cloud/ai-onboarding).
 
+### 2d. Enforce DLP on the Foundry hosted agent (per-user OBO)
+
+The default engine is the Foundry **hosted agent**, so DLP must enforce on *its*
+model call — not just the direct engine. The API calls Foundry **On-Behalf-Of the
+signed-in user** (`lib/foundryAuth.ts`): it exchanges the user's bearer for an Azure
+AI data-plane token and invokes the agent as that user, so Purview evaluates the
+policy. Without this the deployed app calls with its **managed identity** (app-only)
+and DLP only audits — the exact reason alerts can silently stop after a deploy.
+
+One-time setup (needs a Global / Privileged Role Admin for consent, and
+Owner / RBAC Admin on the Foundry account):
+
+```bash
+# Values from the root .env
+TENANT=<AAD_TENANT_ID>
+APP=<AAD_CLIENT_ID>            # the login app registration
+FOUNDRY=<AIServices account>  # e.g. cog-xxxxx
+RG=<resource group>
+
+# 1) A client secret on the app registration (also powers Graph OBO)
+az ad app credential reset --id "$APP" --display-name foundry-obo --query password -o tsv
+#   → put the value in .env as AAD_CLIENT_SECRET (never commit it)
+
+# 2) Add a delegated "user_impersonation" permission for the Azure AI / Cognitive
+#    Services data plane (ai.azure.com / cognitiveservices.azure.com) to the app
+#    registration in the Entra admin center → App registrations → API permissions,
+#    then grant admin consent:
+az ad app permission admin-consent --id "$APP"
+
+# 3) Each signed-in seller needs a data-plane role on the Foundry account so their
+#    delegated token can invoke the agent:
+az role assignment create \
+  --assignee <user-object-id> \
+  --role "Azure AI User" \
+  --scope $(az cognitiveservices account show -n "$FOUNDRY" -g "$RG" --query id -o tsv)
+```
+
+Verify: sign in, send a prompt containing a Luhn-valid test value (e.g. a
+collaboration note mentioning `4111 1111 1111 1111`), then check **Purview → DLP →
+Alerts (Standard view)** and **DSPM for AI → Activity Explorer** — the interaction
+should show the **user's** identity, not the app. If OBO can't run, the API logs a
+`[foundry] On-Behalf-Of … failed … Purview DLP will NOT enforce` warning and falls
+back to app-only.
+
 ---
 
 ## Part 3 — Test that it actually fires
@@ -207,11 +255,14 @@ direct engine adds explicit per-user attribution.
 
 ## Caveats (read before demoing)
 
-- **Purview coverage is model-level, not agent-level.** The data-security bridge
-  classifies the prompts/responses sent to the **model deployment** — including calls
-  a Foundry agent makes under the hood — so PII/PCI DLP does fire for the agent path.
-  What Purview does **not** yet capture is the **agent as its own entity** (its
-  identity, tool calls, multi-step orchestration context).
+- **Purview coverage is model-level, and enforcement needs a user token.** The
+  data-security bridge classifies the prompts/responses sent to the **model
+  deployment** — including calls the Foundry hosted agent makes — so PII/PCI DLP
+  fires for the agent path **when that call runs as the signed-in user** (this app's
+  OBO exchange). On an app-only / managed-identity token the same interaction is
+  audited but **not** enforced, so no alert fires. What Purview does **not** yet
+  capture is the **agent as its own entity** (its identity, tool calls, multi-step
+  orchestration context).
 - **Synthetic data rarely trips real classifiers.** The mock records use fake PII/PCI
   that usually fails checksum/confidence checks, so DLP may not match unless you feed
   a format-valid test value.

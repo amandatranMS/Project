@@ -40,20 +40,29 @@ export const chatService = {
 
     // The in-app (direct Azure OpenAI) engine is off by default — the demo routes
     // every turn to the Foundry hosted agent. Set IN_APP_ENGINE_ENABLED=true to
-    // re-enable it: it is the ONLY path Microsoft Purview Data Security / DLP can
-    // govern (Purview does not cover Foundry agents), and it carries the signed-in
-    // user's Defender/Purview user-security context on each model call.
+    // re-enable it: it carries the signed-in user's Defender/Purview user-security
+    // context directly on each model call. Microsoft Purview DLP now also governs
+    // the Foundry hosted agent, but ONLY when that model call runs as the signed-in
+    // user — see the On-Behalf-Of exchange below (app-only / managed-identity tokens
+    // are audited but never enforced, so no DLP alerts fire on them).
     if (engine === 'in-app' && process.env.IN_APP_ENGINE_ENABLED !== 'true') {
       throw new HttpError(403, 'The in-app engine is disabled. Use the Foundry hosted agent.');
     }
     if (engine === 'foundry') {
-      // If a real user is signed in, stash their token and give the hosted agent
-      // an opaque session handle so it can act on their behalf (Graph OBO).
-      const sessionId =
-        user?.kind === 'user' && user.bearer ? createUserSession(user.bearer, user.email) : undefined;
+      // If a real user is signed in, capture their token for two On-Behalf-Of
+      // exchanges: (1) the *inbound* Foundry model call runs as the user so Purview
+      // DLP enforces per seller (app-only tokens are audited but never enforced);
+      // (2) an opaque session handle lets the hosted agent's tool callbacks act on
+      // their behalf (Graph OBO).
+      let sessionId: string | undefined;
+      let userAssertion: string | undefined;
+      if (user?.kind === 'user' && user.bearer) {
+        userAssertion = user.bearer;
+        sessionId = createUserSession(user.bearer, user.email);
+      }
 
       const startedAt = new Date();
-      const reply = await runFoundryAgent(messages, onToken, sessionId);
+      const reply = await runFoundryAgent(messages, onToken, sessionId, userAssertion);
       const fullConversation = JSON.stringify([...messages, { role: 'assistant', content: reply }]);
       // Attribute everything the hosted agent did during THIS user's turn to that
       // user, so the Approvals log and Audit Log stay private per user. The agent

@@ -22,11 +22,29 @@ import { DefaultAzureCredential } from '@azure/identity';
 const SCOPES = ['https://cognitiveservices.azure.com/.default', 'https://ai.azure.com/.default'];
 const credential = new DefaultAzureCredential();
 
-const ENDPOINT = process.env.DEFENDER_SCREEN_ENDPOINT?.trim();
-// Enabled only when an endpoint is configured and it isn't explicitly turned off.
-const ENABLED = !!ENDPOINT && process.env.DEFENDER_SCREEN_ENABLED !== 'false';
-const TIMEOUT_MS = Number(process.env.DEFENDER_SCREEN_TIMEOUT_MS) || 15_000;
-const MAX_CHARS = Number(process.env.DEFENDER_SCREEN_MAX_CHARS) || 8_000;
+// Read configuration at CALL TIME, not module load. Capturing these into module-level
+// constants at import time is fragile: if this module is evaluated before dotenv has
+// populated process.env — or the process started before `.env` was finished being
+// written — the shim silently disables itself (enabled=false) with no way to tell, and
+// no amount of prompting produces a Defender alert. Reading per-call is cheap and immune
+// to import order.
+function readConfig() {
+  const endpoint = process.env.DEFENDER_SCREEN_ENDPOINT?.trim();
+  // Enabled only when an endpoint is configured and it isn't explicitly turned off.
+  const enabled = !!endpoint && process.env.DEFENDER_SCREEN_ENABLED !== 'false';
+  const timeoutMs = Number(process.env.DEFENDER_SCREEN_TIMEOUT_MS) || 15_000;
+  const maxChars = Number(process.env.DEFENDER_SCREEN_MAX_CHARS) || 8_000;
+  return { endpoint, enabled, timeoutMs, maxChars };
+}
+
+// Best-effort visibility. The screening call is deliberately fire-and-forget, but a
+// silent no-op is precisely why a missing Defender alert is impossible to diagnose. We
+// announce the effective state ONCE (always), and log per-call detail when
+// DEFENDER_SCREEN_DEBUG=true.
+let announced = false;
+function debug(...args: unknown[]): void {
+  if (process.env.DEFENDER_SCREEN_DEBUG === 'true') console.log('[defender-screen]', ...args);
+}
 
 let tokenCache: { token: string; expiresOn: number } | null = null;
 async function getToken(): Promise<string | null> {
@@ -52,16 +70,32 @@ async function getToken(): Promise<string | null> {
  * all errors are swallowed so screening can never affect the chat turn.
  */
 export function screenForDefender(userText: string): void {
-  const text = (userText ?? '').trim().slice(0, MAX_CHARS);
-  if (!ENABLED || !text) return;
+  const { endpoint, enabled, timeoutMs, maxChars } = readConfig();
+
+  // Announce the effective state once, so a disabled shim is obvious in the API log
+  // instead of an invisible no-op (the #1 reason "no Defender alerts" is a mystery).
+  if (!announced) {
+    announced = true;
+    console.log(
+      enabled
+        ? `[defender-screen] enabled — mirroring prompts to ${endpoint} for Defender AI threat detection`
+        : '[defender-screen] disabled — set DEFENDER_SCREEN_ENDPOINT (and DEFENDER_SCREEN_ENABLED!=false), then restart the API, to surface agent-UI jailbreaks in Microsoft Defender',
+    );
+  }
+
+  const text = (userText ?? '').trim().slice(0, maxChars);
+  if (!enabled || !text) return;
   void (async () => {
     try {
       const token = await getToken();
-      if (!token) return;
+      if (!token) {
+        debug('no Azure token — check az login / managed identity and the "Cognitive Services OpenAI User" role');
+        return;
+      }
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
       try {
-        await fetch(ENDPOINT!, {
+        const res = await fetch(endpoint!, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           // The INPUT Prompt Shield runs before generation, so a jailbreak is caught
@@ -72,11 +106,24 @@ export function screenForDefender(userText: string): void {
           }),
           signal: controller.signal,
         });
+        // A 400 content_filter is the SUCCESS signal here: a jailbreak tripped the input
+        // Prompt Shield, which is exactly what Defender turns into an alert. A 401/403
+        // means the identity lacks data-plane access, so the filter never runs — no alert.
+        debug(
+          `screened prompt -> HTTP ${res.status}` +
+            (res.status === 400
+              ? ' (content_filter → Defender jailbreak alert expected)'
+              : res.status === 401 || res.status === 403
+                ? ' (UNAUTHORIZED → grant the API identity "Cognitive Services OpenAI User"; no alert will fire)'
+                : ''),
+        );
       } finally {
         clearTimeout(timer);
       }
-    } catch {
-      // Best-effort telemetry only — swallow network errors, timeouts, and 4xx/5xx.
+    } catch (err) {
+      // Best-effort telemetry only — swallow network errors, timeouts, and 4xx/5xx,
+      // but surface them under DEBUG so a broken shim can actually be diagnosed.
+      debug('screening call failed:', err instanceof Error ? err.message : String(err));
     }
   })();
 }
