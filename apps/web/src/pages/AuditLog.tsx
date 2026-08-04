@@ -21,6 +21,7 @@ function parseConversation(raw?: string | null): ConversationTurn[] | null {
 
 export default function AuditLog() {
   const [items, setItems] = useState<AuditLogEntry[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<AuditLogEntry | null>(null);
 
@@ -28,7 +29,8 @@ export default function AuditLog() {
     api
       .get<AuditLogEntry[]>('/agent-action-audit-logs')
       .then(setItems)
-      .catch((e) => setError(e.message));
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
   }, []);
 
   const conversation = parseConversation(selected?.conversation);
@@ -43,6 +45,7 @@ export default function AuditLog() {
         action and the conversation (prompts &amp; answers) that produced it.
       </p>
       {error && <p className="error">{error}</p>}
+      <div className="table-wrap">
       <table>
         <thead>
           <tr>
@@ -57,7 +60,15 @@ export default function AuditLog() {
           </tr>
         </thead>
         <tbody>
-          {items.map((l) => {
+          {loading &&
+            Array.from({ length: 6 }).map((_, i) => (
+              <tr key={`sk-${i}`} className="skeleton-row">
+                <td colSpan={8}>
+                  <span className="skeleton-line" />
+                </td>
+              </tr>
+            ))}
+          {!loading && items.map((l) => {
             const hasConvo = Boolean(parseConversation(l.conversation));
             return (
               <tr key={l.id} className="clickable" onClick={() => setSelected(l)}>
@@ -72,11 +83,12 @@ export default function AuditLog() {
               </tr>
             );
           })}
-          {items.length === 0 && !error && (
+          {!loading && items.length === 0 && !error && (
             <tr><td colSpan={8} className="muted">No agent actions recorded yet.</td></tr>
           )}
         </tbody>
       </table>
+      </div>
 
       {selected && (
         <div className="modal-overlay" onClick={() => setSelected(null)}>

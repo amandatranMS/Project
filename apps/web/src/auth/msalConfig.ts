@@ -29,7 +29,13 @@ const configuration: Configuration = {
     redirectUri,
   },
   cache: {
-    cacheLocation: 'sessionStorage',
+    // localStorage (not sessionStorage) so the sign-in survives tab closes,
+    // reloads, and browser restarts, and is shared across tabs. This lets MSAL
+    // renew access tokens silently for much longer, so the agent's on-behalf-of
+    // reads (Outlook / Teams) keep working without forcing a fresh interactive
+    // sign-in each time. Acceptable for this synthetic demo; a hardened app would
+    // weigh the localStorage XSS-exposure tradeoff.
+    cacheLocation: 'localStorage',
   },
 };
 

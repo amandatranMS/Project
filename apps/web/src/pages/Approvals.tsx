@@ -71,6 +71,7 @@ export default function Approvals() {
   const { accounts } = useMsal();
   const reviewedBy = accounts[0]?.name ?? accounts[0]?.username ?? 'Demo Approver';
   const [items, setItems] = useState<ApprovalRequest[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -82,7 +83,8 @@ export default function Approvals() {
     api
       .get<ApprovalRequest[]>('/approval-requests')
       .then(setItems)
-      .catch((e) => setError(e.message));
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
   }
 
   useEffect(load, []);
@@ -224,6 +226,7 @@ export default function Approvals() {
       </p>
       {error && <p className="error">{error}</p>}
       {message && <p style={{ color: 'var(--success)' }}>{message}</p>}
+      <div className="table-wrap">
       <table>
         <thead>
           <tr>
@@ -237,7 +240,15 @@ export default function Approvals() {
           </tr>
         </thead>
         <tbody>
-          {items.map((a) => (
+          {loading &&
+            Array.from({ length: 6 }).map((_, i) => (
+              <tr key={`sk-${i}`} className="skeleton-row">
+                <td colSpan={7}>
+                  <span className="skeleton-line" />
+                </td>
+              </tr>
+            ))}
+          {!loading && items.map((a) => (
             <tr key={a.id}>
               <td>{a.approvalRequestBusinessId}</td>
               <td>
@@ -304,11 +315,12 @@ export default function Approvals() {
               </td>
             </tr>
           ))}
-          {items.length === 0 && !error && (
+          {!loading && items.length === 0 && !error && (
             <tr><td colSpan={7} className="muted">No approval requests.</td></tr>
           )}
         </tbody>
       </table>
+      </div>
 
       {confirmingLostId && (
         <LostToCompetitorDialog

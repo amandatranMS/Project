@@ -8,6 +8,7 @@ import OpportunityForm from '../components/form/OpportunityForm';
 
 export default function Opportunities() {
   const [items, setItems] = useState<Opportunity[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -25,7 +26,8 @@ export default function Opportunities() {
     api
       .get<Opportunity[]>('/opportunities')
       .then(setItems)
-      .catch((e) => setError(e.message));
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
   }, [refreshKey]);
 
   const distinct = (values: (string | null | undefined)[]) =>
@@ -102,6 +104,7 @@ export default function Opportunities() {
 
       {error && <p className="error">{error}</p>}
       <p className="muted">Showing {filtered.length} of {items.length} opportunities.</p>
+      <div className="table-wrap">
       <table>
         <thead>
           <tr>
@@ -119,7 +122,15 @@ export default function Opportunities() {
           </tr>
         </thead>
         <tbody>
-          {filtered.map((o) => (
+          {loading &&
+            Array.from({ length: 6 }).map((_, i) => (
+              <tr key={`sk-${i}`} className="skeleton-row">
+                <td colSpan={11}>
+                  <span className="skeleton-line" />
+                </td>
+              </tr>
+            ))}
+          {!loading && filtered.map((o) => (
             <tr key={o.id}>
               <td>{o.opportunityBusinessId}</td>
               <td>
@@ -138,7 +149,7 @@ export default function Opportunities() {
               </td>
             </tr>
           ))}
-          {filtered.length === 0 && !error && (
+          {!loading && filtered.length === 0 && !error && (
             <tr>
               <td colSpan={11} className="muted">
                 No opportunities match your search or filters.
@@ -147,6 +158,7 @@ export default function Opportunities() {
           )}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

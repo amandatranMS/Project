@@ -581,12 +581,39 @@ th {
   letter-spacing: 0.05em;
   position: sticky;
   top: 0;
+  z-index: 1;
+  box-shadow: 0 4px 8px -6px rgba(16, 24, 40, 0.28);
 }
 td { color: var(--text-2); }
 tr:last-child td { border-bottom: none; }
 tbody tr { transition: background var(--dur-1) var(--ease); }
 tbody tr:hover { background: var(--accent-grad-soft); }
 tbody tr.clickable { cursor: pointer; }
+
+/* Wide tables scroll horizontally inside their own container so the page
+   header + filters stay put instead of the whole content area sliding. */
+.table-wrap {
+  overflow-x: auto;
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-4);
+}
+.table-wrap > table { box-shadow: none; }
+
+/* Loading skeleton rows — shown while a list first fetches so the
+   empty-state message never flashes before data arrives. */
+.skeleton-row td { padding: 15px var(--sp-4); }
+.skeleton-line {
+  display: block;
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--surface-alt) 25%, var(--surface-2) 37%, var(--surface-alt) 63%);
+  background-size: 400% 100%;
+  animation: skeleton-shimmer 1.4s ease infinite;
+}
+@keyframes skeleton-shimmer {
+  from { background-position: 100% 50%; }
+  to { background-position: 0 50%; }
+}
 
 .approval-fields { margin-top: var(--sp-2); min-width: 280px; }
 .approval-fields summary {
@@ -650,6 +677,11 @@ tbody tr.clickable { cursor: pointer; }
   border: 1px solid var(--border);
   border-radius: var(--r-md);
 }
+/* The audit modal reuses .chat-msg without the .chat-row wrapper, so restore
+   speaker alignment + max-width here (the live chat sets these on .chat-row). */
+.audit-convo .chat-msg { max-width: 86%; white-space: pre-wrap; }
+.audit-convo .chat-msg.user { align-self: flex-end; }
+.audit-convo .chat-msg.assistant { align-self: flex-start; color: var(--text); }
 
 /* ============================== Badges ============================== */
 .badge {
@@ -848,13 +880,14 @@ select:focus, .filters input:focus {
   padding: 13px 20px;
   font-size: 14px;
   font-weight: 700;
-  box-shadow: 0 10px 26px rgba(43, 108, 255, 0.4);
+  box-shadow: 0 8px 22px rgba(43, 108, 255, 0.28);
   cursor: pointer;
   z-index: 55;
   transition: transform var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease), filter var(--dur-1) var(--ease);
 }
-.chat-fab:hover { transform: translateY(-2px) scale(1.03); box-shadow: 0 14px 34px rgba(43, 108, 255, 0.48); filter: brightness(1.05); }
+.chat-fab:hover { transform: translateY(-2px) scale(1.03); box-shadow: 0 12px 30px rgba(43, 108, 255, 0.36); filter: brightness(1.05); }
 .chat-fab:active { transform: translateY(0) scale(0.99); }
+.chat-fab svg { width: 18px; height: 18px; }
 
 .chat-panel {
   position: fixed;
@@ -1339,6 +1372,91 @@ button.chip.filter-chip.clear-all:hover { border-color: var(--danger, #c50f1f); 
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* ============================================================================
+   Dark theme — automatic via OS/browser preference. Purely re-maps design
+   tokens (plus a handful of rules that hard-code light colours); no layout,
+   markup, or behaviour changes. The brand gradients + navy sidebar are kept.
+   ========================================================================== */
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Brand ramp: brighten so text/links stay legible on dark surfaces */
+    --brand-10: rgba(74, 163, 232, 0.14);
+    --brand-20: rgba(74, 163, 232, 0.30);
+    --brand-40: rgba(74, 163, 232, 0.46);
+    --brand-primary: #4aa3e8;
+    --brand-shade: #6fb7ee;
+    --brand-dark: #a9d2f5;
+
+    --accent-grad-soft: linear-gradient(135deg, rgba(43, 108, 255, 0.20), rgba(109, 92, 231, 0.20) 50%, rgba(23, 176, 196, 0.20));
+
+    /* Neutral layers */
+    --bg: #0e1320;
+    --bg-tint: radial-gradient(1200px 600px at 100% -10%, rgba(109, 92, 231, 0.12), transparent 60%),
+               radial-gradient(1000px 500px at -10% 110%, rgba(23, 176, 196, 0.10), transparent 55%);
+    --surface: #161d2e;
+    --surface-2: #1a2234;
+    --surface-alt: #1f273a;
+    --border: #2a3348;
+    --border-strong: #3a445c;
+    --text: #e8ecf6;
+    --text-2: #b7c0d3;
+    --muted: #8791a6;
+
+    /* Status: brighter foregrounds, translucent tinted backgrounds */
+    --success: #4ec26a;  --success-bg: rgba(78, 194, 106, 0.16);
+    --warning: #d7a53f;
+    --at-risk: #e0913f;  --at-risk-bg: rgba(224, 145, 63, 0.16);
+    --danger: #f2707c;   --danger-bg: rgba(242, 112, 124, 0.16);
+
+    /* Deeper shadows read on dark backgrounds */
+    --shadow-2: 0 1px 2px rgba(0, 0, 0, 0.40), 0 1px 3px rgba(0, 0, 0, 0.30);
+    --shadow-4: 0 2px 6px rgba(0, 0, 0, 0.44), 0 1px 2px rgba(0, 0, 0, 0.34);
+    --shadow-8: 0 6px 18px rgba(0, 0, 0, 0.50), 0 2px 6px rgba(0, 0, 0, 0.38);
+    --shadow-16: 0 12px 32px rgba(0, 0, 0, 0.55), 0 4px 10px rgba(0, 0, 0, 0.40);
+    --shadow-28: 0 22px 52px rgba(0, 0, 0, 0.62), 0 8px 18px rgba(0, 0, 0, 0.45);
+  }
+
+  /* Scrollbars */
+  * { scrollbar-color: #3a445c transparent; }
+  *::-webkit-scrollbar-thumb { background: #3a445c; }
+  *::-webkit-scrollbar-thumb:hover { background: #4a5670; }
+
+  /* Rules that hard-code light values */
+  .topbar { background: rgba(14, 19, 32, 0.72); }
+  .login-card { background: var(--surface); }
+  .btn { color: var(--text); }
+  .m365-form input, .m365-form textarea { background: var(--surface); color: var(--text); }
+
+  .mock-banner {
+    background: linear-gradient(135deg, rgba(224, 145, 63, 0.16), rgba(224, 145, 63, 0.09));
+    border-color: rgba(224, 145, 63, 0.32);
+    color: #e6b877;
+  }
+
+  .badge.gray { background: rgba(255, 255, 255, 0.06); color: #c3ccdb; border-color: rgba(255, 255, 255, 0.14); }
+  .badge.green { border-color: rgba(78, 194, 106, 0.32); }
+  .badge.amber { border-color: rgba(224, 145, 63, 0.32); }
+  .badge.red { border-color: rgba(242, 112, 124, 0.32); }
+
+  .error { border-color: rgba(242, 112, 124, 0.32); }
+  .chat-errbar { border-color: rgba(242, 112, 124, 0.32); }
+  .chat-send.stop:hover { border-color: rgba(242, 112, 124, 0.4); }
+
+  .m365-status.success { border-color: rgba(78, 194, 106, 0.32); }
+  .m365-status.warn { border-color: rgba(224, 145, 63, 0.32); }
+  .m365-status.error { background: rgba(242, 112, 124, 0.14); border-color: rgba(242, 112, 124, 0.32); }
+
+  th { box-shadow: 0 4px 8px -6px rgba(0, 0, 0, 0.6); }
+
+  /* Overlays that assume a light backdrop */
+  .icon-btn:hover { background: rgba(255, 255, 255, 0.08); }
+  .chat-rail-item:hover { background: rgba(255, 255, 255, 0.05); }
+
+  /* Recharts legibility on dark */
+  .recharts-cartesian-axis-tick-value { fill: var(--text-2); }
+  .recharts-cartesian-grid line { stroke: var(--border); }
 }
 
 

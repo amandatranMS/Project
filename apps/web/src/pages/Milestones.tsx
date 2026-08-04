@@ -8,6 +8,7 @@ import MilestoneForm from '../components/form/MilestoneForm';
 
 export default function Milestones() {
   const [items, setItems] = useState<Milestone[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [milestoneStatus, setMilestoneStatus] = useState('');
@@ -21,7 +22,8 @@ export default function Milestones() {
     api
       .get<Milestone[]>(`/milestones${qs ? `?${qs}` : ''}`)
       .then(setItems)
-      .catch((e) => setError(e.message));
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
   }, [milestoneStatus, refreshKey]);
 
   const filtered = useMemo(() => {
@@ -67,6 +69,7 @@ export default function Milestones() {
 
       {error && <p className="error">{error}</p>}
       <p className="muted">Showing {filtered.length} of {items.length} milestones.</p>
+      <div className="table-wrap">
       <table>
         <thead>
           <tr>
@@ -81,7 +84,15 @@ export default function Milestones() {
           </tr>
         </thead>
         <tbody>
-          {filtered.map((m) => (
+          {loading &&
+            Array.from({ length: 6 }).map((_, i) => (
+              <tr key={`sk-${i}`} className="skeleton-row">
+                <td colSpan={8}>
+                  <span className="skeleton-line" />
+                </td>
+              </tr>
+            ))}
+          {!loading && filtered.map((m) => (
             <tr key={m.id}>
               <td>{m.milestoneBusinessId}</td>
               <td><Link to={`/milestones/${m.id}`}>{m.milestoneName}</Link></td>
@@ -93,11 +104,12 @@ export default function Milestones() {
               <td>{choiceLabel(m.riskImpact)}</td>
             </tr>
           ))}
-          {filtered.length === 0 && !error && (
+          {!loading && filtered.length === 0 && !error && (
             <tr><td colSpan={8} className="muted">No milestones match your search or filter.</td></tr>
           )}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
