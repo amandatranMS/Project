@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import {
   PieChart,
@@ -20,7 +20,7 @@ import {
 import { choiceLabel } from '@msx/shared';
 import { api, type DashboardMetrics, type Milestone, type Opportunity } from '../api/client';
 import { statusBadgeClass, formatCurrency, formatDate } from '../ui';
-import { countBy, sumBy, colorFor, nameOf, compactCurrency } from '../chartUtils';
+import { countBy, sumBy, colorFor, nameOf, compactCurrency, norm } from '../chartUtils';
 
 // Dimensions the user can cross-filter on. Milestone dims filter milestones
 // directly; opportunity dims filter opportunities and, through them, the
@@ -35,12 +35,20 @@ interface Filter {
 
 const isOppDim = (d: Dim): d is OpportunityDim => d === 'solutionArea' || d === 'salesStage';
 
+const DIM_LABELS: Record<Dim, string> = {
+  milestoneStatus: 'Status',
+  milestoneCategory: 'Category',
+  riskImpact: 'Risk',
+  solutionArea: 'Solution Area',
+  salesStage: 'Stage',
+};
+
 export default function Dashboard() {
   const [miles, setMiles] = useState<Milestone[]>([]);
   const [opps, setOpps] = useState<Opportunity[]>([]);
   const [summary, setSummary] = useState<DashboardMetrics | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<Filter | null>(null);
+  const [filters, setFilters] = useState<Filter[]>([]);
 
   useEffect(() => {
     Promise.all([
@@ -57,39 +65,75 @@ export default function Dashboard() {
   }, []);
 
   const toggle = (dim: Dim, value: string) =>
-    setFilter((f) => (f && f.dim === dim && f.value === value ? null : { dim, value }));
-
-  // Opportunities that match the current filter.
-  const filteredOpps = useMemo(() => {
-    if (!filter) return opps;
-    const value = filter.value;
-    if (isOppDim(filter.dim)) {
-      const dim = filter.dim;
-      return opps.filter((o) => choiceLabel(o[dim]) === value);
-    }
-    // A milestone-dim filter narrows opportunities to those that own a matching milestone.
-    const dim = filter.dim;
-    const ok = new Set(
-      miles.filter((m) => choiceLabel(m[dim]) === value).map((m) => m.opportunityId),
+    setFilters((fs) =>
+      fs.some((f) => f.dim === dim && f.value === value)
+        ? fs.filter((f) => !(f.dim === dim && f.value === value))
+        : [...fs, { dim, value }],
     );
-    return opps.filter((o) => ok.has(o.id));
-  }, [opps, miles, filter]);
 
-  // Milestones that match the current filter (the detail table + KPIs use this).
-  const filteredMiles = useMemo(() => {
-    if (!filter) return miles;
-    const value = filter.value;
-    if (isOppDim(filter.dim)) {
-      const dim = filter.dim;
-      const ok = new Set(opps.filter((o) => choiceLabel(o[dim]) === value).map((o) => o.id));
-      return miles.filter((m) => ok.has(m.opportunityId));
+  const removeFilter = (dim: Dim, value: string) =>
+    setFilters((fs) => fs.filter((f) => !(f.dim === dim && f.value === value)));
+
+  // Selected values grouped by dimension. Multiple values within one dimension
+  // are OR'd; different dimensions are AND'd (Power BI-style multi-select).
+  const selected = useMemo(() => {
+    const opp = new Map<OpportunityDim, Set<string>>();
+    const mile = new Map<MilestoneDim, Set<string>>();
+    for (const f of filters) {
+      if (isOppDim(f.dim)) {
+        const set = opp.get(f.dim) ?? new Set<string>();
+        set.add(f.value);
+        opp.set(f.dim, set);
+      } else {
+        const set = mile.get(f.dim) ?? new Set<string>();
+        set.add(f.value);
+        mile.set(f.dim, set);
+      }
     }
-    const dim = filter.dim;
-    return miles.filter((m) => choiceLabel(m[dim]) === value);
-  }, [miles, opps, filter]);
+    return { opp, mile };
+  }, [filters]);
+
+  // An entity matches when, for every dimension it is filtered on, its value is
+  // one of the selected values. Chart slice names come from `norm`, so compare
+  // on `norm` too (this also matches the "(None)" slice correctly).
+  const oppSelfMatch = useCallback(
+    (o: Opportunity) => {
+      for (const [dim, vals] of selected.opp) {
+        if (!vals.has(norm(o[dim]))) return false;
+      }
+      return true;
+    },
+    [selected],
+  );
+  const mileSelfMatch = useCallback(
+    (m: Milestone) => {
+      for (const [dim, vals] of selected.mile) {
+        if (!vals.has(norm(m[dim]))) return false;
+      }
+      return true;
+    },
+    [selected],
+  );
+
+  // Linked cross-filter: opportunities must match their own dims and (when any
+  // milestone dim is filtered) own at least one matching milestone; milestones
+  // must match their own dims and belong to a matching opportunity.
+  const filteredOpps = useMemo(() => {
+    const matches = opps.filter(oppSelfMatch);
+    if (selected.mile.size === 0) return matches;
+    const ownerIds = new Set(miles.filter(mileSelfMatch).map((m) => m.opportunityId));
+    return matches.filter((o) => ownerIds.has(o.id));
+  }, [opps, miles, selected, oppSelfMatch, mileSelfMatch]);
+
+  const filteredMiles = useMemo(() => {
+    const matches = miles.filter(mileSelfMatch);
+    if (selected.opp.size === 0) return matches;
+    const okOppIds = new Set(opps.filter(oppSelfMatch).map((o) => o.id));
+    return matches.filter((m) => okOppIds.has(m.opportunityId));
+  }, [miles, opps, selected, mileSelfMatch, oppSelfMatch]);
 
   // Chart series are computed from the FULL sets so every category stays visible;
-  // the active slice stays lit and the rest dim (Power BI cross-highlight feel).
+  // selected slices stay lit and the rest dim (Power BI cross-highlight feel).
   const byStatus = useMemo(() => countBy(miles, (m) => m.milestoneStatus), [miles]);
   const byRisk = useMemo(() => countBy(miles.filter((m) => m.riskImpact), (m) => m.riskImpact), [miles]);
   const bySolutionArea = useMemo(() => countBy(opps, (o) => o.solutionArea), [opps]);
@@ -104,8 +148,13 @@ export default function Dashboard() {
     return Math.round((done / filteredMiles.length) * 100);
   }, [filteredMiles]);
 
-  const opacityFor = (dim: Dim, name: string) =>
-    !filter ? 1 : filter.dim === dim && filter.value === name ? 1 : 0.28;
+  // A slice lights up when its dimension has this value selected. If the slice's
+  // dimension has no active selection, that whole chart stays fully lit.
+  const opacityFor = (dim: Dim, name: string) => {
+    const set = isOppDim(dim) ? selected.opp.get(dim) : selected.mile.get(dim);
+    if (!set || set.size === 0) return 1;
+    return set.has(name) ? 1 : 0.28;
+  };
 
   const filteredPipeline = useMemo(
     () => filteredOpps.reduce((sum, o) => sum + (o.estimatedRevenue ?? 0), 0),
@@ -121,16 +170,28 @@ export default function Dashboard() {
     { label: 'Pending Approvals', value: summary?.pendingApprovals ?? 0 },
   ];
 
-  const filterLabel = filter ? filter.value : null;
-
   return (
     <div>
       <div className="page-header">
         <h1>Dashboard</h1>
-        {filter && (
-          <button className="chip filter-chip" onClick={() => setFilter(null)}>
-            Filtered: {filterLabel} <span aria-hidden="true">✕</span>
-          </button>
+        {filters.length > 0 && (
+          <div className="filter-chips">
+            {filters.map((f) => (
+              <button
+                key={`${f.dim}:${f.value}`}
+                className="chip filter-chip"
+                onClick={() => removeFilter(f.dim, f.value)}
+                title={`Remove ${DIM_LABELS[f.dim]} filter`}
+              >
+                {DIM_LABELS[f.dim]}: {f.value} <span aria-hidden="true">✕</span>
+              </button>
+            ))}
+            {filters.length > 1 && (
+              <button className="chip filter-chip clear-all" onClick={() => setFilters([])}>
+                Clear all <span aria-hidden="true">✕</span>
+              </button>
+            )}
+          </div>
         )}
       </div>
 
@@ -174,7 +235,7 @@ export default function Dashboard() {
                 <Label
                   position="center"
                   content={(props) => (
-                    <CenterLabel viewBox={props.viewBox} top={filteredMiles.length} bottom={filterLabel ?? 'total'} />
+                    <CenterLabel viewBox={props.viewBox} top={filteredMiles.length} bottom={filters.length ? 'filtered' : 'total'} />
                   )}
                 />
               </Pie>
@@ -279,7 +340,7 @@ export default function Dashboard() {
       {/* Detail table — reflects the active cross-filter */}
       <div className="card" style={{ marginTop: 'var(--sp-6)' }}>
         <div className="chart-head">
-          <h3>Milestones {filter ? `· ${filterLabel}` : ''}</h3>
+          <h3>Milestones{filters.length ? ' · filtered' : ''}</h3>
           <Link to="/milestones" className="muted">View all →</Link>
         </div>
         <p className="muted">Showing {filteredMiles.length} of {miles.length} milestones.</p>

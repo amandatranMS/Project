@@ -1291,6 +1291,13 @@ button.chip.filter-chip {
   color: var(--brand-dark);
 }
 button.chip.filter-chip:hover { border-color: var(--brand-primary); }
+.filter-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+button.chip.filter-chip.clear-all {
+  background: var(--surface-alt);
+  border-color: var(--border);
+  color: var(--text-2);
+}
+button.chip.filter-chip.clear-all:hover { border-color: var(--danger, #c50f1f); color: var(--danger, #c50f1f); }
 
 /* Radial gauge with centered percentage */
 .gauge { position: relative; }

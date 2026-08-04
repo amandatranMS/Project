@@ -7,7 +7,7 @@ export interface Slice {
   value: number;
 }
 
-const norm = (v?: string | null) => (v == null || v === '' || v === '---' ? '(None)' : v);
+export const norm = (v?: string | null) => (v == null || v === '' || v === '---' ? '(None)' : v);
 
 /** Count items grouped by a string key (blank/"---" collapse into "(None)"). */
 export function countBy<T>(items: T[], key: (x: T) => string | null | undefined): Slice[] {
