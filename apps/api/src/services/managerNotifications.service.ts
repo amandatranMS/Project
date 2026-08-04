@@ -89,7 +89,7 @@ function buildEmail(milestone: any, managerDisplayName?: string, changedBy?: str
     '',
     `Marked by ${orDash(changedBy)} on ${new Date().toLocaleString('en-US')}.`,
     '',
-    '— Sent automatically by the MSX Milestone Assistant. This is a synthetic mock application; the opportunity and milestone details above are sample data, not real customer records.',
+    '— Sent automatically by the Multi-Agent Sales Assistant. This is a synthetic mock application; the opportunity and milestone details above are sample data, not real customer records.',
   );
 
   return { subject, body: lines.join('\n') };

@@ -59,7 +59,7 @@ export function getUserSecurityContext(): Record<string, string> | undefined {
   if (user?.kind !== 'user' || !user.oid) return undefined;
 
   const context: Record<string, string> = {
-    application_name: process.env.DEFENDER_AI_APP_NAME || 'MSX Milestone Assistant',
+    application_name: process.env.DEFENDER_AI_APP_NAME || 'Multi-Agent Sales Assistant',
     end_user_id: user.oid,
   };
   if (user.tenantId) context.end_user_tenant_id = user.tenantId;

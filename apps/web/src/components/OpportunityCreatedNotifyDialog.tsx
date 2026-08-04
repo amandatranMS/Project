@@ -13,7 +13,7 @@ interface Props {
 }
 
 /**
- * Human-in-the-loop consent pop-up shown right after a Solution Engineer creates
+ * Human-in-the-loop consent pop-up shown right after a user creates
  * an opportunity. Agreeing posts a Microsoft Teams message summarising the new
  * opportunity to the configured teammate, for visibility and collaboration.
  * Nothing is sent until the user acknowledges here.
@@ -43,7 +43,7 @@ export default function OpportunityCreatedNotifyDialog({
       {error && <p className="error">{error}</p>}
       <p>
         A Microsoft Teams message summarising <strong>{opportunityName}</strong> will be sent to the
-        team for visibility, so other Solution Engineers can collaborate on it.
+        team for visibility, so the rest of the account team can collaborate on it.
       </p>
       <p className="muted">
         The message content is built from this opportunity’s data and the send is recorded in the

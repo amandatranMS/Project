@@ -1,4 +1,4 @@
-# Azure Deployment Plan — MSX Milestone Assistant Redeployment
+# Azure Deployment Plan — Multi-Agent Sales Assistant Redeployment
 
 **Status:** Deployed and Verified  
 **Approval state:** User plan approval and validation are complete; deployment is authorized through `azure-deploy`.  

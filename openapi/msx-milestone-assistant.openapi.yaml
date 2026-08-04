@@ -1,9 +1,9 @@
 openapi: 3.0.3
 info:
-  title: MSX Milestone Assistant API (Mock)
+  title: Multi-Agent Sales Assistant API (Mock)
   version: 0.4.0
   description: >
-    REST API for the MSX Milestone Assistant, a SYNTHETIC MOCK application for
+    REST API for the Multi-Agent Sales Assistant, a SYNTHETIC MOCK application for
     Solution Engineering opportunity and milestone management. NOT connected to
     real MSX, Dataverse, Power Platform, or customer data.
 

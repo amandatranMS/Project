@@ -1,5 +1,5 @@
 /**
- * Shared choice values for MSX Milestone Assistant (the controlled vocabularies).
+ * Shared choice values for Multi-Agent Sales Assistant (the controlled vocabularies).
  *
  * These are the single source of truth for dropdowns/filters in the web UI and for
  * Zod validation in the API. Values mirror the workbook exactly (SQLite has no

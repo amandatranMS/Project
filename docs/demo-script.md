@@ -1,4 +1,4 @@
-# Demo Script — MSX Milestone Assistant (Mock)
+# Demo Script — Multi-Agent Sales Assistant (Mock)
 
 A ~5 minute walkthrough for showing the proof of concept. Everything is synthetic;
 there is no connection to real MSX, Dataverse, or customer data.

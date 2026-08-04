@@ -1,4 +1,4 @@
-"""Thin client for the MSX Milestone Assistant REST API.
+"""Thin client for the Multi-Agent Sales Assistant REST API.
 
 Handles the response envelope ({success, data} | {success, error}) and sends the
 `x-api-key` header so it works whether the API is local or behind a dev tunnel.

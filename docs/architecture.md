@@ -1,9 +1,12 @@
-# Architecture — MSX Milestone Assistant (Mock)
+# Architecture — Multi-Agent Sales Assistant (Mock)
 
 ## Purpose & scope
 
 A synthetic, self-contained proof of concept that recreates a simplified
-**MSX-style workspace** for Solution Engineering. It manages **opportunities**
+**MSX-style workspace** for the Microsoft sales motion — for **anyone who works an
+opportunity on the MSX platform** (Account Executives, Solution Engineers, Cloud
+Solution Architects, Customer Success Account Managers, and the wider account team).
+It manages **opportunities**
 (parent business records) and **opportunity milestones** (the central working
 records), and demonstrates a **governed agent pattern**: agents can read context,
 make recommendations, and request approval, but a human must approve before any

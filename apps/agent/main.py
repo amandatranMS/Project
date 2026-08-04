@@ -47,7 +47,7 @@ def main() -> int:
     subagents = build_subagents(mc, client, model, confirm)
     orch = Orchestrator(subagents, client, model, confirm)
 
-    print("MSX Milestone Assistant (mock) — multi-agent chat")
+    print("Multi-Agent Sales Assistant (mock) — multi-agent chat")
     print(f"Model: {model}   API: {mc.base}")
     print("Specialists: " + ", ".join(sa.name for sa in subagents))
     print("Type your question, or 'exit' to quit.\n")

@@ -5,7 +5,7 @@ import { sendChatStream, type ChatEngine, type ChatTurn } from '../api/client';
 import { authEnabled, msalInstance } from '../auth/msalConfig';
 
 const WELCOME_TEXT =
-  "Hi! I'm the **MSX Milestone Assistant**. Ask me about opportunities, milestones, or dashboard " +
+  "Hi! I'm the **Multi-Agent Sales Assistant**. Ask me about opportunities, milestones, or dashboard " +
   "metrics — I can also create or update records (I'll confirm first). This is mock data.";
 
 /** Ready-made prompts shown on an empty chat to remove the blank-page problem. */
@@ -410,7 +410,7 @@ export default function ChatWidget() {
   }
 
   return (
-    <div className="chat-panel" role="dialog" aria-label="MSX Milestone Assistant">
+    <div className="chat-panel" role="dialog" aria-label="Multi-Agent Sales Assistant">
       <div className={`chat-shell ${railOpen ? 'rail-open' : ''}`}>
         {/* History rail */}
         <aside className="chat-rail">

@@ -1,4 +1,4 @@
-"""Thin client for the MSX Milestone Assistant REST API.
+"""Thin client for the Multi-Agent Sales Assistant REST API.
 
 Handles the response envelope ({success, data} | {success, error}) and
 authenticates to the API. Preferred: a real Microsoft Entra access token

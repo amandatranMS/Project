@@ -39,8 +39,8 @@ export default function App() {
             </svg>
           </span>
           <span className="brand-text">
-            <strong>MSX Milestone</strong>
-            <small>Assistant · Solution Engineering</small>
+            <strong>Multi-Agent Sales</strong>
+            <small>Assistant · MSX platform</small>
           </span>
         </div>
         <nav className="nav">
@@ -60,10 +60,10 @@ export default function App() {
 
       <div className="main-area">
         <header className="topbar">
-          <div className="topbar-title">Solution Engineering Workspace</div>
+          <div className="topbar-title">Sales Opportunity Workspace</div>
           <div className="topbar-actions">
             <span className="chip">Synthetic · no real data</span>
-            {authEnabled ? <AuthMenu /> : <span className="avatar" aria-hidden="true">SE</span>}
+            {authEnabled ? <AuthMenu /> : <span className="avatar" aria-hidden="true">You</span>}
           </div>
         </header>
         <main className="content">

@@ -1,5 +1,5 @@
 <#
-  MSX Milestone Assistant — feature smoke test (mock only).
+  Multi-Agent Sales Assistant — feature smoke test (mock only).
 
   Exercises every current API feature against a running local API and reports
   pass/fail per feature. Nothing here touches real MSX/Dataverse/customer data.
@@ -72,7 +72,7 @@ function Check {
 }
 
 $stamp = Get-Date -Format 'yyyyMMddHHmmss'
-Write-Host "MSX Milestone Assistant smoke test against $BaseUrl (run $stamp)" -ForegroundColor Cyan
+Write-Host "Multi-Agent Sales Assistant smoke test against $BaseUrl (run $stamp)" -ForegroundColor Cyan
 Write-Host ('=' * 70)
 
 # ---------------------------------------------------------------- Health

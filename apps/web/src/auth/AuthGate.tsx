@@ -25,7 +25,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
             <path d="M12 3l1.9 4.7L19 9.5l-4.1 2.9L16 18l-4-2.9L8 18l1.1-5.6L5 9.5l5.1-1.8L12 3z" />
           </svg>
         </div>
-        <h1>MSX Milestone Assistant</h1>
+        <h1>Multi-Agent Sales Assistant</h1>
         <p>Sign in with your Microsoft work account to continue.</p>
         <button className="btn-signin" onClick={signIn} disabled={inProgress !== 'none'}>
           {inProgress !== 'none' ? 'Signing in…' : 'Sign in with Microsoft'}

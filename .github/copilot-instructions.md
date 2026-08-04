@@ -1,4 +1,4 @@
-# Copilot instructions — MSX Milestone Assistant
+# Copilot instructions — Multi-Agent Sales Assistant
 
 ## What this project is
 A **synthetic mock** full-stack web app that recreates a simplified **MSX-style

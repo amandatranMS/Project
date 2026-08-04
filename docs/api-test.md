@@ -1,4 +1,4 @@
-# API Test Guide — MSX Milestone Assistant (Mock)
+# API Test Guide — Multi-Agent Sales Assistant (Mock)
 
 All examples target the local mock API at `http://localhost:4000`. Nothing here
 touches real MSX, Dataverse, or customer data.

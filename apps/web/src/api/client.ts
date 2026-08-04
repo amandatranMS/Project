@@ -1,4 +1,4 @@
-// Thin fetch wrapper for the MSX Milestone Assistant API.
+// Thin fetch wrapper for the Multi-Agent Sales Assistant API.
 // Requests go through the Vite dev proxy to the Express backend.
 // Every endpoint returns { success, data } | { success, error }; we unwrap it here.
 

@@ -1,9 +1,9 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "MSX Milestone Assistant API (Mock)",
+    "title": "Multi-Agent Sales Assistant API (Mock)",
     "version": "0.4.0",
-    "description": "REST API for the MSX Milestone Assistant, a SYNTHETIC MOCK application for Solution Engineering opportunity and milestone management. NOT connected to real MSX, Dataverse, Power Platform, or customer data.\nData is imported from the Excel workbook (single source of truth): data/MSX_Mirror_Necessary_Tables_Import_10_More_Entries.xlsx.\nEvery response uses a consistent envelope:\n  success: { \"success\": true, \"data\": ... }\n  error:   { \"success\": false, \"error\": \"Plain language error message\" }\n\nGovernance: agent-initiated writes — including creating a milestone or an opportunity — happen only when a human decides an approval request via PATCH /api/approval-requests/{id}/approve. Approving executes the request's deferred action (create/update/delete, email, or Teams) or performs the mock milestone writeback for a recommendation-backed request, and records it in the Agent Action Audit Log. reject / needs-changes never execute anything.\n"
+    "description": "REST API for the Multi-Agent Sales Assistant, a SYNTHETIC MOCK application for Solution Engineering opportunity and milestone management. NOT connected to real MSX, Dataverse, Power Platform, or customer data.\nData is imported from the Excel workbook (single source of truth): data/MSX_Mirror_Necessary_Tables_Import_10_More_Entries.xlsx.\nEvery response uses a consistent envelope:\n  success: { \"success\": true, \"data\": ... }\n  error:   { \"success\": false, \"error\": \"Plain language error message\" }\n\nGovernance: agent-initiated writes — including creating a milestone or an opportunity — happen only when a human decides an approval request via PATCH /api/approval-requests/{id}/approve. Approving executes the request's deferred action (create/update/delete, email, or Teams) or performs the mock milestone writeback for a recommendation-backed request, and records it in the Agent Action Audit Log. reject / needs-changes never execute anything.\n"
   },
   "servers": [
     {

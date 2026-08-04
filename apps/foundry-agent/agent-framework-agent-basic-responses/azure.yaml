@@ -18,7 +18,7 @@ services:
             resources:
                 cpu: "0.5"
                 memory: 1Gi
-        description: MSX Milestone Assistant orchestrator that delegates to milestone, dashboard, and opportunity specialists (mock data).
+        description: Multi-Agent Sales Assistant orchestrator that delegates to milestone, dashboard, and opportunity specialists (mock data).
         environmentVariables:
             - name: AZURE_AI_MODEL_DEPLOYMENT_NAME
               value: ${AZURE_AI_MODEL_DEPLOYMENT_NAME}

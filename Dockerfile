@@ -1,4 +1,4 @@
-# MSX Milestone Assistant API — container image for Azure Container Apps.
+# Multi-Agent Sales Assistant API — container image for Azure Container Apps.
 # Runs the Express API with tsx (matching dev) so the @msx/shared workspace
 # (which resolves to TypeScript source) loads without a separate build step.
 # SQLite lives on a mounted volume at /data (DATABASE_URL=file:/data/dev.db).
