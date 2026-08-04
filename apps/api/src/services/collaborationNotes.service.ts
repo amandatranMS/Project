@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma.js';
 import { genId } from '../lib/ids.js';
+import { recordAgentAction } from '../lib/audit.js';
 import { connectOpportunity, connectMilestone } from '../lib/connect.js';
 import type { z } from 'zod';
 import type { createNoteSchema } from '../validators/schemas.js';
@@ -14,9 +15,9 @@ export const collaborationNotesService = {
   },
 
   /** Create a timestamped note and connect it through user-facing business identifiers. */
-  create(input: CreateInput) {
+  async create(input: CreateInput) {
     const { collaborationNoteBusinessId, opportunityName, relatedMilestoneBusinessId, ...rest } = input;
-    return prisma.collaborationNote.create({
+    const note = await prisma.collaborationNote.create({
       data: {
         ...rest,
         collaborationNoteBusinessId: collaborationNoteBusinessId || genId('CN'),
@@ -25,5 +26,17 @@ export const collaborationNotesService = {
         relatedMilestone: connectMilestone(relatedMilestoneBusinessId),
       },
     });
+
+    await recordAgentAction({
+      agentName: note.createdBy ?? 'system',
+      actionType: 'Create',
+      actionName: 'Collaboration note added',
+      actor: note.createdBy ?? undefined,
+      opportunityId: note.opportunityId,
+      relatedMilestoneId: note.relatedMilestoneId,
+      inputSummary: `Added note ${note.collaborationNoteBusinessId}${note.noteTitle ? ` — "${note.noteTitle}"` : ''}`,
+    });
+
+    return note;
   },
 };

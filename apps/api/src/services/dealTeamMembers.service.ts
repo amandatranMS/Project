@@ -20,7 +20,7 @@ export const dealTeamMembersService = {
     const { dealTeamMemberBusinessId, opportunityName, addedDate, ...rest } = input;
     const opportunity = await prisma.opportunity.findUnique({ where: { opportunityName } });
     if (!opportunity) throw new HttpError(400, `Opportunity "${opportunityName}" was not found.`);
-    return prisma.dealTeamMember.create({
+    const member = await prisma.dealTeamMember.create({
       data: {
         ...rest,
         addedDate: addedDate ? new Date(addedDate) : null,
@@ -28,6 +28,18 @@ export const dealTeamMembersService = {
         opportunity: { connect: { opportunityName } },
       },
     });
+
+    await recordAgentAction({
+      agentName: 'system',
+      actionType: 'Create',
+      actionName: 'Deal team member added',
+      opportunityId: opportunity.id,
+      inputSummary: `Added ${member.dealTeamMemberBusinessId}${
+        member.personName ? ` (${member.personName})` : ''
+      } to ${opportunityName}`,
+    });
+
+    return member;
   },
 
   /** Accept an internal or business id, apply partial fields, then audit what changed. */

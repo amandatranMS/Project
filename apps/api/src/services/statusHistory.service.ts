@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma.js';
 import { HttpError } from '../lib/httpError.js';
 import { genId } from '../lib/ids.js';
+import { recordAgentAction } from '../lib/audit.js';
 import { assertCompetitorForLostStatus } from '../lib/lostToCompetitor.js';
 import { maybeNotifyManager, type MilestoneNotifyContext } from './managerNotifications.service.js';
 import type { z } from 'zod';
@@ -51,6 +52,19 @@ export const statusHistoryService = {
         },
       }),
     ]);
+
+    // Audit the status change. This path mutates milestoneStatus directly (a
+    // governed field), so it must be logged just like milestonesService.update.
+    await recordAgentAction({
+      agentName: ctx?.changedBy ?? input.changedBy ?? 'system',
+      actionType: 'Update',
+      actionName: 'Milestone status changed',
+      actor: ctx?.changedBy ?? input.changedBy ?? undefined,
+      opportunityId: milestone.opportunityId,
+      relatedMilestoneId: milestone.id,
+      inputSummary: `${milestone.milestoneBusinessId}: ${input.oldStatus ?? milestone.milestoneStatus} → ${input.newStatus}`,
+      outputSummary: `Recorded status history ${history.statusHistoryBusinessId}`,
+    });
 
     // Side effect: a real transition INTO "Lost To Competitor" notifies the
     // seller's manager (best-effort; guarded by the human acknowledgement).

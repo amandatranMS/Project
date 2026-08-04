@@ -169,6 +169,20 @@ async function queueTeamsBroadcastApproval(opp: Opportunity) {
       opportunity: connectOpportunity(opp.opportunityName),
     },
   });
+
+  // This bypasses approvalRequestsService.create, so log the submission here to
+  // match how in-app agent approvals are audited — the agent queuing a send is
+  // itself a governed action, even though nothing is delivered until approval.
+  await recordAgentAction({
+    agentName: 'OpportunityBroadcast',
+    actionType: 'NotifyTeams',
+    actionName: 'Approval submitted',
+    actor: 'agent',
+    opportunityId: opp.id,
+    inputSummary: `Queue tenant-wide Teams broadcast for ${opp.opportunityBusinessId}`,
+    outputSummary: `Submitted ${approval.approvalRequestBusinessId} for human approval`,
+  });
+
   return {
     queued: true,
     approvalRequestBusinessId: approval.approvalRequestBusinessId,

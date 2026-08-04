@@ -101,6 +101,20 @@ export const opportunitiesService = {
       },
     });
 
+    // Audit the creation itself. The broadcast below only logs the visibility
+    // notification, and is skipped entirely when notifications are disabled, so
+    // without this the create would be silent — unlike update/remove.
+    const actorLabel = actor?.email ?? (actor?.kind === 'service' ? 'foundry-agent (service)' : 'system');
+    await recordAgentAction({
+      agentName: actorLabel,
+      actionType: 'Create',
+      actionName: 'Opportunity created',
+      actor: actorLabel,
+      opportunityId: created.id,
+      inputSummary: `Created ${created.opportunityBusinessId} (${created.opportunityName})`,
+      outputSummary: `Created opportunity ${created.opportunityBusinessId}`,
+    });
+
     // "Notify the team of a new opportunity" broadcast. Always records the
     // in-app notification; the `broadcast` mode decides how Teams is handled — 'none'
     // (human form, web modal drives it), 'queue' (direct agent create → approval-gated),
