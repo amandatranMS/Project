@@ -42,12 +42,11 @@ export default function OpportunityCreatedNotifyDialog({
     >
       {error && <p className="error">{error}</p>}
       <p>
-        A Microsoft Teams message summarising <strong>{opportunityName}</strong> will be sent to the
-        team for visibility, so the rest of the account team can collaborate on it.
+        This sends a Teams notification about <strong>{opportunityName}</strong> to all STU(s) /
+        MCAPS users for better visibility, transparency, and collaboration.
       </p>
       <p className="muted">
-        The message content is built from this opportunity’s data and the send is recorded in the
-        audit log. This is the confirmation that authorises it — nothing is sent unless you agree.
+        Nothing is sent unless you confirm here, and the send is recorded in the audit log.
       </p>
     </Modal>
   );

@@ -63,9 +63,9 @@ controls (Defender for AI + Purview DLP).
 
 ## A2. Architecture at a glance
 
-```mermaid
+
 flowchart TD
-    U[Account team user in browser] -->|MSAL sign-in| W[React web app - apps/web - runs locally]
+    [Account team user in browser] -->|MSAL sign-in| W[React web app - apps/web - runs locally]
     W -->|HTTPS with signed-in user token, via Vite proxy| API[Express API - msx-api Container App - port 4000]
 
     API -->|Prisma| DB[(Azure PostgreSQL Flexible Server<br/>11 mock tables)]
