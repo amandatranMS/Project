@@ -22,6 +22,26 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
   if (err instanceof HttpError) {
     return sendError(res, err.status, err.message);
   }
+
+  // Map common Prisma failures to clear, actionable envelope errors so operational
+  // problems don't hide behind a generic 500 (e.g. an unreachable database, which
+  // otherwise surfaced only as "Something went wrong on the server.").
+  const prismaErr = err as { name?: string; code?: string; meta?: { target?: unknown } };
+  if (prismaErr?.name === 'PrismaClientInitializationError') {
+    console.error('Database unreachable:', err);
+    return sendError(
+      res,
+      503,
+      'The database is currently unreachable. Check the API database connection (network/firewall) and try again.',
+    );
+  }
+  if (prismaErr?.code === 'P2002') {
+    const target = Array.isArray(prismaErr.meta?.target)
+      ? prismaErr.meta.target.join(', ')
+      : prismaErr.meta?.target;
+    return sendError(res, 409, `A record with the same ${target ?? 'unique value'} already exists.`);
+  }
+
   console.error('Unhandled error:', err);
   return sendError(res, 500, 'Something went wrong on the server.');
 }

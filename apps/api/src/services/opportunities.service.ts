@@ -125,6 +125,24 @@ export const opportunitiesService = {
     return { ...created, teamsBroadcast: broadcastResult.teamsBroadcast };
   },
 
+  /**
+   * Create-or-reuse for the human approval gate. `opportunityName` is @unique, so
+   * re-approving a CreateOpportunity request whose opportunity was already created
+   * (a prior approval that partially completed, or a duplicate queued request) must
+   * not throw a unique-constraint error that surfaces as an opaque 500. When the
+   * opportunity already exists we reuse it and still run the visibility broadcast so
+   * the Teams notification goes out and the approval can complete cleanly.
+   */
+  async createForApproval(input: CreateInput, actor?: AuthUser, broadcast: BroadcastMode = 'send') {
+    const existing = input.opportunityName
+      ? await prisma.opportunity.findUnique({ where: { opportunityName: input.opportunityName } })
+      : null;
+    if (!existing) return opportunitiesService.create(input, actor, broadcast);
+
+    const broadcastResult = await opportunityBroadcastService.onOpportunityCreated(existing, actor, broadcast);
+    return { ...existing, teamsBroadcast: broadcastResult.teamsBroadcast, alreadyExisted: true as const };
+  },
+
   async update(id: string, input: UpdateInput, actor?: string) {
     // Accept either the internal id or the business id (e.g. "OPP-002") so the
     // agent can target an opportunity the same way a human does.

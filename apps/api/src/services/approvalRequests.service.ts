@@ -102,7 +102,11 @@ async function executeAction(
       //   - "Create without posting" (skipBroadcast) → 'none': create the opportunity only,
       //     no Teams post and no queued Teams approval.
       const { kind, ...fields } = action;
-      return opportunitiesService.create(fields, actor, skipBroadcast ? 'none' : 'send');
+      // Idempotent on the @unique opportunityName: if this approval already created
+      // the opportunity before (partial completion) or a duplicate request exists,
+      // reuse it instead of throwing a duplicate-key error (which surfaced as an
+      // opaque 500) — and still run the Teams broadcast so the message goes out.
+      return opportunitiesService.createForApproval(fields, actor, skipBroadcast ? 'none' : 'send');
     }
     case 'SendOutlookMail':
       return graphService.sendMail(actor, {
