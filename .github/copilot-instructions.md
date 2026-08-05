@@ -4,7 +4,7 @@
 A **synthetic mock** full-stack web app that recreates a simplified **MSX-style
 workspace** for Solution Engineering opportunity + milestone management. It replaces
 an original Power Apps / Dataverse plan (blocked by DLP) with a self-contained
-React + Express + SQLite + Prisma app.
+React + Express + PostgreSQL + Prisma app.
 
 ## Hard rules — do not violate
 - **Never** connect to or reference real MSX, real customer data, Dataverse, Power
@@ -27,7 +27,7 @@ React + Express + SQLite + Prisma app.
 ## Data — the Excel workbook is the single source of truth
 - Records are imported from `data/MSX_Mirror_Necessary_Tables_Import_10_More_Entries.xlsx`,
   NOT hardcoded. `prisma/seed.ts` just calls the importer.
-- Pipeline: Excel → `scripts/parseWorkbook.ts` (xlsx) → JSON → Prisma `connect` → SQLite.
+- Pipeline: Excel → `scripts/parseWorkbook.ts` (xlsx) → JSON → Prisma `connect` → PostgreSQL.
 - Column→field maps live in `scripts/workbookMappings.ts`. The schema mirrors the
   workbook columns; each table has a `@unique` business id (opportunityBusinessId,
   milestoneBusinessId, recommendationBusinessId, etc.) and children resolve lookups
@@ -68,9 +68,9 @@ React + Express + SQLite + Prisma app.
 - Frontend: React + TypeScript (Vite) in `apps/web`.
 - Backend: Node + Express + TypeScript in `apps/api`, ESM (`"type": "module"`),
   NodeNext resolution — local imports use `.js` extensions.
-- ORM: Prisma, schema at `prisma/schema.prisma`, SQLite (`prisma/dev.db`).
-- Validation: Zod in `apps/api/src/validators/schemas.ts`. SQLite has no enums, so
-  status/type fields are Strings; the controlled choice lists live in
+- ORM: Prisma, schema at `prisma/schema.prisma`, PostgreSQL via `DATABASE_URL`.
+- Validation: Zod in `apps/api/src/validators/schemas.ts`. Status/type fields remain
+  Strings so they mirror the workbook; the controlled choice lists live in
   `packages/shared` and are enforced by Zod `z.enum`.
 - Keep the REST API and `openapi/msx-milestone-assistant.openapi.yaml` in sync.
 

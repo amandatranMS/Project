@@ -1,391 +1,256 @@
-# Azure Deployment Plan — Multi-Agent Sales Assistant Redeployment
+# Redeploy the Multi-Agent Sales Assistant
 
-**Status:** Deployed and Verified  
-**Approval state:** User plan approval and validation are complete; deployment is authorized through `azure-deploy`.  
-**Classification:** Development; synthetic mock business data only  
-**Scale:** Small  
-**Strategy:** Reuse existing resources and update application revisions/versions only  
-**Prepared:** 2026-07-30
+| | |
+|---|---|
+| Status | Deployed and verified |
+| Last prepared | 2026-07-30 |
+| Deployment method | `azure-deploy` only |
+| Data | Development; synthetic mock business data only |
 
-## 1. Goal and Outcome
+This file records a completed deployment. Before another deployment, run the Azure validation process again. Only that process may mark a new deployment as validated.
 
-Redeploy the existing MSX API changes to the existing Azure Container App and redeploy the existing Microsoft Foundry hosted-agent changes through the existing `azd` environment.
+## What This Guide Does
 
-The React web client has no standalone Azure resource in the selected subscription. It will be dependency-checked, built, and verified locally, and will continue to run locally against the deployed API. This plan does not create an Azure web-hosting resource.
+This guide explains how to update the two parts of the application that run in Azure:
 
-Expected outcome:
+- The API, which runs in Azure Container Apps.
+- The AI assistant, which runs in Microsoft Foundry.
 
-- `msx-api` runs a new healthy Container Apps revision using a uniquely tagged image from the existing ACR.
-- `agent-framework-agent-basic-responses` runs a new hosted-agent version/deployment against the existing Foundry project.
-- The local React client builds successfully and can use the unchanged API endpoint.
-- Existing data, configuration, identities, secrets, networking, model deployment, and resource topology remain in place.
+The web app continues to run locally. This process updates existing software only. It must not create Azure resources or change the database, security settings, identities, network, or AI model.
 
-## 2. Fixed Azure Context
+The deployment follows four stages:
 
-| Item | Value |
+1. **Check:** Confirm the Azure account, resources, code, and safety rules.
+2. **Deploy:** Update the API, then update the hosted AI assistant.
+3. **Verify:** Confirm both updates work and approval controls still apply.
+4. **Recover:** Restore the previous version if a check fails.
+
+After a successful deployment:
+
+- The API runs a new healthy revision of `msx-api`.
+- The hosted agent runs a new version of `agent-framework-agent-basic-responses`.
+- The local React app connects to the deployed API.
+- Existing data and Azure configuration remain unchanged.
+
+### Terms Used in This Guide
+
+- **API:** The backend service used by the web app and AI assistant.
+- **Container image:** A packaged copy of the API code and everything it needs to run.
+- **Revision:** One deployed version of the API in Azure Container Apps.
+- **Hosted agent:** The AI assistant running in Microsoft Foundry.
+- **Rollback:** Restoring the last working version after a failed update.
+- **FQDN:** The API's full internet address.
+
+## Fixed Targets
+
+| Item | Required value |
 |---|---|
 | Subscription | `ME-MngEnvMCAP758248-t-amandatran-1` |
 | Subscription ID | `f850b37c-9bf9-4075-9eb5-43aa2daf6d85` |
 | API resource group | `rg-msx-milestone-api` |
 | API region | Canada Central |
 | Container App | `msx-api` |
-| Azure Container Registry | `ca34643b5fc3acr` |
+| Container registry | `ca34643b5fc3acr` |
 | Foundry resource group | `rg-agent-framework-agent-basic-responses-dev` |
 | Foundry region | Canada East |
 | Hosted agent | `agent-framework-agent-basic-responses` |
 | `azd` environment | `msx` |
-| Foundry deployment directory | `apps\foundry-agent\agent-framework-agent-basic-responses` |
+| Foundry directory | `apps\foundry-agent\agent-framework-agent-basic-responses` |
 
-Before any deployment command, the operator must verify that Azure CLI and `azd` resolve this exact subscription and that the existing resources above are present. A mismatch is a stop condition, not permission to create replacements.
+These are the only approved deployment targets. Stop if Azure shows different names, subscription IDs, or regions. Do not create replacement resources.
 
-## 3. Scope Boundaries
+## What May Change
 
-### In scope
+The deployment may:
 
-- Validate the current API, shared package, React client, and hosted-agent source changes.
-- Build and locally test the API container image.
-- Push a uniquely tagged API image to existing ACR `ca34643b5fc3acr`.
-- Update existing Container App `msx-api` to that exact image, producing a new revision.
-- Deploy the existing hosted-agent service with `azd deploy` in environment `msx`.
-- Verify API health, Container Apps revision state, hosted-agent invocation, approval governance, audit behavior, and local web-client connectivity.
+- Build and test the application code.
+- Upload a new, uniquely named API image to the existing container registry.
+- Point the existing Container App to that image.
+- Update the code for the existing Foundry hosted agent.
+- Test sign-in, approvals, auditing, API health, and local web connectivity.
 
-### Explicitly out of scope
+## What Must Not Change
 
-- No new Azure resources, resource groups, environments, registries, apps, projects, model deployments, databases, identities, role assignments, DNS entries, or web-hosting resources.
-- No infrastructure provisioning: do not run `azd up`, `azd provision`, ARM/Bicep/Terraform deployments, or `azd init`.
-- No infrastructure, Prisma schema, workbook mapping, table, migration, or seed-source changes.
-- No database reset, workbook import, manual seeding, or destructive data operation.
-- No SKU, scale, networking, ingress, secret, identity, RBAC, CORS, domain, or environment-variable changes.
-- No connection or reference to real MSX, Dataverse, Power Apps, Power Automate, or real customer business records.
-- No persistence of Microsoft Graph data into the 11 mock tables.
+Do not:
 
-The database remains exactly 11 mock tables: `Opportunity`, `OpportunityMilestone`, `MilestoneStatusHistory`, `AiMilestoneRecommendation`, `ApprovalRequest`, `CollaborationNote`, `DealTeamMember`, `AgentNotification`, `AgentRunLog`, `AgentActionAuditLog`, and `DashboardMetricSnapshot`.
+- Create resources, environments, identities, permissions, databases, AI models, or web hosting.
+- Run provisioning commands such as `azd up`, `azd provision`, or `azd init`.
+- Deploy ARM, Bicep, or Terraform infrastructure.
+- Change the database design, workbook mapping, secrets, environment variables, network, ingress, scale, CORS, or identity settings.
+- Reset, migrate, import, or manually seed the database.
+- Connect to real MSX, Dataverse, Power Apps, Power Automate, or real customer records.
+- Save Microsoft Graph results in the mock business tables.
 
-## 4. Existing Architecture and Deployment Recipe
+The database must remain exactly these 11 synthetic tables: `Opportunity`, `OpportunityMilestone`, `MilestoneStatusHistory`, `AiMilestoneRecommendation`, `ApprovalRequest`, `CollaborationNote`, `DealTeamMember`, `AgentNotification`, `AgentRunLog`, `AgentActionAuditLog`, and `DashboardMetricSnapshot`.
 
-```text
-Local React/Vite client
-        |
-        | HTTPS + existing authentication/configuration
-        v
-Existing Container App: msx-api (Canada Central)
-        |
-        +-- Existing ACR: ca34643b5fc3acr
-        +-- Existing database/configuration/secrets (unchanged)
-        +-- Existing Entra ID and Microsoft Graph integration
-        ^
-        | API_BASE_URL / existing authenticated API contract
-Existing Foundry hosted agent (Canada East)
-agent-framework-agent-basic-responses
+## Safety Rules
+
+- Never display or commit passwords, tokens, database URLs, API keys, or `azd` secrets.
+- Use the existing signed-in identity and permissions.
+- Keep HTTPS, managed identities, secret references, port `4000`, ingress, scale, and revision mode unchanged.
+- Keep all sales records synthetic.
+- Require sign-in for real Microsoft Graph access and audit every Graph read with `recordAgentAction`.
+- Put every AI-requested change or message into `ApprovalRequest`.
+- Execute it only after a person approves it, then record the result in `AgentActionAuditLog`.
+- Stop when a target, health, policy, quota, database, or governance check does not match this plan.
+
+## Before You Deploy
+
+Complete all three checks below. Run commands from the repository root unless the guide says otherwise.
+
+### 1. Check your tools and Azure account
+
+You need Git, Node.js/npm, Azure CLI with Container Apps support, Python, `azd`, and the Microsoft Foundry `azd` extension. Docker is optional because Azure Container Registry can build the image remotely.
+
+Sign in and confirm that every command returns the resource listed in **Fixed Targets**:
+
+```powershell
+az login
+az account set --subscription "f850b37c-9bf9-4075-9eb5-43aa2daf6d85"
+azd auth login
+
+az account show --query "{name:name,id:id,tenantId:tenantId}" -o json
+az group show -n "rg-msx-milestone-api" --query "{name:name,location:location}" -o json
+az acr show -g "rg-msx-milestone-api" -n "ca34643b5fc3acr" --query "{name:name,location:location,loginServer:loginServer,adminUserEnabled:adminUserEnabled}" -o json
+az containerapp show -g "rg-msx-milestone-api" -n "msx-api" --query "{name:name,location:location,state:properties.provisioningState,fqdn:properties.configuration.ingress.fqdn,targetPort:properties.configuration.ingress.targetPort,revisionMode:properties.configuration.activeRevisionsMode,image:properties.template.containers[0].image,latestRevision:properties.latestRevisionName}" -o json
+az group show -n "rg-agent-framework-agent-basic-responses-dev" --query "{name:name,location:location}" -o json
 ```
 
-Selected recipe:
+Also confirm that the `msx` environment points to the required subscription and Canada East Foundry project. Confirm that required secrets exist, but do not display their values.
 
-1. **API:** existing Azure CLI Container Apps image/revision workflow.
-2. **Hosted agent:** existing Azure Developer CLI project and environment, using service-only `azd deploy`.
-3. **Web:** local npm build and local runtime verification only.
+### 2. Check the code
 
-This mixed recipe is intentional: it preserves the established deployment paths and avoids provisioning or topology changes.
+These commands confirm that the database and Foundry setup have not changed, install the locked dependencies, regenerate Prisma, update the OpenAPI JSON, and check that all TypeScript projects build:
 
-## 5. Quota and Capacity
+```powershell
+git diff --check
+git diff --exit-code -- prisma\schema.prisma
+git diff --exit-code -- apps\foundry-agent\agent-framework-agent-basic-responses\azure.yaml
+npm ci
+npm run prisma:generate
+npm run openapi:json
+npm run build
+npm run typecheck -w @msx/api
+npm run typecheck -w @msx/web
+```
 
-- Net-new Azure resources: **0**.
-- The Microsoft.App quota query for Canada Central returned no quota rows.
-- Quota is not applicable to updating an existing Container Apps revision or an existing Foundry hosted-agent version.
-- Validation must still confirm that the existing Container App, ACR, Foundry project, and hosted agent are available and healthy.
-- Any deployment response indicating capacity, policy, or quota failure is a stop condition; do not create alternate resources or switch regions.
+Then open the hosted-agent directory and check the Python code and deployment package:
 
-## 6. Security, Data, and Governance Guardrails
+```powershell
+python -m compileall -q .
+azd package --no-prompt -e msx
+```
 
-- Never print, persist, commit, or copy ACR credentials, API keys, database URLs, tokens, or `azd` environment secrets into logs or this plan.
-- Use the existing signed-in Azure identity and existing RBAC; do not enable ACR admin credentials or anonymous pull.
-- Preserve HTTPS, existing managed identities, secret references, ingress settings, and the Container App target port (`4000`).
-- Keep all business records synthetic and mock-only.
-- Real Entra ID sign-in and Microsoft Graph reads remain allowed only for authenticated users and must be audited through `recordAgentAction`.
-- Preserve the human-in-the-loop gate: governed agent changes/messages must remain deferred in `ApprovalRequest` and execute only after human approval.
-- Preserve audit writes to `AgentActionAuditLog` for every governed action.
-- Do not run `prisma migrate`, `prisma db push`, `db:reset`, `seed`, or `import-workbook` manually. The existing container entrypoint may perform its unchanged startup schema check; validation must establish that `prisma\schema.prisma` has no deployment-scope changes before image publication.
+Before continuing, confirm:
 
-## 7. Planning Checklist
+- API responses still use `{ success, data }` or `{ success, error }`.
+- Governed actions and messages still require approval and call `recordAgentAction`.
+- The API still listens on port `4000`.
+- There are no infrastructure, database-design, table, seed, or hosting changes.
 
-- [x] User approved this exact plan on 2026-07-30.
-- [ ] Confirm the only requested persistent edit during planning is this file.
-- [ ] Confirm the working tree contains the intended API, Foundry-agent, and local-web changes.
-- [ ] Confirm `prisma\schema.prisma`, infrastructure files, and table count are unchanged.
-- [ ] Confirm no standalone Azure web resource is expected or will be created.
-- [ ] Confirm rollback owners and the maintenance window for development deployment.
-- [ ] After approval, change plan status to `Preparing`; after preparation succeeds, change it to `Ready for Validation`.
+### 3. Test the application
 
-## 8. Preparation Checklist
+- Build the API image locally when Docker is available. Otherwise, use the existing Azure Container Registry remote build.
+- For local tests, use a temporary PostgreSQL database. Never use the Azure database for destructive tests.
+- Verify `/api/health` and run `scripts\smoke-test.ps1` against the isolated environment.
+- Run the hosted agent locally and send it a read-only prompt using synthetic data.
+- Send it a change request and confirm that it creates an approval instead of changing data immediately.
+- Start the local web app and check sign-in, the mock-data banner, dashboard, opportunities, approvals, and API connection.
+- When finished, remove only the temporary resources and processes created for this test.
 
-Run from repository root unless a different directory is stated.
+## Deployment
 
-### 8.1 Tooling and target checks
+Continue only when every check above passes and the Azure targets still match this guide.
 
-- [ ] Verify `git`, Node.js/npm, Docker, Azure CLI, Azure Container Apps CLI support, Python, `azd`, and the Microsoft Foundry `azd` extension are installed.
-- [ ] Authenticate without exposing tokens:
+### 1. Update the API
 
-  ```powershell
-  az login
-  az account set --subscription "f850b37c-9bf9-4075-9eb5-43aa2daf6d85"
-  azd auth login
-  ```
+First, record the currently running image, revision, and web address. These values are needed if you must restore the previous version. Then create a unique name for the new image:
 
-- [ ] Verify the selected account:
+```powershell
+$PreviousImage = az containerapp show -g "rg-msx-milestone-api" -n "msx-api" --query "properties.template.containers[0].image" -o tsv
+$PreviousRevision = az containerapp show -g "rg-msx-milestone-api" -n "msx-api" --query "properties.latestRevisionName" -o tsv
+$Fqdn = az containerapp show -g "rg-msx-milestone-api" -n "msx-api" --query "properties.configuration.ingress.fqdn" -o tsv
+$Tag = "redeploy-" + (Get-Date).ToUniversalTime().ToString("yyyyMMddHHmmss")
+$Image = "ca34643b5fc3acr.azurecr.io/msx-api:$Tag"
+```
 
-  ```powershell
-  az account show --query "{name:name,id:id,tenantId:tenantId}" -o json
-  ```
+Build the new image locally or in Azure Container Registry. Confirm its image digest, then update only the Container App image:
 
-- [ ] Verify existing targets and regions; all commands must succeed:
+```powershell
+az containerapp update -g "rg-msx-milestone-api" -n "msx-api" --image $Image
+```
 
-  ```powershell
-  az group show -n "rg-msx-milestone-api" --query "{name:name,location:location}" -o json
-  az acr show -g "rg-msx-milestone-api" -n "ca34643b5fc3acr" --query "{name:name,location:location,loginServer:loginServer,adminUserEnabled:adminUserEnabled}" -o json
-  az containerapp show -g "rg-msx-milestone-api" -n "msx-api" --query "{name:name,location:location,state:properties.provisioningState,fqdn:properties.configuration.ingress.fqdn,targetPort:properties.configuration.ingress.targetPort,revisionMode:properties.configuration.activeRevisionsMode,image:properties.template.containers[0].image,latestRevision:properties.latestRevisionName}" -o json
-  az group show -n "rg-agent-framework-agent-basic-responses-dev" --query "{name:name,location:location}" -o json
-  ```
+Do not add options that change configuration, secrets, identity, ingress, scale, revision mode, or traffic. Wait until the new API revision is healthy before continuing.
 
-- [x] Foundry `azd` environment `msx` verified against subscription `f850b37c-9bf9-4075-9eb5-43aa2daf6d85` and Canada East; secret values were not displayed.
-- [x] Existing Container App Graph configuration verified: `GRAPH_SEND_MODE=live` and AAD tenant, client, and secret settings are configured; values were not exposed.
-- [ ] Confirm Azure Policy assignments permit updates to the existing resources. Do not modify policy.
+### 2. Update the AI assistant
 
-### 8.2 Change and contract checks
+From `apps\foundry-agent\agent-framework-agent-basic-responses`:
 
-- [x] Change hygiene check completed: `git diff --check` passed.
-- [ ] Run:
+```powershell
+azd env select msx
+azd deploy agent-framework-agent-basic-responses
+```
 
-  ```powershell
-  git diff --exit-code -- prisma\schema.prisma
-  git diff --exit-code -- apps\foundry-agent\agent-framework-agent-basic-responses\azure.yaml
-  ```
+Cancel the command if it tries to create infrastructure or targets a different project or agent. Record the new agent version, but do not record secrets.
 
-- [x] OpenAPI synchronization check completed: `npm run openapi:json` passed.
-- [ ] Confirm all responses retain the `{ success, data }` / `{ success, error }` envelope.
-- [ ] Confirm agent mutations/messages remain approval-gated and all governed and Graph actions call `recordAgentAction`.
-- [ ] Confirm the API continues listening on port `4000`, matching the Dockerfile and existing Container App target port.
+## Check the Deployment
 
-### 8.3 Dependency, build, and static verification
+After both updates finish:
 
-- [ ] Install exactly the locked Node dependencies: `npm ci`.
-- [ ] Generate the existing Prisma client without changing schema: `npm run prisma:generate`.
-- [x] Build shared, API, and web packages: `npm run build` passed on 2026-07-30.
-- [ ] Run existing targeted type checks:
+1. Confirm the new API revision is active, healthy, and using the expected image.
+2. Confirm the web address, port `4000`, revision mode, traffic, identity, secrets, environment names, and scale did not change.
+3. Open `https://<existing-fqdn>/api/health` and confirm it returns HTTP 200 with the normal success response.
+4. Check API and agent logs for startup, database, sign-in, Graph, tool, or unexpected errors.
+5. Sign in and perform read-only checks for opportunities, opportunity context, and the dashboard.
+6. Test one synthetic change: it must create an approval. Rejecting it or requesting changes must do nothing. Approving it must run exactly once and create an audit record.
+7. Test the hosted agent with one read-only request and one request that requires approval.
+8. Build and run the local React app against the deployed API.
+9. Confirm that Azure contains no new resources and that the 11 tables and existing data remain intact.
 
-  ```powershell
-  npm run typecheck -w @msx/api
-  npm run typecheck -w @msx/web
-  ```
+Do not send a tenant-wide Teams message during verification.
 
-- [x] Hosted-agent Python compile check passed with `python -m compileall -q .`.
+## Restore the Previous Version
 
-  ```powershell
-  python -m compileall -q .
-  ```
+Restore the previous version if the new revision is unhealthy, fails to start, has database or sign-in errors, breaks the agent, bypasses approval, fails to audit actions, or causes a serious regression.
 
-- [ ] If project tests or linters exist at execution time, run the smallest existing commands covering the changed API, governance, Graph, web, and agent behavior. Do not add a new test/lint framework.
+### Restore the API
 
-### 8.4 Local API image verification
+```powershell
+az containerapp update -g "rg-msx-milestone-api" -n "msx-api" --image $PreviousImage
+```
 
-- [ ] Set a unique immutable candidate tag, for example:
+Wait for the restored revision to become healthy and check the existing web address. If traffic was split between revisions, restore the original traffic settings. Keep the failed revision's logs for investigation. Never reset the database during recovery.
 
-  ```powershell
-  $Tag = "redeploy-" + (Get-Date).ToUniversalTime().ToString("yyyyMMddHHmmss")
-  $Image = "ca34643b5fc3acr.azurecr.io/msx-api:$Tag"
-  ```
+### Restore the AI assistant
 
-- [x] Local container build check skipped because Docker is unavailable locally; the existing ACR remote-build path will be validated and used during deployment.
+Reactivate or redeploy the previously recorded healthy agent version. Repeat the read-only and approval checks. Do not delete or recreate the agent, project, model, or resource group.
 
-  ```powershell
-  docker build --pull --build-arg "CACHEBUST=$Tag" -t $Image .
-  ```
+## Previous Validation Results
 
-- [ ] If Docker is available, run the candidate against an ephemeral local PostgreSQL container on an isolated local Docker network. Generate local-only random credentials, do not use Azure database secrets, wait for PostgreSQL readiness, start the API candidate on port `4000`, and verify `GET /api/health` returns HTTP 200 with `{ success: true, data: { status: "ok" } }`.
-- [ ] Run `pwsh scripts\smoke-test.ps1 -BaseUrl http://localhost:4000 -ApiKey <local-random-key>` against only the ephemeral local database. The AI-config-dependent chat check may be reported as skipped; other failures block deployment.
-- [ ] Stop and remove the local API/PostgreSQL containers and local validation network by their exact names. Do not remove unrelated Docker objects.
-- [ ] Record the candidate tag and local image ID in execution notes without recording secrets.
+The following checks passed before the last deployment:
 
-### 8.5 Local hosted-agent and web verification
-
-- [ ] In the hosted-agent deployment directory, install from the existing `requirements.txt` into the selected local environment if dependencies are missing.
-- [ ] Use the existing `msx` environment to run the hosted agent locally (`azd ai agent run`) and invoke a read-only synthetic prompt with `azd ai agent invoke --local`.
-- [ ] Confirm the local agent can read synthetic API context and does not directly execute a governed mutation or message.
-- [ ] Start the existing local Vite client with `npm run dev:web`.
-- [ ] Verify the mock banner, sign-in boundary, dashboard/opportunity views, approval UI, and API connectivity. Confirm no real MSX/customer data appears.
-- [ ] Stop local long-running processes by their exact process IDs after verification.
-
-## 9. Azure Validate Checklist
-
-This phase is mandatory and must be performed by the `azure-validate` workflow after preparation, never by manually declaring the plan validated.
-
-- [x] Status updated to `Ready for Validation` on 2026-07-30.
-- [ ] Invoke `azure-validate`.
-- [ ] Verify subscription, tenant, both resource groups, both regions, resource names, and `azd` environment `msx`.
-- [ ] Verify API and Foundry authentication/RBAC are sufficient for revision/version updates and no broader role is introduced.
-- [ ] Verify ACR admin access and anonymous pull remain disabled.
-- [ ] Verify the Container App’s current FQDN, target port, ingress, revision mode, identity, secrets, environment variables, scale, and database configuration will be preserved.
-- [ ] Capture, without secrets, the current API image reference, active/latest revision, traffic weights, and FQDN as the rollback baseline.
-- [ ] Verify the candidate image exists locally, passed local health/smoke checks, and has a unique tag.
-- [ ] Verify no schema, table, IaC, resource, environment, model deployment, or web-hosting changes are proposed.
-- [ ] Verify the hosted-agent manifest resolves to the existing project and service and that service-only `azd deploy` will not provision infrastructure.
-- [ ] Verify required non-secret hosted-agent settings are present; verify required secret keys exist without outputting their values.
-- [ ] Verify policy and resource health permit in-place updates.
-- [ ] Record the earlier quota result: Microsoft.App / Canada Central returned no quota rows; quota is not applicable because this is an existing revision/version update with zero new resources.
-- [ ] Add command outputs, timestamps, and pass/fail evidence only under **Validation Proof**.
-- [ ] If every required check passes, set status to `Validated`; otherwise set status to `Validation Failed` and do not deploy.
-
-## 10. Deployment Checklist
-
-Deployment requires both explicit user approval and successful `azure-validate` proof.
-
-### 10.1 API image publication and Container App revision
-
-- [ ] Reconfirm the exact subscription:
-
-  ```powershell
-  az account set --subscription "f850b37c-9bf9-4075-9eb5-43aa2daf6d85"
-  ```
-
-- [ ] Capture rollback values in memory or protected execution output:
-
-  ```powershell
-  $PreviousImage = az containerapp show -g "rg-msx-milestone-api" -n "msx-api" --query "properties.template.containers[0].image" -o tsv
-  $PreviousRevision = az containerapp show -g "rg-msx-milestone-api" -n "msx-api" --query "properties.latestRevisionName" -o tsv
-  $Fqdn = az containerapp show -g "rg-msx-milestone-api" -n "msx-api" --query "properties.configuration.ingress.fqdn" -o tsv
-  ```
-
-- [ ] Authenticate to the existing registry with the signed-in identity, then push the already-tested local image:
-
-  ```powershell
-  az acr login -n "ca34643b5fc3acr"
-  docker push $Image
-  ```
-
-- [ ] Resolve and record the pushed manifest digest using ACR metadata. The unique tag must resolve to the candidate image; a mismatch blocks rollout.
-- [ ] Update only the image of the existing Container App:
-
-  ```powershell
-  az containerapp update -g "rg-msx-milestone-api" -n "msx-api" --image $Image
-  ```
-
-- [ ] Do not pass flags that alter secrets, environment variables, ingress, target port, identity, scale, revision mode, or traffic.
-- [ ] Wait for the new revision to become provisioned, running, and healthy. Verify the unchanged FQDN before proceeding to the agent.
-
-### 10.2 Foundry hosted-agent deployment
-
-- [ ] Change directory to `apps\foundry-agent\agent-framework-agent-basic-responses`.
-- [ ] Select and recheck environment `msx`: `azd env select msx`.
-- [ ] Deploy only the existing hosted-agent service:
-
-  ```powershell
-  azd deploy agent-framework-agent-basic-responses
-  ```
-
-- [ ] Do not run `azd provision`, `azd up`, or any command that creates/updates the Foundry project or model deployment.
-- [ ] Capture the resulting hosted-agent version/deployment identifier and deployment status without secrets.
-- [ ] If the command attempts infrastructure provisioning or targets anything other than the existing hosted agent/project, cancel and stop.
-
-## 11. Post-Deployment Verification Checklist
-
-### 11.1 API
-
-- [ ] Query the Container App and confirm provisioning succeeded, the latest revision is healthy/active, and the configured image equals the unique candidate tag/digest.
-- [ ] Confirm existing revision mode and traffic behavior are preserved.
-- [ ] Verify `https://<existing-fqdn>/api/health` returns HTTP 200 and the standard success envelope.
-- [ ] Review new-revision system/console logs for startup, Prisma, authentication, Graph, and unhandled errors. Do not expose secrets.
-- [ ] Run non-destructive authenticated API reads for opportunities/context and dashboard summary.
-- [ ] Exercise one synthetic approval-gated workflow and verify:
-  - the agent creates an `ApprovalRequest` rather than mutating/sending directly;
-  - reject/needs-changes does not execute the deferred action;
-  - an approved synthetic action executes exactly once;
-  - the action is recorded in `AgentActionAuditLog`.
-- [ ] If testing a real Microsoft Graph read, use an authenticated development user, keep the read minimal, verify `recordAgentAction`, and do not persist returned Graph data into mock tables.
-
-### 11.2 Foundry hosted agent
-
-- [ ] Confirm the hosted agent reports a successful/running deployment in the existing Canada East project.
-- [ ] Invoke a read-only synthetic prompt with `azd ai agent invoke`.
-- [ ] Verify the response uses the deployed API at the unchanged endpoint.
-- [ ] Invoke a synthetic governed-change prompt and confirm it proposes/submits approval instead of directly changing data or sending Teams/Outlook messages.
-- [ ] Review hosted-agent logs for startup, authentication, tool, protocol, and API errors without exposing environment values.
-
-### 11.3 Local React client
-
-- [ ] Re-run `npm run build -w @msx/web`.
-- [ ] Start the local Vite client and verify it connects to the deployed API through existing local configuration.
-- [ ] Verify the synthetic mock banner remains visible and the authentication, opportunity, dashboard, and approval experiences work.
-- [ ] Confirm the subscription still contains no new standalone web resource.
-
-### 11.4 Resource and data invariants
-
-- [ ] Compare the post-deployment Container App configuration to the baseline; only image/revision metadata may differ.
-- [ ] Confirm both original resource groups remain the deployment targets and no new Azure resources were created.
-- [ ] Confirm no schema migration/reset/import occurred and all 11 mock tables remain intact.
-- [ ] Confirm resource health and logs remain stable after a short observation window.
-- [ ] Set plan status to `Deployed and Verified` only after all required checks pass.
-
-## 12. Failure Handling and Rollback
-
-### API rollback
-
-Trigger rollback for failed health checks, crash loops, startup/schema errors, authentication regressions, approval/audit bypass, or material API regressions.
-
-1. Stop Foundry deployment if it has not started.
-2. Restore the captured previous API image on the same Container App:
-
-   ```powershell
-   az containerapp update -g "rg-msx-milestone-api" -n "msx-api" --image $PreviousImage
-   ```
-
-3. Wait for the rollback revision to become healthy and verify the existing FQDN.
-4. Preserve failed-revision logs and identifiers; do not delete resources or data.
-
-If the app uses multiple-revision traffic, restore the captured predeployment traffic weights instead of inventing new weights. Never reset the database as part of rollback.
-
-### Hosted-agent rollback
-
-Trigger rollback for failed deployment/invocation, protocol errors, broken API calls, missing approval gating, or audit failures.
-
-1. Stop further invocations of the failed version.
-2. Use the existing Foundry version-management path to reactivate/redeploy the previously captured healthy hosted-agent version.
-3. Re-run read-only and approval-gate verification.
-4. Do not delete/recreate the agent, project, model deployment, or resource group.
-
-### Stop conditions
-
-- Azure target differs from the fixed context.
-- Validation is absent, failed, or stale relative to the candidate.
-- A command proposes a new resource or infrastructure update.
-- Schema/IaC/table changes are detected.
-- Secrets appear in output or source control.
-- Local build, health, smoke, governance, or agent checks fail.
-- Existing resources are unhealthy before deployment.
-
-## 13. Approval Gate
-
-The plan is **Validated**. Deployment must run through `azure-deploy`; infrastructure provisioning must not run.
-
-## Validation Proof
-
-- `npm` build, API/web typechecks, Prisma generation, OpenAPI generation, Python compile, and `git diff` check passed.
+- Node build, API/web typechecks, Prisma generation, OpenAPI generation, Python compilation, and `git diff --check` passed.
 - `azd package` passed.
-- `azd agent show` confirmed version 25 active; read-only version 25 invocation passed without tools or data changes.
-- API `/api/health` returned HTTP 200 with the expected mock envelope.
-- ACR DNS and token checks passed; remote build is required because Docker is unavailable.
-- No direct policy assignments and no RBAC, IaC, schema, table, or environment changes.
-- `azd provision --preview` succeeded but proposed a duplicate Foundry account/project; provisioning is prohibited and only code deployment is allowed.
-- Foundry MCP identity lacks read RBAC, but Azure CLI/`azd` exact-target checks passed.
-- Revalidation after autonomous-draft prompt correction on 2026-07-31 UTC: `npm run build`, Python `compileall`, `git diff --check`, and no-change checks for `prisma/schema.prisma` and hosted-agent `azure.yaml` passed.
-- `azd package --no-prompt -e msx` passed.
-- `azd provision --preview --no-prompt -e msx` passed and returned the same duplicate-project proposal, confirming deployment must remain code-only.
+- Hosted-agent version 25 was active and passed a read-only invocation.
+- API health returned HTTP 200 with the expected mock envelope.
+- ACR DNS and token checks passed; remote build was required because Docker was unavailable.
+- No permission, infrastructure, database-design, table, or environment changes were found.
+- A preview of `azd provision` proposed a duplicate Foundry account and project. This confirmed that provisioning must not be used and only code should be deployed.
+- Revalidation on 2026-07-31 passed after the autonomous-draft prompt correction.
 
-## Deployment Proof
+## Previous Deployment Results
 
-- API image `ca34643b5fc3acr.azurecr.io/msx-api:draftfix-20260731014241` has digest `sha256:afac463060985ccce931498fd37822a312e87e012ee05c00e5fd53fc07348aff`; Container App revision `msx-api--0000022` is active, provisioned, and running, and its health URL returned HTTP 200.
-- Foundry hosted agent version 28 is active; the exact milestone request produced a complete field-by-field draft with assumptions and an edit/confirm choice.
-- API-to-Foundry chat returned HTTP 200 without asking for missing details, and the approval count remained 18 before and after.
-- The local web app is running at `http://127.0.0.1:5173`, and its API proxy health returned HTTP 200.
-- Resource counts remained 7 in each original resource group. Target port `4000`, Single revision mode, identity, environment names, and secret names were preserved.
-- `AcrPull` remains assigned, anonymous pull remains disabled, and the existing enabled ACR admin setting remains unchanged per user instruction.
-- `GRAPH_SEND_MODE` remains `live`. The Prisma schema is unchanged with exactly 11 models; startup logs show the schema already in sync with no seed or reset.
-- No real tenant-wide Teams test was sent because it would message every eligible tenant member.
+The last authorized deployment completed successfully:
+
+- API image: `ca34643b5fc3acr.azurecr.io/msx-api:draftfix-20260731014241`
+- Image digest: `sha256:afac463060985ccce931498fd37822a312e87e012ee05c00e5fd53fc07348aff`
+- Active Container App revision: `msx-api--0000022`
+- Active hosted-agent version: `28`
+- API and local proxy health checks returned HTTP 200.
+- The milestone prompt produced a complete editable draft without creating an approval; the approval count remained 18.
+- The local web app ran at `http://127.0.0.1:5173` against the deployed API.
+- Both original resource groups retained 7 resources. No new resources were created.
+- Port `4000`, single-revision mode, identity, environment names, secret names, Graph live mode, and all 11 database models were preserved.
+- `AcrPull` remained assigned and anonymous registry pull remained disabled.
+- No schema migration, reset, import, or seed occurred.
+- No tenant-wide Teams test was sent.
