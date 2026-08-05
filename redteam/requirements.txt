@@ -1,0 +1,6 @@
+# AI Red Teaming Agent (PyRIT) + target dependencies.
+# Python 3.10-3.13 required (PyRIT does not support 3.9).
+azure-ai-evaluation[redteam]>=1.0.0
+azure-identity>=1.17.0
+aiohttp>=3.9.0
+python-dotenv>=1.0.0

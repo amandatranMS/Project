@@ -1,0 +1,8 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+!.env.example
+results/*.json
+.pyrit/
+.pyrit_memory/
