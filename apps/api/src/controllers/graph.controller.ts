@@ -3,6 +3,7 @@ import { asyncHandler, sendOk } from '../lib/responses.js';
 import { HttpError } from '../lib/httpError.js';
 import type { AuthUser } from '../lib/entraAuth.js';
 import { getUserSession } from '../lib/userSessions.js';
+import { recordResolveOutcome } from '../lib/graphSessionMetrics.js';
 import { graphService } from '../services/graph.service.js';
 import { sendMailSchema, notifyTeamsSchema } from '../validators/schemas.js';
 
@@ -25,9 +26,16 @@ function requireUser(req: Request) {
 function resolveActingUser(req: Request): AuthUser {
   if (req.user?.kind === 'user' && req.user.bearer) return req.user;
   const sessionId = req.header('x-msx-session');
+  const callerKind = req.user?.kind ?? 'none';
+  // Record every on-behalf-of resolution so the watchdog can confirm the hosted
+  // agent still forwards the handle (present) and the loud alarm can spot the
+  // service-fallback outage signature. PII-free: only present/resolved/prefix.
   if (sessionId) {
     const s = getUserSession(sessionId);
+    recordResolveOutcome({ present: true, resolved: Boolean(s), callerKind, prefix: sessionId });
     if (s) return { kind: 'user', bearer: s.bearer, email: s.email };
+  } else {
+    recordResolveOutcome({ present: false, resolved: false, callerKind });
   }
   if (req.user?.kind === 'service') return { kind: 'service' };
   throw new HttpError(401, 'Sign in (or provide a valid session handle) to act as a user.');

@@ -1,6 +1,7 @@
 import type { AuthUser } from '../lib/entraAuth.js';
 import { createGraphSession, graphGet, graphPost, GraphError, type GraphSession } from '../lib/graph.js';
 import { recordAgentAction } from '../lib/audit.js';
+import { recordServiceFallback } from '../lib/graphSessionMetrics.js';
 import { HttpError } from '../lib/httpError.js';
 
 /**
@@ -95,6 +96,18 @@ function autoConfirmEnabled(): boolean {
 
 function assertion(user: AuthUser): string {
   if (user.kind !== 'user' || !user.bearer) {
+    // LOUD ALARM: a governed on-behalf-of action reached here without a
+    // signed-in user, so it will fail with the user-visible "sign-in required"
+    // message. Make it impossible to miss in the logs and point at the likely
+    // cause (the hosted agent's streamed turn dropping the handle).
+    recordServiceFallback();
+    console.warn(
+      `[graph-session] ALARM: on-behalf-of Graph action attempted without a signed-in user ` +
+        `(actor=${actorOf(user)}, callerKind=${user.kind}). The user's session handle did not reach/` +
+        `resolve on the API, so the read/live-send falls back to the service principal and fails. ` +
+        `If this is the hosted agent, the streaming turn likely dropped the handle — inspect ` +
+        `GET /api/diagnostics/session-metrics (handleAbsent = not forwarded; handlePresentUnresolved = key/TTL).`,
+    );
     throw new HttpError(401, 'A signed-in Microsoft user is required for this action.');
   }
   return user.bearer;

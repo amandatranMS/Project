@@ -150,14 +150,20 @@ class MsxSessionMiddleware(AgentMiddleware):
             handle = extract_session_id(getattr(message, "text", None))
             if handle:
                 break
-        if not handle:
-            await call_next()
-            return
-        token = set_session_id(handle)
-        try:
-            await call_next()
-        finally:
-            reset_session_id(token)
+        # Bind the handle (or clear it) for the WHOLE turn. We intentionally do
+        # NOT scope it with a reset around call_next(): when the host STREAMS the
+        # response (the web app always does), the model step and its tool calls —
+        # including the on-behalf-of read_outlook / read_teams reads — continue to
+        # run AFTER call_next() returns, while the host consumes the stream. A
+        # reset here (in a finally) fires before those reads execute, so the
+        # handle is already cleared by the time msx_client looks it up, and the
+        # read falls back to the service principal ("a signed-in Microsoft user is
+        # required") even though the user IS signed in. ContextVars are isolated
+        # per asyncio task, so leaving it set stays scoped to this turn's task and
+        # cannot leak into a concurrently handled turn; setting it unconditionally
+        # (handle or None) also clears any stale value if the host reuses the task.
+        set_session_id(handle)
+        await call_next()
 
 
 def _make_delegate(agent: Agent):

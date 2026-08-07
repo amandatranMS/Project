@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { dashboardController } from '../controllers/dashboard.controller.js';
 import { searchController } from '../controllers/search.controller.js';
+import { diagnosticsController } from '../controllers/diagnostics.controller.js';
 import opportunities from './opportunities.routes.js';
 import milestones from './milestones.routes.js';
 import statusHistory from './statusHistory.routes.js';
@@ -42,6 +43,10 @@ api.use('/graph', graph);
 
 // Universal "look up ANY field" search across the global business records.
 api.get('/search', searchController.search);
+
+// Operational diagnostics — on-behalf-of session-handle resolution metrics that
+// power the Outlook/Teams read watchdog (PII-free snapshot).
+api.get('/diagnostics/session-metrics', diagnosticsController.sessionMetrics);
 
 // Dashboard (two base paths per the spec).
 api.get('/dashboard/summary', dashboardController.summary);
