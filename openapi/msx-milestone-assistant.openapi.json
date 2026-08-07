@@ -943,6 +943,14 @@
                       "status": {
                         "type": "string"
                       },
+                      "forecastCategory": {
+                        "type": "string",
+                        "enum": [
+                          "Uncommitted",
+                          "Best Case",
+                          "Committed"
+                        ]
+                      },
                       "estimatedRevenue": {
                         "type": "number"
                       },
@@ -1493,6 +1501,14 @@
           },
           "status": {
             "type": "string"
+          },
+          "forecastCategory": {
+            "type": "string",
+            "enum": [
+              "Uncommitted",
+              "Best Case",
+              "Committed"
+            ]
           },
           "estimatedRevenue": {
             "type": "number"

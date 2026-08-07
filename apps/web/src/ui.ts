@@ -10,11 +10,13 @@ export function statusBadgeClass(status?: string | null): string {
     case 'Success':
     case 'Confirmed':
     case 'Contracted':
+    case 'Committed':
       return 'green';
     case 'In Progress':
     case 'Reviewed':
     case 'Read':
     case 'Submitted':
+    case 'Best Case':
       return 'blue';
     case 'At Risk':
     case 'Pending':

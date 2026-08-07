@@ -433,6 +433,7 @@ paths:
                     solutionArea: { type: string }
                     salesStage: { type: string }
                     status: { type: string }
+                    forecastCategory: { type: string, enum: [Uncommitted, Best Case, Committed] }
                     estimatedRevenue: { type: number }
                     closeDate: { type: string, format: date }
                     aeOwner: { type: string }
@@ -634,6 +635,7 @@ components:
         solutionArea: { type: string }
         salesStage: { type: string }
         status: { type: string }
+        forecastCategory: { type: string, enum: [Uncommitted, Best Case, Committed] }
         estimatedRevenue: { type: number }
         closeDate: { type: string, format: date }
         aeOwner: { type: string }

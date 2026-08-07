@@ -132,6 +132,7 @@ export default function OpportunityDetail() {
           <div><div className="muted">Industry</div>{data.industry ?? '—'}</div>
           <div><div className="muted">Solution Area</div>{choiceLabel(data.solutionArea)}</div>
           <div><div className="muted">Sales Stage</div>{choiceLabel(data.salesStage)}</div>
+          <div><div className="muted">Forecast Category</div>{choiceLabel(data.forecastCategory)}</div>
           <div><div className="muted">Estimated Revenue</div>{formatCurrency(data.estimatedRevenue)}</div>
           <div><div className="muted">AE Owner</div>{data.aeOwner ?? '—'}</div>
           <div><div className="muted">Assigned SE</div>{data.assignedSE ?? '—'}</div>

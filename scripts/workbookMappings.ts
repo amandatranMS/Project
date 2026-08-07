@@ -40,6 +40,7 @@ export const opportunityMapping: FieldMap = {
   'Solution Area': 'solutionArea',
   'Sales Stage': 'salesStage',
   Status: 'status',
+  'Forecast Category': 'forecastCategory',
   'Estimated Revenue': { to: 'estimatedRevenue', type: 'float' },
   'Close Date': { to: 'closeDate', type: 'date' },
   'AE Owner': 'aeOwner',

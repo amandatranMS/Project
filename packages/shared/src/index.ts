@@ -19,6 +19,12 @@ export const SALES_STAGES = [
   'Manage & Optimize',
 ] as const;
 export const OPPORTUNITY_STATUSES = ['Active', 'On Hold', 'Won', 'Lost', 'Closed'] as const;
+// Opportunity-level forecast category — how confident the seller/management are that
+// the deal closes in the forecast period. This is the MSX "forecast object": the
+// opportunity moves Uncommitted → Best Case → Committed as key milestones complete.
+// (Best Case is also called "Upside".) Distinct from milestone customer commitment,
+// which tracks execution/readiness of a single milestone, not the forecast.
+export const FORECAST_CATEGORIES = ['Uncommitted', 'Best Case', 'Committed'] as const;
 
 // ---- Milestone ----
 export const MILESTONE_STATUSES = [
@@ -86,6 +92,7 @@ export const CHOICES = {
   solutionArea: SOLUTION_AREAS,
   salesStage: SALES_STAGES,
   opportunityStatus: OPPORTUNITY_STATUSES,
+  forecastCategory: FORECAST_CATEGORIES,
   milestoneStatus: MILESTONE_STATUSES,
   workload: WORKLOADS,
   customerCommitment: CUSTOMER_COMMITMENTS,
