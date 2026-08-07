@@ -1558,9 +1558,9 @@
           "customerCommitment": {
             "type": "string",
             "enum": [
-              "Uncommitted",
+              "Exploring",
               "Verbal",
-              "Committed",
+              "Confirmed",
               "Contracted"
             ]
           },

@@ -8,7 +8,7 @@ export function statusBadgeClass(status?: string | null): string {
     case 'Approved':
     case 'Active':
     case 'Success':
-    case 'Committed':
+    case 'Confirmed':
     case 'Contracted':
       return 'green';
     case 'In Progress':

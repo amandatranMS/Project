@@ -47,7 +47,11 @@ export const WORKLOADS = [
   'Defender XDR',
   'Teams Premium',
 ] as const;
-export const CUSTOMER_COMMITMENTS = ['Uncommitted', 'Verbal', 'Committed', 'Contracted'] as const;
+// Milestone-level customer commitment tracks the customer's execution/readiness
+// commitment to THIS milestone. It is deliberately NOT the opportunity forecast
+// category (Uncommitted / Committed / Best Case / Upside), which is an
+// opportunity-level concept — so these values avoid the forecast-category terms.
+export const CUSTOMER_COMMITMENTS = ['Exploring', 'Verbal', 'Confirmed', 'Contracted'] as const;
 export const DELIVERED_BY = ['Microsoft', 'Partner', 'Customer', 'Joint'] as const;
 export const MILESTONE_CATEGORIES = ['Production', 'Pilot', 'Workshop', 'Assessment', 'Deployment', 'Adoption'] as const;
 export const AZURE_CAPACITY_TYPES = ['---', 'Azure Commit', 'MACC', 'Open', 'CSP', 'EA'] as const;

@@ -651,7 +651,7 @@ components:
         milestoneName: { type: string }
         opportunityName: { type: string, description: Connects to Opportunity.opportunityName }
         workload: { type: string, enum: [M365 Copilot for Microsoft 365, Microsoft Sentinel, Microsoft Purview, Azure Migration, Copilot Studio, Defender XDR, Teams Premium] }
-        customerCommitment: { type: string, enum: [Uncommitted, Verbal, Committed, Contracted] }
+        customerCommitment: { type: string, enum: [Exploring, Verbal, Confirmed, Contracted] }
         deliveredBy: { type: string, enum: [Microsoft, Partner, Customer, Joint] }
         partnerName: { type: string }
         competitorName: { type: string }
