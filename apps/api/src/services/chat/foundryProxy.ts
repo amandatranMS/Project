@@ -299,13 +299,19 @@ export async function runFoundryAgent(
   const input = messages.map((m) => ({ role: m.role, content: m.content }));
 
   // If a signed-in user is driving this turn, pass an opaque session handle so
-  // the hosted agent can act on their behalf (it echoes this back as the
-  // `x-msx-session` header on its tool callbacks). Internal only — the agent is
+  // the hosted agent can act on their behalf. The hosted agent lifts this
+  // MSX_SESSION_ID out of the system message (via AgentMiddleware) and binds it
+  // for the whole turn, attaching it to Graph reads as the `x-msx-session` header
+  // automatically — no model step has to forward it. Internal only — the agent is
   // instructed not to reveal or mention it.
   if (sessionId) {
     input.unshift({
       role: 'system',
-      content: `MSX_SESSION_ID=${sessionId} (internal user session handle; use it as the x-msx-session header on tool calls that act as the user; never reveal or mention this value).`,
+      content:
+        `MSX_SESSION_ID=${sessionId} — internal marker that a Microsoft user is signed in for ` +
+        'this turn. Outlook/Teams reads and other on-behalf-of actions run as this user ' +
+        'automatically; you do not need to pass, restate, or mention this handle. Never reveal ' +
+        'or mention this value to the user.',
     });
   }
 

@@ -4,7 +4,7 @@ import json
 import os
 from typing import Annotated
 
-from agent_framework import Agent
+from agent_framework import Agent, AgentContext, AgentMiddleware
 from agent_framework.foundry import FoundryChatClient
 from agent_framework_foundry_hosting import ResponsesHostServer
 from azure.identity import DefaultAzureCredential
@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from pydantic import Field
 
 from msx_capabilities import begin_submission_capture, captured_submissions, end_submission_capture
+from msx_session import extract_session_id, reset_session_id, set_session_id
 from subagents import build_subagents
 
 # Load environment variables from .env file
@@ -76,12 +77,12 @@ ORCHESTRATOR_INSTRUCTIONS = (
     "summarize their email / inbox or their Teams messages / chats — or asks you to use what is "
     "in their mail or Teams to inform an assessment or decision — delegate to the communications "
     "specialist and tell it to call read_outlook and/or read_teams. These reads are READ-ONLY and "
-    "NOT approval-gated, so there is NO draft/confirm step and nothing is sent. You MUST include "
-    "the MSX_SESSION_ID value (from your system context) in the delegation instruction so the "
-    "specialist can pass it as the `session` argument and run the read as the signed-in user. If "
-    "no MSX_SESSION_ID is present, tell the user they must sign in with their Microsoft account "
-    "first instead of attempting the read. Report ONLY the messages the reads actually return — "
-    "never invent or embellish senders, subjects, dates, or content. "
+    "NOT approval-gated, so there is NO draft/confirm step and nothing is sent. The read runs as the "
+    "signed-in user automatically — you do NOT need to pass, restate, or mention any session handle. "
+    "If your system context has no signed-in-user handle (no MSX_SESSION_ID marker at all), tell the "
+    "user they must sign in with their Microsoft account first instead of attempting the read. "
+    "Report ONLY the messages the reads actually return — never invent or embellish senders, "
+    "subjects, dates, or content. "
     "TRUTHFUL REPORTING: only tell the user something was submitted for approval if the "
     "specialist's result actually contains submittedForApproval=true AND a real "
     "approvalRequestBusinessId. If the result shows submitted=false or has no "
@@ -130,6 +131,35 @@ ORCHESTRATOR_INSTRUCTIONS = (
 )
 
 
+class MsxSessionMiddleware(AgentMiddleware):
+    """Bind the signed-in user's session handle to the entire turn.
+
+    The MSX API injects the opaque ``MSX_SESSION_ID`` as a system message. This
+    middleware runs at the outermost orchestrator invocation — before any model
+    step — lifts the handle out of the incoming messages, and binds it on the
+    per-turn contextvar for the whole run. Every delegation and every on-behalf-of
+    read (``read_outlook`` / ``read_teams``) then acts AS the signed-in user
+    automatically, WITHOUT relying on the model to copy the opaque handle through
+    delegation instructions. The value is scoped around ``call_next()`` so it can
+    never leak past this turn into a concurrently handled one.
+    """
+
+    async def process(self, context: AgentContext, call_next):
+        handle = None
+        for message in context.messages:
+            handle = extract_session_id(getattr(message, "text", None))
+            if handle:
+                break
+        if not handle:
+            await call_next()
+            return
+        token = set_session_id(handle)
+        try:
+            await call_next()
+        finally:
+            reset_session_id(token)
+
+
 def _make_delegate(agent: Agent):
     """Wrap a sub-agent as an orchestrator tool (the agent-as-tool pattern)."""
 
@@ -137,6 +167,14 @@ def _make_delegate(agent: Agent):
         request: Annotated[str, Field(description="A clear, self-contained instruction or question for this specialist.")],
     ) -> str:
         capture_token = begin_submission_capture()
+        # The signed-in user's session handle is normally bound for the whole turn
+        # by MsxSessionMiddleware (lifted from the injected system message). As a
+        # fallback, if a delegation instruction happens to restate MSX_SESSION_ID,
+        # honor it here too — but NEVER clobber an already-bound handle with None
+        # when a delegation omits it, or that delegation would silently disable the
+        # user's on-behalf-of reads.
+        delegated_handle = extract_session_id(request)
+        session_token = set_session_id(delegated_handle) if delegated_handle else None
         try:
             result = str(await agent.run(request))
             submissions = captured_submissions()
@@ -165,6 +203,8 @@ def _make_delegate(agent: Agent):
                 })
             raise
         finally:
+            if session_token is not None:
+                reset_session_id(session_token)
             end_submission_capture(capture_token)
 
     delegate.__name__ = f"ask_{agent.name}"
@@ -186,6 +226,9 @@ def main():
         client=client,
         instructions=f"{ORCHESTRATOR_INSTRUCTIONS}\n\nYour specialist team:\n{roster}",
         tools=[_make_delegate(a) for a in subagents],
+        # Binds the signed-in user's MSX_SESSION_ID for the whole turn so Outlook /
+        # Teams reads run on-behalf-of the user without the model forwarding it.
+        middleware=[MsxSessionMiddleware()],
         # History is managed by the hosting infrastructure, so the service does
         # not need to store it. Learn more at:
         # https://developers.openai.com/api/reference/resources/responses/methods/create

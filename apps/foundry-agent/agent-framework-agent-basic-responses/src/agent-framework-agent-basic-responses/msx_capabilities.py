@@ -19,6 +19,7 @@ from typing import Annotated, Any
 from pydantic import Field
 
 from msx_client import MsxClient
+from msx_session import get_session_id
 
 # Controlled choice values (mirror packages/shared) so the model emits values the
 # API's Zod validation will accept.
@@ -995,13 +996,18 @@ def notify_teams(
 # changes nothing and sends nothing, so there is no draft/confirm step. Every read
 # is audited on the API side (recordAgentAction, security event) and only
 # metadata/short previews are returned — full bodies are never persisted into the
-# 11 mock tables. These require the signed-in user's session handle
-# (MSX_SESSION_ID, provided to the agent as a system message) so the API can run
-# the read AS that user via Microsoft Graph on-behalf-of; without it the API
-# returns a clear "sign-in required" error.
+# 11 mock tables. These act AS the signed-in user via the session handle
+# (MSX_SESSION_ID), which is propagated out-of-band (see msx_session.py) and
+# attached to the API call automatically — the model does NOT need to forward it.
+# Without a signed-in user the API returns a clear "sign-in required" error.
 def _session_headers(session: str | None) -> dict | None:
-    """Per-call header carrying the user session handle for on-behalf-of reads."""
-    s = (session or "").strip()
+    """Per-call header carrying the user session handle for on-behalf-of reads.
+
+    Prefers the handle captured out-of-band for this turn (msx_session) so a
+    deterministic value always wins over anything the model might supply; falls
+    back to an explicitly passed handle only when none was captured. Returns None
+    when neither is available (MsxClient then applies the turn handle if any)."""
+    s = get_session_id() or (session or "").strip()
     return {"x-msx-session": s} if s else None
 
 
@@ -1010,16 +1016,16 @@ def read_outlook(
     session: Annotated[
         str | None,
         Field(
-            description="The MSX_SESSION_ID value from the system message. REQUIRED so the read runs as the signed-in user — pass it verbatim."
+            description="Optional. The signed-in user's session handle is applied automatically; leave unset unless you were explicitly given an MSX_SESSION_ID to override it."
         ),
     ] = None,
 ) -> Any:
     """Read the signed-in user's recent Outlook email (subject, sender, date, and a
     short body preview) so you can extract context to inform a decision.
 
-    READ-ONLY: nothing is sent and no approval is needed. Requires the user's
-    session handle (MSX_SESSION_ID). Returns only metadata/previews — never full
-    bodies, and nothing is stored."""
+    READ-ONLY: nothing is sent and no approval is needed. Runs as the signed-in
+    user automatically (the session handle is propagated for you). Returns only
+    metadata/previews — never full bodies, and nothing is stored."""
     top = max(1, min(50, int(top or 10)))
     try:
         data = _mc.get(
@@ -1049,7 +1055,7 @@ def read_teams(
     session: Annotated[
         str | None,
         Field(
-            description="The MSX_SESSION_ID value from the system message. REQUIRED so the read runs as the signed-in user — pass it verbatim."
+            description="Optional. The signed-in user's session handle is applied automatically; leave unset unless you were explicitly given an MSX_SESSION_ID to override it."
         ),
     ] = None,
 ) -> Any:
@@ -1057,9 +1063,9 @@ def read_teams(
     (sender + short text + timestamp) so you can extract context to inform a
     decision.
 
-    READ-ONLY: nothing is posted and no approval is needed. Requires the user's
-    session handle (MSX_SESSION_ID). Returns only metadata/short previews, and
-    nothing is stored."""
+    READ-ONLY: nothing is posted and no approval is needed. Runs as the signed-in
+    user automatically (the session handle is propagated for you). Returns only
+    metadata/short previews, and nothing is stored."""
     top = max(1, min(50, int(top or 5)))
     perChat = max(1, min(20, int(perChat or 5)))
     try:

@@ -23,6 +23,8 @@ import os
 
 import requests
 
+from msx_session import get_session_id
+
 
 class MsxApiError(Exception):
     """Raised when the API returns a { success: false, error } envelope."""
@@ -87,7 +89,16 @@ class MsxClient:
         # Per-call headers (e.g. x-msx-session for on-behalf-of reads) are merged on
         # top of the session defaults for THIS request only — never stored on the
         # shared session, so one user's handle can't leak into another's call.
-        resp = self.session.request(method, url, params=params, json=json, headers=headers, timeout=30)
+        merged = dict(headers) if headers else {}
+        # Attach the signed-in user's session handle automatically so on-behalf-of
+        # reads (Outlook / Teams) act AS the user without the model having to copy
+        # the opaque handle through delegation. An explicit per-call header still
+        # wins; the contextvar is only a fallback.
+        if not any(k.lower() == "x-msx-session" for k in merged):
+            session_id = get_session_id()
+            if session_id:
+                merged["x-msx-session"] = session_id
+        resp = self.session.request(method, url, params=params, json=json, headers=merged or None, timeout=30)
         try:
             body = resp.json()
         except ValueError:
