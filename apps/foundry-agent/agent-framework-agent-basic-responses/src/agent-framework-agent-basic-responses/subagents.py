@@ -25,7 +25,9 @@ from msx_capabilities import (
     create_opportunity,
     delete_milestone,
     get_dashboard_summary,
+    get_handoff_readiness,
     get_milestone,
+    get_milestone_handoff_readiness,
     get_opportunity,
     list_deal_team,
     list_milestones,
@@ -184,9 +186,14 @@ def build_subagents(client) -> list[Agent]:
                 "Report ids and names clearly. An identifier "
                 "beginning with MS- is a milestone business id. Use get_milestone and "
                 "update_milestone for it, including when changing competitorName; never treat an "
-                "MS- identifier as an opportunity." + _APPROVAL_RULE + _CONFIRM_RULE + _GROUNDING_RULE + _SEARCH_RULE + _GOVERNANCE_RULE + _LOST_TO_COMPETITOR_RULE
+                "MS- identifier as an opportunity. HANDOFF READINESS: when the user asks whether a "
+                "milestone is ready to hand off, what handoff info it is missing, or for its CSA "
+                "handoff notes, call get_milestone_handoff_readiness and answer from its result — "
+                "lead with what is missing (each item's howToFix) and offer the returned "
+                "suggestedDescription to paste into the milestone; do not answer from get_milestone "
+                "raw fields." + _APPROVAL_RULE + _CONFIRM_RULE + _GROUNDING_RULE + _SEARCH_RULE + _GOVERNANCE_RULE + _LOST_TO_COMPETITOR_RULE
             ),
-            tools=[list_milestones, get_milestone, get_opportunity, search_records, propose_milestone_for_approval, update_milestone, delete_milestone],
+            tools=[list_milestones, get_milestone, get_milestone_handoff_readiness, get_opportunity, search_records, propose_milestone_for_approval, update_milestone, delete_milestone],
         ),
         Agent(
             client=client,
@@ -250,11 +257,17 @@ def build_subagents(client) -> list[Agent]:
                 "userConfirmed=true and the exact displayed values. Report ids and names clearly. "
                 "Opportunity business ids begin with OPP-. Never "
                 "pass an MS- milestone business id to an opportunity tool; milestone competitor "
-                "updates belong to the milestone specialist." + _APPROVAL_RULE + _CONFIRM_RULE + _GROUNDING_RULE + _SEARCH_RULE
+                "updates belong to the milestone specialist. HANDOFF READINESS: when the user asks "
+                "whether an opportunity/deal is ready to hand off, is handoff-ready, or what is "
+                "missing before handoff to the CSA/CSAM, call get_handoff_readiness and answer ONLY "
+                "from its result — lead with the ready flag and headline, then list EACH missing "
+                "item with its howToFix, then briefly note the passing checks; do not answer from "
+                "get_opportunity raw fields." + _APPROVAL_RULE + _CONFIRM_RULE + _GROUNDING_RULE + _SEARCH_RULE
             ),
             tools=[
                 list_opportunities,
                 get_opportunity,
+                get_handoff_readiness,
                 search_records,
                 create_opportunity,
                 update_opportunity,

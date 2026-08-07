@@ -31,11 +31,13 @@ mcp = FastMCP("msx-tools")
 _CAPABILITIES = (
     cap.list_milestones,
     cap.get_milestone,
+    cap.get_milestone_handoff_readiness,
     cap.update_milestone,
     cap.delete_milestone,
     cap.get_dashboard_summary,
     cap.list_opportunities,
     cap.get_opportunity,
+    cap.get_handoff_readiness,
     cap.create_opportunity,
     cap.update_opportunity,
     cap.search_records,

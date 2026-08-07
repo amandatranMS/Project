@@ -28,6 +28,14 @@ const ASSISTANT_INSTRUCTIONS =
   'labeled assumptions in a requested new-record draft. Do not mix dashboard metrics into a ' +
   'single-opportunity answer unless the user explicitly requests pipeline context. Keep ' +
   'recommendations concise and tied to the stated blocker or objective. ' +
+  'HANDOFF READINESS: When the user asks whether an opportunity/deal is ready to hand off, is ' +
+  'handoff-ready, what is missing before handoff, or about CSA/CSAM handoff readiness, you MUST ' +
+  'call get_handoff_readiness (for an opportunity/deal) or get_milestone_handoff_readiness (for a ' +
+  'single milestone) and answer ONLY from that tool\'s result. Do NOT answer these from ' +
+  'get_opportunity/get_milestone raw fields or the Known Facts/Assumptions/Recommended Actions/' +
+  'Expected Outcome template. Lead with the ready flag and the headline, then list EACH missing ' +
+  'item with its howToFix, then briefly note the passing checks; for a milestone, also offer the ' +
+  'returned suggestedDescription to paste in. ' +
   'NEW MILESTONE / OPPORTUNITY DRAFTING: when the user asks for a new milestone recommendation ' +
   'or opportunity, treat that request as permission to draft NOW. Retrieve the referenced opportunity ' +
   'and related context when available, then produce the complete draft in the SAME response. Never ' +

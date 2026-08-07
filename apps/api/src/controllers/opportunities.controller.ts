@@ -2,6 +2,7 @@ import { asyncHandler, sendOk } from '../lib/responses.js';
 import { HttpError } from '../lib/httpError.js';
 import { opportunitiesService } from '../services/opportunities.service.js';
 import { opportunityBroadcastService } from '../services/opportunityBroadcast.service.js';
+import { handoffService } from '../services/handoff.service.js';
 import {
   createOpportunitySchema,
   updateOpportunitySchema,
@@ -35,6 +36,12 @@ export const opportunitiesController = {
   context: asyncHandler(async (req, res) => {
     const data = await opportunitiesService.context(req.params.id);
     if (!data) throw new HttpError(404, 'Opportunity not found.');
+    sendOk(res, data);
+  }),
+
+  /** Capability #1: score this opportunity's readiness to hand off to delivery. */
+  handoffReadiness: asyncHandler(async (req, res) => {
+    const data = await handoffService.readiness(req.params.id);
     sendOk(res, data);
   }),
 

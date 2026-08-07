@@ -242,6 +242,20 @@ def get_milestone(
     return _mc.get(f"/api/milestones/{id}")
 
 
+def get_milestone_handoff_readiness(
+    id: Annotated[str, Field(description="The milestone id or business id (e.g. MS-001).")],
+) -> Any:
+    """Check whether a milestone carries the CSA-critical handoff info a delivery team needs.
+
+    Covers customer intent (do they actually plan to deploy — buying is not intent), what was
+    promised, deployment details, BANT (budget, authority/owner, need, timeline), and who to
+    contact. Returns a completeness score, a `missing` list (each with `whatsMissing` +
+    `howToFix`), the checks already `present`, and `suggestedDescription` — a ready-to-paste
+    "CSA Handoff Notes" block for the milestone description. Informational only; never blocks a save.
+    """
+    return _mc.get(f"/api/milestones/{id}/handoff-readiness")
+
+
 def update_milestone(
     id: Annotated[str, Field(description="The milestone id or business id (e.g. MS-001) to update.")],
     milestoneName: Annotated[str | None, Field(description="New name.")] = None,
@@ -380,6 +394,17 @@ def list_opportunities(
 def get_opportunity(id: Annotated[str, Field(description="The opportunity id or business id (e.g. OPP-003).")]) -> Any:
     """Get one opportunity's detail (includes its milestones) by id or business id."""
     return _mc.get(f"/api/opportunities/{id}")
+
+
+def get_handoff_readiness(id: Annotated[str, Field(description="The opportunity id or business id (e.g. OPP-003).")]) -> Any:
+    """Assess whether an opportunity is ready to hand off from pre-sales (AE/SE) to delivery (CSA/CSAM).
+
+    Returns a 0–100 score, a `ready` flag, a `headline`, a `missing` list (each with `item`,
+    `whatsMissing`, and `howToFix`), the checks already `present`, and `nextSteps`. Use this
+    whenever the user asks if an opportunity/deal is ready to hand off, is handoff-ready, what is
+    missing before handoff, or about CSA/CSAM readiness for a deal.
+    """
+    return _mc.get(f"/api/opportunities/{id}/handoff-readiness")
 
 
 def create_opportunity(

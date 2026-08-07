@@ -6,6 +6,7 @@ router.get('/', c.list);
 router.get('/next-tpid', c.nextTpid); // must precede '/:id' so it isn't captured as an id
 router.get('/:id', c.get);
 router.get('/:id/context', c.context);
+router.get('/:id/handoff-readiness', c.handoffReadiness);
 router.post('/', c.create);
 router.post('/:id/announce', c.announce);
 router.patch('/:id', c.update);

@@ -17,6 +17,7 @@ import {
 import { milestonesService } from '../milestones.service.js';
 import { dashboardService } from '../dashboard.service.js';
 import { opportunitiesService } from '../opportunities.service.js';
+import { handoffService } from '../handoff.service.js';
 import { recommendationsService } from '../recommendations.service.js';
 import { approvalRequestsService } from '../approvalRequests.service.js';
 import { searchService } from '../search.service.js';
@@ -90,9 +91,16 @@ export const milestoneTools: Tool[] = [
     run: (a) => milestonesService.get(String(a.id)),
   },
   {
+    name: 'get_milestone_handoff_readiness',
+    description:
+      'Call this whenever the user asks if a specific milestone is ready to hand off, what handoff info a milestone is missing, or for its CSA handoff notes. Check whether a milestone carries the CSA-critical handoff info a delivery team needs: customer intent (do they actually plan to deploy — buying is not intent), what was promised, deployment details, BANT (budget, authority/owner, need, timeline), and who to contact. Returns a score, a `missing` list (each with `whatsMissing` + `howToFix`), and `suggestedDescription` — a ready-to-paste "CSA Handoff Notes" block for the milestone description. Informational only; it never blocks a save. When answering, list what is missing and offer the suggested description so the SE can fill it into the milestone.',
+    parameters: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+    run: (a) => handoffService.milestoneReadiness(String(a.id)),
+  },
+  {
     name: 'create_milestone',
     description:
-      'After the user explicitly confirms a complete displayed draft, record its recommendation and submit the milestone for human approval. Never call while drafting.',
+      'After the user explicitly confirms a complete displayed draft, record its recommendation and submit the milestone for human approval. Never call while drafting. To keep milestones useful for the downstream CSA handoff, encourage capturing customer intent (do they actually plan to deploy — buying is not intent), what was promised, deployment details, and BANT (budget, authority/owner, need, timeline) in the comments/description; if the SE omits these, note they can be added later (not required).',
     parameters: {
       type: 'object',
       properties: {
@@ -227,6 +235,13 @@ export const opportunityTools: Tool[] = [
     description: "Get one opportunity's detail (includes its milestones) by id.",
     parameters: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
     run: (a) => opportunitiesService.get(String(a.id)),
+  },
+  {
+    name: 'get_handoff_readiness',
+    description:
+      'Call this whenever the user asks if an opportunity or deal is ready to hand off, is handoff-ready, what is missing before handoff, or about CSA/CSAM readiness for a deal. Assess whether an opportunity is ready to hand off from pre-sales (AE/SE) to delivery (CSA/CSAM). Returns a 0–100 score, a `ready` flag, a `headline`, a `missing` list (each with `item`, `whatsMissing`, and `howToFix`), `present` (checks that already pass), and `nextSteps`. When answering the user, LEAD with whether it is ready and then clearly list each MISSING item and how to fix it — do not just report the score, and do not bury the gaps under the passing checks.',
+    parameters: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+    run: (a) => handoffService.readiness(String(a.id)),
   },
   {
     name: 'create_opportunity',
