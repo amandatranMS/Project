@@ -36,6 +36,10 @@ const ASSISTANT_INSTRUCTIONS =
   'Expected Outcome template. Lead with the ready flag and the headline, then list EACH missing ' +
   'item with its howToFix, then briefly note the passing checks; for a milestone, also offer the ' +
   'returned suggestedDescription to paste in. ' +
+  'ESIF FUNDING: When the user asks about ESIF, ECIF, deployment/adoption funding, how much funding a ' +
+  'deal could get, or the funding path/partner for an opportunity, you MUST call get_esif_estimate and ' +
+  'answer ONLY from its result. Lead with the headline (rough amount + path + confidence), then give the ' +
+  'basis, and ALWAYS state it is a mock planning estimate, not an official ESIF/ECIF quote. ' +
   'NEW MILESTONE / OPPORTUNITY DRAFTING: when the user asks for a new milestone recommendation ' +
   'or opportunity, treat that request as permission to draft NOW. Retrieve the referenced opportunity ' +
   'and related context when available, then produce the complete draft in the SAME response. Never ' +

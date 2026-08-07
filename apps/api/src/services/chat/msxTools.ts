@@ -244,6 +244,13 @@ export const opportunityTools: Tool[] = [
     run: (a) => handoffService.readiness(String(a.id)),
   },
   {
+    name: 'get_esif_estimate',
+    description:
+      'Call this whenever the user asks about ESIF, ECIF, deployment/adoption funding, how much funding a deal could get, or the funding path/partner for an opportunity. Returns a MOCK, transparent ESIF funding estimate for an opportunity: `estimatedFundingUsd`, `eligible`, `pathLabel` and `recommendedPath` (Microsoft- vs partner- vs joint- vs customer-led), a `confidence` level, a `headline`, a `basis` list (each with `factor` and `detail`) explaining how the number was derived, and `caveats`. When answering, LEAD with the headline (the rough amount + path + confidence), then briefly give the basis, and ALWAYS state it is a mock planning estimate, not an official ESIF/ECIF quote.',
+    parameters: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+    run: (a) => handoffService.esifEstimate(String(a.id)),
+  },
+  {
     name: 'create_opportunity',
     description:
       'After the user explicitly confirms a complete displayed draft, submit a new opportunity for human approval. Never call while drafting.',

@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma.js';
 import { recordAgentAction } from '../lib/audit.js';
 import { scoreHandoff } from '../lib/handoffReadiness.js';
 import { scoreMilestoneHandoff } from '../lib/milestoneHandoff.js';
+import { estimateEsif } from '../lib/esif.js';
 import { opportunitiesService } from './opportunities.service.js';
 
 /**
@@ -59,6 +60,32 @@ export const handoffService = {
       outputSummary: `Score ${result.score}% — ${result.missing.length} missing: ${
         result.missing.map((m) => m.item).join(', ') || 'none'
       }`,
+    });
+
+    return result;
+  },
+
+  /**
+   * Capability #3: estimate the ESIF deployment/adoption funding that could back
+   * an opportunity, and the likely funding path (Microsoft / partner / joint).
+   * A transparent MOCK heuristic over milestone charges + delivery fields — never
+   * an official quote. Audited as a Read so the governance story holds.
+   */
+  async esifEstimate(id: string) {
+    const ctx = await opportunitiesService.context(id);
+    if (!ctx) throw new HttpError(404, 'Opportunity not found.');
+
+    const result = estimateEsif(ctx);
+
+    await recordAgentAction({
+      agentName: 'system',
+      actionType: 'Read',
+      actionName: 'ESIF funding estimated',
+      opportunityId: ctx.id,
+      inputSummary: `Estimated ESIF funding for ${ctx.opportunityBusinessId}`,
+      outputSummary: result.eligible
+        ? `~$${result.estimatedFundingUsd.toLocaleString('en-US')} (${result.pathLabel}, ${result.confidence} confidence)`
+        : 'No ESIF funding estimated',
     });
 
     return result;

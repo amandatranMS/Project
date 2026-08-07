@@ -106,6 +106,48 @@ paths:
         notifications, agent run logs, and audit logs.
       parameters: [{ $ref: '#/components/parameters/IdParam' }]
       responses: { '200': { description: Opportunity context }, '404': { description: Not found } }
+  /api/opportunities/{id}/handoff-readiness:
+    get:
+      tags: [Opportunities]
+      summary: >
+        Capability #1 — score whether this opportunity is ready to hand off from
+        pre-sales (AE/SE) to delivery (CSA/CSAM). Reports a 0–100 score, a `ready`
+        flag, a `headline`, each MISSING item (with whatsMissing + howToFix), the
+        checks already `present`, and `nextSteps`. Read-only; audited as a Read in
+        the Agent Action Audit Log.
+      parameters: [{ $ref: '#/components/parameters/IdParam' }]
+      responses:
+        '200':
+          description: Envelope with a HandoffReadiness result
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - properties: { data: { $ref: '#/components/schemas/HandoffReadiness' } }
+        '404': { description: Not found }
+  /api/opportunities/{id}/esif-estimate:
+    get:
+      tags: [Opportunities]
+      summary: >
+        Capability #3 — MOCK ESIF funding estimate for an opportunity. Returns an
+        estimated deployment/adoption funding amount (USD), an `eligible` flag, the
+        likely funding path (`pathLabel` / `recommendedPath`: Microsoft- vs partner-
+        vs joint- vs customer-led), a `confidence` level, a `headline`, a
+        transparent `basis` list, and `caveats`. Derived only from existing
+        opportunity + milestone fields; NOT an official ESIF/ECIF quote. Read-only;
+        audited as a Read.
+      parameters: [{ $ref: '#/components/parameters/IdParam' }]
+      responses:
+        '200':
+          description: Envelope with an EsifEstimate result
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - properties: { data: { $ref: '#/components/schemas/EsifEstimate' } }
+        '404': { description: Not found }
   /api/opportunities/{id}/announce:
     post:
       tags: [Opportunities]
@@ -258,6 +300,27 @@ paths:
       summary: Delete a milestone (status history is also removed)
       parameters: [{ $ref: '#/components/parameters/IdParam' }]
       responses: { '200': { description: Deleted }, '404': { description: Not found } }
+  /api/milestones/{id}/handoff-readiness:
+    get:
+      tags: [Milestones]
+      summary: >
+        Capability #2 — check whether ONE milestone carries the CSA-critical handoff
+        info (customer intent, what was promised, deployment details, BANT, who to
+        contact). Returns a 0–100 score, a `ready` flag, a `headline`, MISSING items
+        (whatsMissing + howToFix), `present`, `nextSteps`, and a paste-ready
+        `suggestedDescription` scaffold for the milestone. Informational only — it
+        never blocks a save. Audited as a Read.
+      parameters: [{ $ref: '#/components/parameters/IdParam' }]
+      responses:
+        '200':
+          description: Envelope with a MilestoneHandoffReadiness result
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - properties: { data: { $ref: '#/components/schemas/MilestoneHandoffReadiness' } }
+        '404': { description: Not found }
 
   /api/status-history:
     get:
@@ -697,3 +760,69 @@ components:
         active: { type: boolean }
         handoffRequired: { type: boolean }
         handoffNotes: { type: string }
+    MissingItem:
+      type: object
+      description: One CSA-critical handoff item that is not yet captured.
+      properties:
+        item: { type: string, description: The missing item }
+        whatsMissing: { type: string, description: Plain-language description of the gap }
+        howToFix: { type: string, description: The concrete action that closes the gap }
+    HandoffReadiness:
+      type: object
+      description: Capability #1 — opportunity handoff-readiness score.
+      properties:
+        opportunityId: { type: string }
+        opportunityBusinessId: { type: string }
+        opportunityName: { type: string }
+        score: { type: integer, description: 0–100 share of readiness checks passed }
+        ready: { type: boolean }
+        headline: { type: string, description: One-line answer leading with the ready flag }
+        missing: { type: array, items: { $ref: '#/components/schemas/MissingItem' } }
+        present: { type: array, items: { type: string } }
+        nextSteps: { type: array, items: { type: string } }
+    MilestoneHandoffReadiness:
+      type: object
+      description: Capability #2 — milestone handoff-info check.
+      properties:
+        milestoneId: { type: string }
+        milestoneBusinessId: { type: string }
+        milestoneName: { type: string }
+        score: { type: integer }
+        ready: { type: boolean }
+        headline: { type: string }
+        missing: { type: array, items: { $ref: '#/components/schemas/MissingItem' } }
+        present: { type: array, items: { type: string } }
+        nextSteps: { type: array, items: { type: string } }
+        suggestedDescription:
+          type: string
+          description: Paste-ready "CSA Handoff Notes" scaffold for the milestone description.
+    EsifBasisItem:
+      type: object
+      description: One transparent factor that fed the ESIF estimate.
+      properties:
+        factor: { type: string }
+        detail: { type: string }
+    EsifEstimate:
+      type: object
+      description: >
+        Capability #3 — MOCK ESIF funding estimate. A transparent, deterministic
+        heuristic over existing opportunity + milestone fields; never an official
+        ESIF/ECIF quote.
+      properties:
+        opportunityId: { type: string }
+        opportunityBusinessId: { type: string }
+        opportunityName: { type: string }
+        eligible: { type: boolean, description: True when a non-zero amount could be estimated }
+        estimatedFundingUsd: { type: number, description: Whole USD, rounded to the nearest $100 }
+        currency: { type: string, enum: [USD] }
+        pathLabel:
+          type: string
+          description: 'Short path tag: Partner-led | Joint | Microsoft-led | Customer-led | Path TBD'
+        recommendedPath: { type: string, description: Full sentence describing how funding would route }
+        confidence: { type: string, enum: [High, Medium, Low] }
+        headline: { type: string }
+        basis: { type: array, items: { $ref: '#/components/schemas/EsifBasisItem' } }
+        caveats:
+          type: array
+          items: { type: string }
+          description: Always includes the mock-data disclaimer, plus any data-quality notes.

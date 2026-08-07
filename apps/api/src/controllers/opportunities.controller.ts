@@ -45,6 +45,12 @@ export const opportunitiesController = {
     sendOk(res, data);
   }),
 
+  /** Capability #3: estimate ESIF deployment funding + likely funding path. */
+  esifEstimate: asyncHandler(async (req, res) => {
+    const data = await handoffService.esifEstimate(req.params.id);
+    sendOk(res, data);
+  }),
+
   create: asyncHandler(async (req, res) => {
     const input = createOpportunitySchema.parse(req.body);
     // An agent-initiated direct create must queue the approval-gated Teams broadcast
