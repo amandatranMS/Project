@@ -4,6 +4,7 @@ import {
   SALES_STAGES,
   OPPORTUNITY_STATUSES,
   SOLUTION_AREAS,
+  FORECAST_CATEGORIES,
   WORKLOADS,
   CUSTOMER_COMMITMENTS,
   DELIVERED_BY,
@@ -63,6 +64,7 @@ function trimOpportunity(o: any) {
     customerName: o.customerName,
     salesStage: o.salesStage,
     status: o.status,
+    forecastCategory: o.forecastCategory,
     milestones: o._count?.milestones,
   };
 }
@@ -240,6 +242,7 @@ export const opportunityTools: Tool[] = [
         solutionArea: { type: ['string', 'null'], enum: [...SOLUTION_AREAS, null] },
         salesStage: { type: ['string', 'null'], enum: [...SALES_STAGES, null] },
         status: { type: ['string', 'null'], enum: [...OPPORTUNITY_STATUSES, null] },
+        forecastCategory: { type: ['string', 'null'], enum: [...FORECAST_CATEGORIES, null] },
         estimatedRevenue: { type: ['number', 'null'] },
         closeDate: { type: ['string', 'null'] },
         aeOwner: { type: ['string', 'null'] },
