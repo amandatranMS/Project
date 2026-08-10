@@ -38,13 +38,14 @@ const ASSISTANT_INSTRUCTIONS =
   'returned suggestedDescription to paste in. ' +
   'ECIF READINESS: When the user asks about ECIF (End Customer Investment Funds) — whether a deal ' +
   'is ready for ECIF, what is missing/needed before requesting ECIF, ECIF prerequisites or ' +
-  'requirements, whether a partner or work scope is in place, how much ECIF a deal can reasonably ' +
-  'request, or the ECIF next step — you MUST call get_ecif_readiness and answer ONLY from its ' +
-  'result. Lead with the ready flag and headline, list EACH missing prerequisite with its howToFix, ' +
-  'then give the fundingGuidance (the 10:1 / 5:1-competitive band and the "Microsoft rarely funds ' +
-  '100%" reminder). ALWAYS lead the next step with creating the Work Scope in ECIF Central BEFORE ' +
-  'the Deal Assistance tab (starting in Deal Assistance just sends the seller back to the work ' +
-  'scope). State it is mock process guidance, not an official ECIF request or quote. ' +
+  'requirements, whether a partner or work scope is in place, or the ECIF next step — you MUST ' +
+  'call get_ecif_readiness and answer ONLY from its result. This feature does NOT estimate a ' +
+  'funding amount — ECIF amounts are assigned through the work scope and approval process, so ' +
+  'never invent, infer, or quote an amount. Lead with the ready flag and headline, list EACH ' +
+  'missing prerequisite with its howToFix, then note any caveats. ALWAYS lead the next step with ' +
+  'creating the Work Scope in ECIF Central BEFORE the Deal Assistance tab (starting in Deal ' +
+  'Assistance just sends the seller back to the work scope). State it is mock process guidance, ' +
+  'not an official ECIF request or quote. ' +
   'ECIF PROMPT ON NEW OPPORTUNITIES: right AFTER you present a new opportunity draft or a new ' +
   'opportunity is created, proactively ask the user whether this deal will likely need ECIF to fund ' +
   'partner-led deployment. Do not block or delay the draft on this — ask only after the draft is ' +

@@ -248,16 +248,16 @@ export const opportunityTools: Tool[] = [
     description:
       'Call this whenever the user asks about ECIF (End Customer Investment Funds): whether a deal ' +
       'is ready for ECIF, what is needed/missing before requesting ECIF, ECIF prerequisites or ' +
-      'requirements, whether a partner or work scope is in place, how much ECIF a deal can reasonably ' +
-      'request, or the ECIF next step. Returns a MOCK ECIF readiness assessment for an opportunity: a ' +
-      '`ready` flag and `score`, a `headline`, a `missing` list (each with `whatsMissing` + `howToFix`) ' +
-      'covering the real prerequisites (delivery partner identified, work scope started, committed ' +
-      'customer intent, and the ">$50K request needs two+ milestones" rule), a `present` list, ' +
-      '`fundingGuidance` (the 10:1 / 5:1-competitive revenue-to-ECIF band and the "Microsoft rarely ' +
-      'funds 100%" cost-share reminder), a `nextAction`, and `caveats`. When answering, LEAD with the ' +
-      'ready flag + headline, list EACH missing prerequisite with its howToFix, give the funding ' +
-      'guidance, and ALWAYS lead the next step with creating the Work Scope in ECIF Central BEFORE the ' +
-      'Deal Assistance tab. It is mock process guidance, never an official ECIF request or quote.',
+      'requirements, whether a partner or work scope is in place, or the ECIF next step. This feature ' +
+      'does NOT estimate a funding amount — ECIF amounts are assigned through the work scope and ' +
+      'approval process. Returns a MOCK ECIF readiness assessment for an opportunity: a `ready` flag ' +
+      'and `score`, a `headline`, a `missing` list (each with `whatsMissing` + `howToFix`) covering ' +
+      'the real prerequisites (delivery partner identified, work scope started, committed customer ' +
+      'intent), a `present` list, a `nextAction`, and `caveats` (including the ">$50K request needs ' +
+      'two+ milestones" reminder). When answering, LEAD with the ready flag + headline, list EACH ' +
+      'missing prerequisite with its howToFix, note any caveats, and ALWAYS lead the next step with ' +
+      'creating the Work Scope in ECIF Central BEFORE the Deal Assistance tab. Never invent or quote a ' +
+      'funding amount. It is mock process guidance, never an official ECIF request or quote.',
     parameters: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
     run: (a) => handoffService.ecifReadiness(String(a.id)),
   },

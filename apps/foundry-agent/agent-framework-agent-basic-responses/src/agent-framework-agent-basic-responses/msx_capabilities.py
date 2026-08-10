@@ -413,13 +413,13 @@ def get_ecif_readiness(id: Annotated[str, Field(description="The opportunity id 
     Returns a MOCK ECIF (End Customer Investment Funds) readiness assessment: a `ready` flag and
     `score`, a `headline`, a `missing` list (each with `whatsMissing` + `howToFix`) covering the
     real prerequisites — a delivery partner is identified, the work scope is started (deliverables
-    with due dates), committed customer intent, and the ">$50K request needs two+ milestones" rule —
-    plus a `present` list, `fundingGuidance` (the 10:1 / 5:1-competitive revenue-to-ECIF band and the
-    "Microsoft rarely funds 100%" cost-share reminder), a `nextAction`, and `caveats`. Use this
-    whenever the user asks about ECIF, ECIF prerequisites/requirements, whether a partner or work
-    scope is in place, how much ECIF a deal can reasonably request, or the ECIF next step. Lead the
-    next step with creating the Work Scope in ECIF Central BEFORE Deal Assistance. It is mock process
-    guidance, never an official ECIF request or quote.
+    with due dates), and committed customer intent — plus a `present` list, a `nextAction`, and
+    `caveats` (including the ">$50K request needs two+ milestones" reminder). This does NOT estimate
+    a funding amount — ECIF amounts are assigned through the work scope and approval process, so
+    never quote one. Use this whenever the user asks about ECIF, ECIF prerequisites/requirements,
+    whether a partner or work scope is in place, or the ECIF next step. Lead the next step with
+    creating the Work Scope in ECIF Central BEFORE Deal Assistance. It is mock process guidance,
+    never an official ECIF request or quote.
     """
     return _mc.get(f"/api/opportunities/{id}/ecif-readiness")
 
