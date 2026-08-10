@@ -3,7 +3,7 @@ import { prisma } from '../lib/prisma.js';
 import { recordAgentAction } from '../lib/audit.js';
 import { scoreHandoff } from '../lib/handoffReadiness.js';
 import { scoreMilestoneHandoff } from '../lib/milestoneHandoff.js';
-import { estimateEsif } from '../lib/esif.js';
+import { estimateEcif } from '../lib/ecif.js';
 import { opportunitiesService } from './opportunities.service.js';
 
 /**
@@ -66,26 +66,26 @@ export const handoffService = {
   },
 
   /**
-   * Capability #3: estimate the ESIF deployment/adoption funding that could back
+   * Capability #3: estimate the ECIF deployment/adoption funding that could back
    * an opportunity, and the likely funding path (Microsoft / partner / joint).
    * A transparent MOCK heuristic over milestone charges + delivery fields — never
    * an official quote. Audited as a Read so the governance story holds.
    */
-  async esifEstimate(id: string) {
+  async ecifEstimate(id: string) {
     const ctx = await opportunitiesService.context(id);
     if (!ctx) throw new HttpError(404, 'Opportunity not found.');
 
-    const result = estimateEsif(ctx);
+    const result = estimateEcif(ctx);
 
     await recordAgentAction({
       agentName: 'system',
       actionType: 'Read',
-      actionName: 'ESIF funding estimated',
+      actionName: 'ECIF funding estimated',
       opportunityId: ctx.id,
-      inputSummary: `Estimated ESIF funding for ${ctx.opportunityBusinessId}`,
+      inputSummary: `Estimated ECIF funding for ${ctx.opportunityBusinessId}`,
       outputSummary: result.eligible
         ? `~$${result.estimatedFundingUsd.toLocaleString('en-US')} (${result.pathLabel}, ${result.confidence} confidence)`
-        : 'No ESIF funding estimated',
+        : 'No ECIF funding estimated',
     });
 
     return result;

@@ -407,17 +407,17 @@ def get_handoff_readiness(id: Annotated[str, Field(description="The opportunity 
     return _mc.get(f"/api/opportunities/{id}/handoff-readiness")
 
 
-def get_esif_estimate(id: Annotated[str, Field(description="The opportunity id or business id (e.g. OPP-003).")]) -> Any:
-    """Estimate the ESIF deployment/adoption funding that could back an opportunity, plus the funding path.
+def get_ecif_estimate(id: Annotated[str, Field(description="The opportunity id or business id (e.g. OPP-003).")]) -> Any:
+    """Estimate the ECIF deployment/adoption funding that could back an opportunity, plus the funding path.
 
     Returns a MOCK, transparent estimate: `estimatedFundingUsd`, an `eligible` flag, a `pathLabel`
     and `recommendedPath` (Microsoft- vs partner- vs joint- vs customer-led), a `confidence` level,
     a `headline`, a `basis` list (each with `factor` and `detail`) explaining how the number was
-    derived, and `caveats`. Use this whenever the user asks about ESIF, ECIF, deployment/adoption
+    derived, and `caveats`. Use this whenever the user asks about ECIF, deployment/adoption
     funding, how much funding a deal could get, or the funding path/partner for an opportunity.
-    Always present it as a mock planning estimate, never an official ESIF/ECIF quote.
+    Always present it as a mock planning estimate, never an official ECIF quote.
     """
-    return _mc.get(f"/api/opportunities/{id}/esif-estimate")
+    return _mc.get(f"/api/opportunities/{id}/ecif-estimate")
 
 
 def create_opportunity(

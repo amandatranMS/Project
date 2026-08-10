@@ -25,7 +25,7 @@ from msx_capabilities import (
     create_opportunity,
     delete_milestone,
     get_dashboard_summary,
-    get_esif_estimate,
+    get_ecif_estimate,
     get_handoff_readiness,
     get_milestone,
     get_milestone_handoff_readiness,
@@ -263,18 +263,18 @@ def build_subagents(client) -> list[Agent]:
                 "missing before handoff to the CSA/CSAM, call get_handoff_readiness and answer ONLY "
                 "from its result — lead with the ready flag and headline, then list EACH missing "
                 "item with its howToFix, then briefly note the passing checks; do not answer from "
-                "get_opportunity raw fields. ESIF FUNDING: when the user asks about ESIF, ECIF, "
+                "get_opportunity raw fields. ECIF FUNDING: when the user asks about ECIF, "
                 "deployment/adoption funding, how much funding a deal could get, or the funding "
-                "path/partner for an opportunity, call get_esif_estimate and answer ONLY from its "
+                "path/partner for an opportunity, call get_ecif_estimate and answer ONLY from its "
                 "result — lead with the headline (rough amount + path + confidence), then the basis, "
-                "and always say it is a mock planning estimate, not an official ESIF/ECIF quote."
+                "and always say it is a mock planning estimate, not an official ECIF quote."
                 + _APPROVAL_RULE + _CONFIRM_RULE + _GROUNDING_RULE + _SEARCH_RULE
             ),
             tools=[
                 list_opportunities,
                 get_opportunity,
                 get_handoff_readiness,
-                get_esif_estimate,
+                get_ecif_estimate,
                 search_records,
                 create_opportunity,
                 update_opportunity,

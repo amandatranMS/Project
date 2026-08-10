@@ -1,15 +1,15 @@
 /**
- * ESIF funding estimate (Capability #3) — a MOCK planning heuristic.
+ * ECIF funding estimate (Capability #3) — a MOCK planning heuristic.
  *
  * Kevin's point #6/#9: when a deal transitions, the delivery team (CSA/CSAM)
  * and their manager want an early "funding heads-up" — roughly how much
- * deployment/adoption investment funding (ESIF) could back the work, and
+ * deployment/adoption investment funding (ECIF) could back the work, and
  * whether it flows through Microsoft or a partner. This lets them plan the
  * deployment path *before* the deal closes instead of discovering it cold.
  *
  * This is a transparent, deterministic estimate derived ONLY from fields that
  * already exist on the opportunity and its milestones — no new tables/columns
- * and no writes. It is explicitly NOT an official ESIF/ECIF quote or approval;
+ * and no writes. It is explicitly NOT an official ECIF quote or approval;
  * every result carries that caveat.
  *
  * Pure and side-effect free — safe to call from a read endpoint, the assistant,
@@ -33,8 +33,8 @@ function usd(n: number): string {
   return `$${Math.round(n).toLocaleString('en-US')}`;
 }
 
-/** A milestone as seen by the ESIF heuristic (only the fields it reads). */
-interface EsifMilestone {
+/** A milestone as seen by the ECIF heuristic (only the fields it reads). */
+interface EcifMilestone {
   milestoneName?: string | null;
   milestoneCategory?: string | null;
   fitCharge?: number | null;
@@ -44,29 +44,29 @@ interface EsifMilestone {
 }
 
 /** An opportunity-with-milestones as returned by opportunitiesService.context(). */
-export interface EsifContext {
+export interface EcifContext {
   id: string;
   opportunityBusinessId: string;
   opportunityName: string;
   solutionArea?: string | null;
   salesStage?: string | null;
   estimatedRevenue?: number | null;
-  milestones?: EsifMilestone[];
+  milestones?: EcifMilestone[];
 }
 
 /** One transparent factor that fed the estimate. */
-export interface EsifBasisItem {
+export interface EcifBasisItem {
   factor: string;
   detail: string;
 }
 
-export interface EsifEstimate {
+export interface EcifEstimate {
   opportunityId: string;
   opportunityBusinessId: string;
   opportunityName: string;
   /** True when a non-zero funding amount could be estimated. */
   eligible: boolean;
-  /** Estimated ESIF funding, whole USD, rounded to the nearest $100. */
+  /** Estimated ECIF funding, whole USD, rounded to the nearest $100. */
   estimatedFundingUsd: number;
   currency: 'USD';
   /** Short path tag: "Partner-led" | "Joint" | "Microsoft-led" | "Customer-led" | "Path TBD". */
@@ -78,7 +78,7 @@ export interface EsifEstimate {
   /** Ready-made one-line answer for the CSA/manager. */
   headline: string;
   /** The factors that drove the number, for transparency. */
-  basis: EsifBasisItem[];
+  basis: EcifBasisItem[];
   /** Mandatory mock disclaimer plus any data-quality notes. */
   caveats: string[];
 }
@@ -90,7 +90,7 @@ const COMMITTED = new Set(['Confirmed', 'Contracted']);
 const LATER_STAGES = new Set(['Empower & Achieve', 'Realize Value', 'Manage & Optimize']);
 
 /**
- * Share of a milestone's services charge that ESIF might co-invest, by category.
+ * Share of a milestone's services charge that ECIF might co-invest, by category.
  * Production is steady-state (not deployment-funded); unknown/blank uses DEFAULT_RATE.
  */
 const CATEGORY_RATE: Record<string, number> = {
@@ -113,7 +113,7 @@ const AREA_MULT: Record<string, number> = {
 
 /** Proxy when no fit charges exist: assume ~30% of deal value is fundable services. */
 const SERVICES_SHARE_OF_REVENUE = 0.3;
-/** Blended ESIF rate applied to the estimated-revenue proxy. */
+/** Blended ECIF rate applied to the estimated-revenue proxy. */
 const PROXY_RATE = 0.12;
 
 function normalizeCategory(category?: string | null): string {
@@ -127,7 +127,7 @@ function categoryRate(category?: string | null): number {
 }
 
 /** Fundable = anything except a Production (steady-state) milestone. */
-function isFundable(m: EsifMilestone): boolean {
+function isFundable(m: EcifMilestone): boolean {
   return normalizeCategory(m.milestoneCategory) !== 'Production';
 }
 
@@ -137,12 +137,12 @@ interface DeliveryPath {
 }
 
 /**
- * Decide how ESIF would be routed. `deliveredBy` is the authoritative signal
+ * Decide how ECIF would be routed. `deliveredBy` is the authoritative signal
  * (partnerName is often populated as a co-sell "partner of record" even on
  * Microsoft-led delivery, so it is NOT used to infer a partner-led path — only
  * to name the partner once the path is known, or as a last-resort fallback).
  */
-function resolvePath(fundable: EsifMilestone[]): DeliveryPath {
+function resolvePath(fundable: EcifMilestone[]): DeliveryPath {
   const partners = Array.from(
     new Set(fundable.map((m) => (has(m.partnerName) ? String(m.partnerName).trim() : '')).filter(Boolean)),
   );
@@ -152,19 +152,19 @@ function resolvePath(fundable: EsifMilestone[]): DeliveryPath {
   if (delivered.has('Partner')) {
     return {
       pathLabel: 'Partner-led',
-      recommendedPath: `Partner-led — route ESIF to the delivery partner${partnerSuffix || ' (name the partner of record)'}.`,
+      recommendedPath: `Partner-led — route ECIF to the delivery partner${partnerSuffix || ' (name the partner of record)'}.`,
     };
   }
   if (delivered.has('Joint')) {
     return {
       pathLabel: 'Joint',
-      recommendedPath: `Joint delivery — split ESIF across Microsoft and the partner${partnerSuffix}.`,
+      recommendedPath: `Joint delivery — split ECIF across Microsoft and the partner${partnerSuffix}.`,
     };
   }
   if (delivered.has('Microsoft')) {
     return {
       pathLabel: 'Microsoft-led',
-      recommendedPath: `Microsoft-led — apply ESIF to the Microsoft-delivered deployment work${
+      recommendedPath: `Microsoft-led — apply ECIF to the Microsoft-delivered deployment work${
         partners.length ? ` (partner of record: ${partners.join(', ')})` : ''
       }.`,
     };
@@ -172,26 +172,26 @@ function resolvePath(fundable: EsifMilestone[]): DeliveryPath {
   if (delivered.has('Customer')) {
     return {
       pathLabel: 'Customer-led',
-      recommendedPath: 'Customer-led — limited ESIF; fund adoption/enablement support only.',
+      recommendedPath: 'Customer-led — limited ECIF; fund adoption/enablement support only.',
     };
   }
   if (partners.length) {
     return {
       pathLabel: 'Partner-led',
-      recommendedPath: `Delivery path unset, but a partner is named${partnerSuffix} — confirm partner-led delivery to route ESIF.`,
+      recommendedPath: `Delivery path unset, but a partner is named${partnerSuffix} — confirm partner-led delivery to route ECIF.`,
     };
   }
   return {
     pathLabel: 'Path TBD',
-    recommendedPath: 'Delivery path not set — confirm Microsoft vs. partner delivery to route ESIF.',
+    recommendedPath: 'Delivery path not set — confirm Microsoft vs. partner delivery to route ECIF.',
   };
 }
 
 /**
- * Estimate the ESIF funding that could back an opportunity's deployment.
+ * Estimate the ECIF funding that could back an opportunity's deployment.
  * Deterministic and side-effect free.
  */
-export function estimateEsif(ctx: EsifContext): EsifEstimate {
+export function estimateEcif(ctx: EcifContext): EcifEstimate {
   const milestones = ctx.milestones ?? [];
   const fundable = milestones.filter(isFundable);
   const charged = fundable.filter((m) => num(m.fitCharge) > 0);
@@ -216,7 +216,7 @@ export function estimateEsif(ctx: EsifContext): EsifEstimate {
   const committedCount = fundable.filter((m) => COMMITTED.has(String(m.customerCommitment ?? ''))).length;
   const laterStage = LATER_STAGES.has(String(ctx.salesStage ?? '').trim());
 
-  let confidence: EsifEstimate['confidence'] = 'Medium';
+  let confidence: EcifEstimate['confidence'] = 'Medium';
   if (!eligible || usedProxy) confidence = 'Low';
   else if (committedCount > 0 && charged.length > 0 && laterStage) confidence = 'High';
   else if (committedCount === 0) confidence = 'Low';
@@ -225,7 +225,7 @@ export function estimateEsif(ctx: EsifContext): EsifEstimate {
     new Set(fundable.map((m) => normalizeCategory(m.milestoneCategory)).filter(Boolean)),
   );
 
-  const basis: EsifBasisItem[] = [
+  const basis: EcifBasisItem[] = [
     {
       factor: 'Fundable milestones',
       detail: `${fundable.length} of ${milestones.length}${
@@ -249,7 +249,7 @@ export function estimateEsif(ctx: EsifContext): EsifEstimate {
   ];
 
   const caveats: string[] = [
-    'Mock heuristic for planning only — not an official ESIF/ECIF quote or funding approval.',
+    'Mock heuristic for planning only — not an official ECIF quote or funding approval.',
   ];
   if (usedProxy) caveats.push('No milestone fit charges recorded; amount derived from estimated revenue.');
   if (!eligible) caveats.push('Add milestone fit charges or a deal value to produce an estimate.');
@@ -262,8 +262,8 @@ export function estimateEsif(ctx: EsifContext): EsifEstimate {
   }
 
   const headline = eligible
-    ? `ESIF funding heads-up: ~${usd(estimatedFundingUsd)} could help fund this deployment (${pathLabel}, ${confidence} confidence).`
-    : `No ESIF funding estimated yet for ${ctx.opportunityBusinessId} — add milestone fit charges or a deal value, and set a delivery path.`;
+    ? `ECIF funding heads-up: ~${usd(estimatedFundingUsd)} could help fund this deployment (${pathLabel}, ${confidence} confidence).`
+    : `No ECIF funding estimated yet for ${ctx.opportunityBusinessId} — add milestone fit charges or a deal value, and set a delivery path.`;
 
   return {
     opportunityId: ctx.id,

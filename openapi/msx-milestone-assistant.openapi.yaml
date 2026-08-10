@@ -126,27 +126,27 @@ paths:
                   - $ref: '#/components/schemas/Envelope'
                   - properties: { data: { $ref: '#/components/schemas/HandoffReadiness' } }
         '404': { description: Not found }
-  /api/opportunities/{id}/esif-estimate:
+  /api/opportunities/{id}/ecif-estimate:
     get:
       tags: [Opportunities]
       summary: >
-        Capability #3 — MOCK ESIF funding estimate for an opportunity. Returns an
+        Capability #3 — MOCK ECIF funding estimate for an opportunity. Returns an
         estimated deployment/adoption funding amount (USD), an `eligible` flag, the
         likely funding path (`pathLabel` / `recommendedPath`: Microsoft- vs partner-
         vs joint- vs customer-led), a `confidence` level, a `headline`, a
         transparent `basis` list, and `caveats`. Derived only from existing
-        opportunity + milestone fields; NOT an official ESIF/ECIF quote. Read-only;
+        opportunity + milestone fields; NOT an official ECIF quote. Read-only;
         audited as a Read.
       parameters: [{ $ref: '#/components/parameters/IdParam' }]
       responses:
         '200':
-          description: Envelope with an EsifEstimate result
+          description: Envelope with an EcifEstimate result
           content:
             application/json:
               schema:
                 allOf:
                   - $ref: '#/components/schemas/Envelope'
-                  - properties: { data: { $ref: '#/components/schemas/EsifEstimate' } }
+                  - properties: { data: { $ref: '#/components/schemas/EcifEstimate' } }
         '404': { description: Not found }
   /api/opportunities/{id}/announce:
     post:
@@ -796,18 +796,18 @@ components:
         suggestedDescription:
           type: string
           description: Paste-ready "CSA Handoff Notes" scaffold for the milestone description.
-    EsifBasisItem:
+    EcifBasisItem:
       type: object
-      description: One transparent factor that fed the ESIF estimate.
+      description: One transparent factor that fed the ECIF estimate.
       properties:
         factor: { type: string }
         detail: { type: string }
-    EsifEstimate:
+    EcifEstimate:
       type: object
       description: >
-        Capability #3 — MOCK ESIF funding estimate. A transparent, deterministic
+        Capability #3 — MOCK ECIF funding estimate. A transparent, deterministic
         heuristic over existing opportunity + milestone fields; never an official
-        ESIF/ECIF quote.
+        ECIF quote.
       properties:
         opportunityId: { type: string }
         opportunityBusinessId: { type: string }
@@ -821,7 +821,7 @@ components:
         recommendedPath: { type: string, description: Full sentence describing how funding would route }
         confidence: { type: string, enum: [High, Medium, Low] }
         headline: { type: string }
-        basis: { type: array, items: { $ref: '#/components/schemas/EsifBasisItem' } }
+        basis: { type: array, items: { $ref: '#/components/schemas/EcifBasisItem' } }
         caveats:
           type: array
           items: { type: string }
