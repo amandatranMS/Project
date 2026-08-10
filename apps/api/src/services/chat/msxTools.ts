@@ -244,11 +244,22 @@ export const opportunityTools: Tool[] = [
     run: (a) => handoffService.readiness(String(a.id)),
   },
   {
-    name: 'get_ecif_estimate',
+    name: 'get_ecif_readiness',
     description:
-      'Call this whenever the user asks about ECIF, deployment/adoption funding, how much funding a deal could get, or the funding path/partner for an opportunity. Returns a MOCK, transparent ECIF funding estimate for an opportunity: `estimatedFundingUsd`, `eligible`, `pathLabel` and `recommendedPath` (Microsoft- vs partner- vs joint- vs customer-led), a `confidence` level, a `headline`, a `basis` list (each with `factor` and `detail`) explaining how the number was derived, and `caveats`. When answering, LEAD with the headline (the rough amount + path + confidence), then briefly give the basis, and ALWAYS state it is a mock planning estimate, not an official ECIF quote.',
+      'Call this whenever the user asks about ECIF (End Customer Investment Funds): whether a deal ' +
+      'is ready for ECIF, what is needed/missing before requesting ECIF, ECIF prerequisites or ' +
+      'requirements, whether a partner or work scope is in place, how much ECIF a deal can reasonably ' +
+      'request, or the ECIF next step. Returns a MOCK ECIF readiness assessment for an opportunity: a ' +
+      '`ready` flag and `score`, a `headline`, a `missing` list (each with `whatsMissing` + `howToFix`) ' +
+      'covering the real prerequisites (delivery partner identified, work scope started, committed ' +
+      'customer intent, and the ">$50K request needs two+ milestones" rule), a `present` list, ' +
+      '`fundingGuidance` (the 10:1 / 5:1-competitive revenue-to-ECIF band and the "Microsoft rarely ' +
+      'funds 100%" cost-share reminder), a `nextAction`, and `caveats`. When answering, LEAD with the ' +
+      'ready flag + headline, list EACH missing prerequisite with its howToFix, give the funding ' +
+      'guidance, and ALWAYS lead the next step with creating the Work Scope in ECIF Central BEFORE the ' +
+      'Deal Assistance tab. It is mock process guidance, never an official ECIF request or quote.',
     parameters: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
-    run: (a) => handoffService.ecifEstimate(String(a.id)),
+    run: (a) => handoffService.ecifReadiness(String(a.id)),
   },
   {
     name: 'create_opportunity',

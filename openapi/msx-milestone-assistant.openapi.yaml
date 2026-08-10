@@ -126,27 +126,31 @@ paths:
                   - $ref: '#/components/schemas/Envelope'
                   - properties: { data: { $ref: '#/components/schemas/HandoffReadiness' } }
         '404': { description: Not found }
-  /api/opportunities/{id}/ecif-estimate:
+  /api/opportunities/{id}/ecif-readiness:
     get:
       tags: [Opportunities]
       summary: >
-        Capability #3 — MOCK ECIF funding estimate for an opportunity. Returns an
-        estimated deployment/adoption funding amount (USD), an `eligible` flag, the
-        likely funding path (`pathLabel` / `recommendedPath`: Microsoft- vs partner-
-        vs joint- vs customer-led), a `confidence` level, a `headline`, a
-        transparent `basis` list, and `caveats`. Derived only from existing
-        opportunity + milestone fields; NOT an official ECIF quote. Read-only;
-        audited as a Read.
+        Capability #3 — MOCK ECIF (End Customer Investment Funds) readiness &
+        process guidance for an opportunity. Assesses whether the deal is ready to
+        REQUEST ECIF against the real prerequisites (delivery partner identified,
+        work scope started, committed customer intent, and the ">$50K request needs
+        two+ milestones" rule) and returns a `ready` flag, a `score`, a `headline`,
+        a `missing` list (each with `whatsMissing` + `howToFix`), a `present` list,
+        `fundingGuidance` (the 10:1 / 5:1-competitive revenue-to-ECIF band plus the
+        "Microsoft rarely funds 100%" cost-share reminder), a `nextAction` that
+        leads with creating the Work Scope in ECIF Central before Deal Assistance,
+        and `caveats`. Derived only from existing opportunity + milestone fields; it
+        does NOT create or submit a real ECIF request. Read-only; audited as a Read.
       parameters: [{ $ref: '#/components/parameters/IdParam' }]
       responses:
         '200':
-          description: Envelope with an EcifEstimate result
+          description: Envelope with an EcifReadiness result
           content:
             application/json:
               schema:
                 allOf:
                   - $ref: '#/components/schemas/Envelope'
-                  - properties: { data: { $ref: '#/components/schemas/EcifEstimate' } }
+                  - properties: { data: { $ref: '#/components/schemas/EcifReadiness' } }
         '404': { description: Not found }
   /api/opportunities/{id}/announce:
     post:
@@ -796,33 +800,36 @@ components:
         suggestedDescription:
           type: string
           description: Paste-ready "CSA Handoff Notes" scaffold for the milestone description.
-    EcifBasisItem:
-      type: object
-      description: One transparent factor that fed the ECIF estimate.
-      properties:
-        factor: { type: string }
-        detail: { type: string }
-    EcifEstimate:
+    EcifFundingGuidance:
       type: object
       description: >
-        Capability #3 — MOCK ECIF funding estimate. A transparent, deterministic
-        heuristic over existing opportunity + milestone fields; never an official
-        ECIF quote.
+        Ratio-based ECIF funding guidance (how much is reasonable to REQUEST), not a
+        predicted quote.
+      properties:
+        estimatedRevenueUsd: { type: number, description: Deal value used for the ratio math (0 if unknown) }
+        standardMaxUsd: { type: number, description: Reasonable ECIF at the standard 10:1 ratio (revenue / 10) }
+        competitiveMaxUsd: { type: number, description: Stretch ceiling in a competitive deal at 5:1 (revenue / 5); justification required }
+        competitive: { type: boolean, description: True when an opportunity competitor is on record }
+        note: { type: string }
+    EcifReadiness:
+      type: object
+      description: >
+        Capability #3 — MOCK ECIF readiness & process guidance. A transparent,
+        deterministic assessment over existing opportunity + milestone fields; it does
+        NOT create or submit a real ECIF request, and funding amounts are ratio-based
+        guidance, never an official ECIF quote.
       properties:
         opportunityId: { type: string }
         opportunityBusinessId: { type: string }
         opportunityName: { type: string }
-        eligible: { type: boolean, description: True when a non-zero amount could be estimated }
-        estimatedFundingUsd: { type: number, description: Whole USD, rounded to the nearest $100 }
-        currency: { type: string, enum: [USD] }
-        pathLabel:
-          type: string
-          description: 'Short path tag: Partner-led | Joint | Microsoft-led | Customer-led | Path TBD'
-        recommendedPath: { type: string, description: Full sentence describing how funding would route }
-        confidence: { type: string, enum: [High, Medium, Low] }
+        score: { type: integer, description: Percent of prerequisites met (0–100) }
+        ready: { type: boolean, description: True when every prerequisite is met }
         headline: { type: string }
-        basis: { type: array, items: { $ref: '#/components/schemas/EcifBasisItem' } }
+        missing: { type: array, items: { $ref: '#/components/schemas/MissingItem' } }
+        present: { type: array, items: { type: string } }
+        fundingGuidance: { $ref: '#/components/schemas/EcifFundingGuidance' }
+        nextAction: { type: string, description: The single most important next step (leads with Work Scope in ECIF Central) }
         caveats:
           type: array
           items: { type: string }
-          description: Always includes the mock-data disclaimer, plus any data-quality notes.
+          description: Always includes the mock-guidance disclaimer, plus any data-quality notes.

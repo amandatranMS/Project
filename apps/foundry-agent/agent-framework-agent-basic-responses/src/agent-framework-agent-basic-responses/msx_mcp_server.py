@@ -38,7 +38,7 @@ _CAPABILITIES = (
     cap.list_opportunities,
     cap.get_opportunity,
     cap.get_handoff_readiness,
-    cap.get_ecif_estimate,
+    cap.get_ecif_readiness,
     cap.create_opportunity,
     cap.update_opportunity,
     cap.search_records,

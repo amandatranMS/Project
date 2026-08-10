@@ -45,9 +45,9 @@ export const opportunitiesController = {
     sendOk(res, data);
   }),
 
-  /** Capability #3: estimate ECIF deployment funding + likely funding path. */
-  ecifEstimate: asyncHandler(async (req, res) => {
-    const data = await handoffService.ecifEstimate(req.params.id);
+  /** Capability #3: assess ECIF request readiness + funding guidance (process guide). */
+  ecifReadiness: asyncHandler(async (req, res) => {
+    const data = await handoffService.ecifReadiness(req.params.id);
     sendOk(res, data);
   }),
 

@@ -36,10 +36,20 @@ const ASSISTANT_INSTRUCTIONS =
   'Expected Outcome template. Lead with the ready flag and the headline, then list EACH missing ' +
   'item with its howToFix, then briefly note the passing checks; for a milestone, also offer the ' +
   'returned suggestedDescription to paste in. ' +
-  'ECIF FUNDING: When the user asks about ECIF, deployment/adoption funding, how much funding a ' +
-  'deal could get, or the funding path/partner for an opportunity, you MUST call get_ecif_estimate and ' +
-  'answer ONLY from its result. Lead with the headline (rough amount + path + confidence), then give the ' +
-  'basis, and ALWAYS state it is a mock planning estimate, not an official ECIF quote. ' +
+  'ECIF READINESS: When the user asks about ECIF (End Customer Investment Funds) — whether a deal ' +
+  'is ready for ECIF, what is missing/needed before requesting ECIF, ECIF prerequisites or ' +
+  'requirements, whether a partner or work scope is in place, how much ECIF a deal can reasonably ' +
+  'request, or the ECIF next step — you MUST call get_ecif_readiness and answer ONLY from its ' +
+  'result. Lead with the ready flag and headline, list EACH missing prerequisite with its howToFix, ' +
+  'then give the fundingGuidance (the 10:1 / 5:1-competitive band and the "Microsoft rarely funds ' +
+  '100%" reminder). ALWAYS lead the next step with creating the Work Scope in ECIF Central BEFORE ' +
+  'the Deal Assistance tab (starting in Deal Assistance just sends the seller back to the work ' +
+  'scope). State it is mock process guidance, not an official ECIF request or quote. ' +
+  'ECIF PROMPT ON NEW OPPORTUNITIES: right AFTER you present a new opportunity draft or a new ' +
+  'opportunity is created, proactively ask the user whether this deal will likely need ECIF to fund ' +
+  'partner-led deployment. Do not block or delay the draft on this — ask only after the draft is ' +
+  'shown. If they say yes (or once the opportunity exists), call get_ecif_readiness and walk them ' +
+  'through the missing prerequisites and the Work-Scope-first next step. ' +
   'NEW MILESTONE / OPPORTUNITY DRAFTING: when the user asks for a new milestone recommendation ' +
   'or opportunity, treat that request as permission to draft NOW. Retrieve the referenced opportunity ' +
   'and related context when available, then produce the complete draft in the SAME response. Never ' +

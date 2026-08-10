@@ -25,7 +25,7 @@ from msx_capabilities import (
     create_opportunity,
     delete_milestone,
     get_dashboard_summary,
-    get_ecif_estimate,
+    get_ecif_readiness,
     get_handoff_readiness,
     get_milestone,
     get_milestone_handoff_readiness,
@@ -263,18 +263,25 @@ def build_subagents(client) -> list[Agent]:
                 "missing before handoff to the CSA/CSAM, call get_handoff_readiness and answer ONLY "
                 "from its result — lead with the ready flag and headline, then list EACH missing "
                 "item with its howToFix, then briefly note the passing checks; do not answer from "
-                "get_opportunity raw fields. ECIF FUNDING: when the user asks about ECIF, "
-                "deployment/adoption funding, how much funding a deal could get, or the funding "
-                "path/partner for an opportunity, call get_ecif_estimate and answer ONLY from its "
-                "result — lead with the headline (rough amount + path + confidence), then the basis, "
-                "and always say it is a mock planning estimate, not an official ECIF quote."
+                "get_opportunity raw fields. ECIF READINESS: when the user asks about ECIF (End "
+                "Customer Investment Funds) — whether a deal is ready for ECIF, what is missing "
+                "before requesting it, ECIF prerequisites, whether a partner or work scope is in "
+                "place, how much ECIF a deal can reasonably request, or the ECIF next step — call "
+                "get_ecif_readiness and answer ONLY from its result: lead with the ready flag and "
+                "headline, list EACH missing prerequisite with its howToFix, give the fundingGuidance "
+                "(10:1 / 5:1-competitive band and the 'Microsoft rarely funds 100%' reminder), and "
+                "ALWAYS lead the next step with creating the Work Scope in ECIF Central BEFORE Deal "
+                "Assistance. It is mock process guidance, not an official ECIF request or quote. When "
+                "a new opportunity is drafted or created, proactively ask whether it will need ECIF; "
+                "if yes, call get_ecif_readiness and walk through the prerequisites and the "
+                "Work-Scope-first next step."
                 + _APPROVAL_RULE + _CONFIRM_RULE + _GROUNDING_RULE + _SEARCH_RULE
             ),
             tools=[
                 list_opportunities,
                 get_opportunity,
                 get_handoff_readiness,
-                get_ecif_estimate,
+                get_ecif_readiness,
                 search_records,
                 create_opportunity,
                 update_opportunity,

@@ -3,7 +3,7 @@ import { prisma } from '../lib/prisma.js';
 import { recordAgentAction } from '../lib/audit.js';
 import { scoreHandoff } from '../lib/handoffReadiness.js';
 import { scoreMilestoneHandoff } from '../lib/milestoneHandoff.js';
-import { estimateEcif } from '../lib/ecif.js';
+import { assessEcifReadiness } from '../lib/ecifReadiness.js';
 import { opportunitiesService } from './opportunities.service.js';
 
 /**
@@ -66,26 +66,29 @@ export const handoffService = {
   },
 
   /**
-   * Capability #3: estimate the ECIF deployment/adoption funding that could back
-   * an opportunity, and the likely funding path (Microsoft / partner / joint).
-   * A transparent MOCK heuristic over milestone charges + delivery fields — never
-   * an official quote. Audited as a Read so the governance story holds.
+   * Capability #3: assess whether an opportunity is ready to REQUEST ECIF (End
+   * Customer Investment Funds) and what the next step is — the real prerequisites
+   * (delivery partner, work scope, committed intent, the >$50K/two-milestone rule)
+   * plus ratio-based funding guidance. Replaces the old dollar "estimate": Adam's
+   * walkthrough showed the amount is out of the seller's control; the value is in
+   * guiding the process. A transparent MOCK read that never touches real ECIF
+   * Central / Deal Assistance. Audited as a Read so the governance story holds.
    */
-  async ecifEstimate(id: string) {
+  async ecifReadiness(id: string) {
     const ctx = await opportunitiesService.context(id);
     if (!ctx) throw new HttpError(404, 'Opportunity not found.');
 
-    const result = estimateEcif(ctx);
+    const result = assessEcifReadiness(ctx);
 
     await recordAgentAction({
       agentName: 'system',
       actionType: 'Read',
-      actionName: 'ECIF funding estimated',
+      actionName: 'ECIF readiness checked',
       opportunityId: ctx.id,
-      inputSummary: `Estimated ECIF funding for ${ctx.opportunityBusinessId}`,
-      outputSummary: result.eligible
-        ? `~$${result.estimatedFundingUsd.toLocaleString('en-US')} (${result.pathLabel}, ${result.confidence} confidence)`
-        : 'No ECIF funding estimated',
+      inputSummary: `Checked ECIF request readiness for ${ctx.opportunityBusinessId}`,
+      outputSummary: result.ready
+        ? `Ready for ECIF request — all ${result.present.length} prerequisites met`
+        : `Not ready — ${result.score}%; missing: ${result.missing.map((m) => m.item).join(', ') || 'none'}`,
     });
 
     return result;
