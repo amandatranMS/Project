@@ -133,7 +133,7 @@ paths:
         Capability #3 — MOCK ECIF (End Customer Investment Funds) readiness &
         process guidance for an opportunity. Assesses whether the deal is ready to
         REQUEST ECIF against the real prerequisites (delivery partner identified,
-        work scope started, committed customer intent) and returns a `ready` flag, a
+        work scope started) and returns a `ready` flag, a
         `score`, a `headline`, a `missing` list (each with `whatsMissing` +
         `howToFix`), a `present` list, a `nextAction` that leads with creating the
         Work Scope in ECIF Central before Deal Assistance, and `caveats` (including

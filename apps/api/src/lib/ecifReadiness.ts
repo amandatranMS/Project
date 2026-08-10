@@ -12,7 +12,6 @@
  * Prerequisite checks map to real process rules from Adam's walkthrough:
  *  - Delivery partner identified — ECIF pays a partner to execute the work scope.
  *  - Work scope started          — deliverables (milestones) with due dates exist.
- *  - Committed customer intent    — do not route ECIF to an exploratory deal.
  * A non-scored reminder covers the ">$50K request needs two+ milestones" rule; it
  * states the rule without estimating the (externally assigned) amount.
  *
@@ -32,7 +31,6 @@ interface EcifMilestone {
   milestoneCategory?: string | null;
   deliveredBy?: string | null;
   partnerName?: string | null;
-  customerCommitment?: string | null;
   estDate?: Date | string | null;
 }
 
@@ -73,15 +71,13 @@ export interface EcifReadinessResult {
 
 /** One prerequisite check on the ECIF readiness checklist. */
 interface Check {
-  key: 'partner' | 'workScope' | 'committedIntent';
+  key: 'partner' | 'workScope';
   item: string;
   whatsMissing: string;
   howToFix: string;
   passed: boolean;
 }
 
-/** Commitment values that count as real deployment intent (not exploratory). */
-const COMMITTED = new Set(['Confirmed', 'Contracted']);
 /** Delivery values that imply a partner will execute the work scope. */
 const PARTNER_DELIVERY = new Set(['Partner', 'Joint']);
 
@@ -96,7 +92,6 @@ export function assessEcifReadiness(ctx: EcifReadinessContext): EcifReadinessRes
     (m) => PARTNER_DELIVERY.has(String(m.deliveredBy ?? '').trim()) || has(m.partnerName),
   );
   const hasWorkScope = milestones.some((m) => has(m.milestoneCategory) && has(m.estDate));
-  const hasCommitted = milestones.some((m) => COMMITTED.has(String(m.customerCommitment ?? '').trim()));
 
   const checks: Check[] = [
     {
@@ -116,15 +111,6 @@ export function assessEcifReadiness(ctx: EcifReadinessContext): EcifReadinessRes
       howToFix:
         'In ECIF Central, create the Work Scope: capture the partner deliverables as milestones, each with a category and a due date.',
       passed: hasWorkScope,
-    },
-    {
-      key: 'committedIntent',
-      item: 'Committed customer intent',
-      whatsMissing:
-        'No milestone shows committed customer intent, so the deal still looks exploratory. ECIF should back deployments the customer actually plans to do.',
-      howToFix:
-        'Confirm the customer plans to deploy and set a milestone customer commitment to Confirmed or Contracted.',
-      passed: hasCommitted,
     },
   ];
 
@@ -149,10 +135,6 @@ export function assessEcifReadiness(ctx: EcifReadinessContext): EcifReadinessRes
   } else if (workScopeFailed) {
     nextAction =
       'Start in ECIF Central and create the Work Scope (partner deliverables as milestones with due dates) BEFORE opening Deal Assistance — starting in Deal Assistance just sends you back to the work scope.';
-  } else if (!ready) {
-    nextAction = `Resolve the remaining prerequisite(s) — ${missing
-      .map((m) => m.item)
-      .join(', ')} — then confirm the Work Scope in ECIF Central and submit the ECIF request from the Deal Assistance tab.`;
   } else {
     nextAction =
       'Prerequisites look complete. Confirm the Work Scope in ECIF Central, then submit the ECIF request from the Deal Assistance tab (local vs global), and track it through the AWR review and finance approval.';

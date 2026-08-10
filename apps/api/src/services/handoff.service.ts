@@ -68,11 +68,12 @@ export const handoffService = {
   /**
    * Capability #3: assess whether an opportunity is ready to REQUEST ECIF (End
    * Customer Investment Funds) and what the next step is — the real prerequisites
-   * (delivery partner, work scope, committed intent, the >$50K/two-milestone rule)
-   * plus ratio-based funding guidance. Replaces the old dollar "estimate": Adam's
-   * walkthrough showed the amount is out of the seller's control; the value is in
-   * guiding the process. A transparent MOCK read that never touches real ECIF
-   * Central / Deal Assistance. Audited as a Read so the governance story holds.
+   * (delivery partner and work scope) plus the >$50K/two-milestone rule as a
+   * non-costed reminder. It does NOT estimate a funding amount: Adam's walkthrough
+   * showed the amount is out of the seller's control and is assigned through the
+   * work scope / approval process; the value is in guiding the process. A
+   * transparent MOCK read that never touches real ECIF Central / Deal Assistance.
+   * Audited as a Read so the governance story holds.
    */
   async ecifReadiness(id: string) {
     const ctx = await opportunitiesService.context(id);

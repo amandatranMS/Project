@@ -412,8 +412,8 @@ def get_ecif_readiness(id: Annotated[str, Field(description="The opportunity id 
 
     Returns a MOCK ECIF (End Customer Investment Funds) readiness assessment: a `ready` flag and
     `score`, a `headline`, a `missing` list (each with `whatsMissing` + `howToFix`) covering the
-    real prerequisites — a delivery partner is identified, the work scope is started (deliverables
-    with due dates), and committed customer intent — plus a `present` list, a `nextAction`, and
+    real prerequisites — a delivery partner is identified and the work scope is started (deliverables
+    with due dates) — plus a `present` list, a `nextAction`, and
     `caveats` (including the ">$50K request needs two+ milestones" reminder). This does NOT estimate
     a funding amount — ECIF amounts are assigned through the work scope and approval process, so
     never quote one. Use this whenever the user asks about ECIF, ECIF prerequisites/requirements,

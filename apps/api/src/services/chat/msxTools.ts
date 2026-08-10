@@ -252,8 +252,8 @@ export const opportunityTools: Tool[] = [
       'does NOT estimate a funding amount — ECIF amounts are assigned through the work scope and ' +
       'approval process. Returns a MOCK ECIF readiness assessment for an opportunity: a `ready` flag ' +
       'and `score`, a `headline`, a `missing` list (each with `whatsMissing` + `howToFix`) covering ' +
-      'the real prerequisites (delivery partner identified, work scope started, committed customer ' +
-      'intent), a `present` list, a `nextAction`, and `caveats` (including the ">$50K request needs ' +
+      'the real prerequisites (delivery partner identified, work scope started), a `present` list, ' +
+      'a `nextAction`, and `caveats` (including the ">$50K request needs ' +
       'two+ milestones" reminder). When answering, LEAD with the ready flag + headline, list EACH ' +
       'missing prerequisite with its howToFix, note any caveats, and ALWAYS lead the next step with ' +
       'creating the Work Scope in ECIF Central BEFORE the Deal Assistance tab. Never invent or quote a ' +
