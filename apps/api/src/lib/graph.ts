@@ -14,7 +14,7 @@ import { HttpError } from './httpError.js';
  *   AAD_TENANT_ID, AAD_CLIENT_ID  — same as the login app registration
  *   AAD_CLIENT_SECRET             — a client secret on that app registration
  * plus admin-consented delegated Graph scopes: User.Read, User.Read.All,
- * Mail.Read, Chat.Read.
+ * Mail.Read, Mail.Send, Chat.ReadWrite, ChatMessage.Send.
  */
 
 const tenantId = process.env.AAD_TENANT_ID;

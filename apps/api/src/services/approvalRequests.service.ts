@@ -50,6 +50,30 @@ function summarizeAction(action: PendingAction): string {
   }
 }
 
+/**
+ * Backward-compatible parser for legacy approval rows that were created
+ * without the encoded action payload and only stored a request title.
+ */
+function inferLegacyAction(approval: { requestName?: string | null }): PendingAction | null {
+  const name = approval.requestName?.trim();
+  if (!name) return null;
+
+  // Example legacy title: Send email to user@contoso.com: "Subject"
+  const match = /^Send email to\s+([^:]+):\s*"([^"]+)"$/i.exec(name);
+  if (!match) return null;
+
+  const to = match[1]?.trim();
+  const subject = match[2]?.trim();
+  if (!to || !subject) return null;
+
+  return {
+    kind: 'SendOutlookMail',
+    to,
+    subject,
+    body: 'Sent by MSX Milestone Assistant after human approval.',
+  };
+}
+
 /** Execute a deferred action after a human approves it. Underlying services audit their own writes. */
 async function executeAction(action: PendingAction, actor: AuthUser, agentName: string): Promise<unknown> {
   switch (action.kind) {
@@ -142,10 +166,11 @@ export const approvalRequestsService = {
     const agentName = input.agentName ?? 'MilestoneAdvisor';
     const reviewStatus = decision; // review + approval vocab match
     const pendingAction = decodeAction(approval.errorMessage);
+    const effectiveAction = pendingAction ?? inferLegacyAction(approval);
 
     if (decision !== 'Approved') {
       // Preserve the encoded action when it may still be approved later.
-      const keepAction = pendingAction && decision === 'Needs Changes';
+      const keepAction = effectiveAction && decision === 'Needs Changes';
       const updated = await prisma.approvalRequest.update({
         where: { id },
         data: {
@@ -176,8 +201,8 @@ export const approvalRequestsService = {
     }
 
     // Approved + a deferred action attached → execute it (send / update / delete).
-    if (pendingAction) {
-      const result = await executeAction(pendingAction, actor ?? { kind: 'service' }, agentName);
+    if (effectiveAction) {
+      const result = await executeAction(effectiveAction, actor ?? { kind: 'service' }, agentName);
       const updated = await prisma.approvalRequest.update({
         where: { id },
         data: {
@@ -186,23 +211,28 @@ export const approvalRequestsService = {
           approvedBy: input.reviewedBy,
           approvedOn: new Date(),
           mockWritebackStatus: 'Completed',
-          errorMessage: `Executed: ${summarizeAction(pendingAction)}`,
+          errorMessage: `Executed: ${summarizeAction(effectiveAction)}`,
         },
       });
       await recordAgentAction({
         agentName,
-        actionType: pendingAction.kind,
+        actionType: effectiveAction.kind,
         actionName: 'Executed after approval',
         actor: input.reviewedBy,
         opportunityId: approval.opportunityId,
-        securityEvent: pendingAction.kind === 'SendOutlookMail' || pendingAction.kind === 'NotifyTeams',
-        outputSummary: `Approved ${approval.approvalRequestBusinessId} → ${summarizeAction(pendingAction)}`,
+        securityEvent: effectiveAction.kind === 'SendOutlookMail' || effectiveAction.kind === 'NotifyTeams',
+        outputSummary: `Approved ${approval.approvalRequestBusinessId} → ${summarizeAction(effectiveAction)}`,
       });
-      return { approval: updated, action: pendingAction.kind, result };
+      return { approval: updated, action: effectiveAction.kind, result };
     }
 
     // Approved (no action): create the milestone (writeback) from the recommendation.
-    if (!approval.opportunityId) throw new HttpError(400, 'Approval has no linked opportunity to create a milestone under.');
+    if (!approval.opportunityId) {
+      throw new HttpError(
+        400,
+        'Approval request has no executable action and no linked opportunity for milestone writeback.',
+      );
+    }
     const rec = approval.relatedRecommendation;
 
     const milestone = await prisma.opportunityMilestone.create({

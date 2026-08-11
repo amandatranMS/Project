@@ -16,6 +16,17 @@ export function createApp() {
   );
   app.use(express.json());
 
+  // TEMP diagnostic request logger (remove after debugging approve flow).
+  app.use((req, res, next) => {
+    const start = Date.now();
+    res.on('finish', () => {
+      console.log(
+        `[REQ] ${req.method} ${req.originalUrl} -> ${res.statusCode} (${Date.now() - start}ms) user=${req.user?.kind ?? 'none'}`,
+      );
+    });
+    next();
+  });
+
   app.get('/api/health', (_req, res) => {
     sendOk(res, { status: 'ok', service: 'msx-milestone-assistant-api', mock: true });
   });

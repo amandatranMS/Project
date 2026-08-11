@@ -52,8 +52,16 @@ const clientId = process.env.AAD_CLIENT_ID;
 /** True once the app registration values are configured. */
 export const entraAuthEnabled = Boolean(tenantId && clientId);
 
-const issuer = `https://login.microsoftonline.com/${tenantId}/v2.0`;
-// A v2 access token for a custom API carries aud = the client id (or api://<clientId>).
+// Accept BOTH issuer forms for this tenant. Depending on the app registration's
+// `accessTokenAcceptedVersion`, Entra issues either v2 access tokens
+// (iss = login.microsoftonline.com/<tid>/v2.0) or v1 access tokens
+// (iss = sts.windows.net/<tid>/). The signing keys are shared, so we accept
+// either issuer and let the JWKS/signature + audience checks do the real work.
+const issuers = [
+  `https://login.microsoftonline.com/${tenantId}/v2.0`,
+  `https://sts.windows.net/${tenantId}/`,
+];
+// A v1/v2 access token for a custom API carries aud = the client id (or api://<clientId>).
 const audiences = [clientId ?? '', `api://${clientId ?? ''}`];
 
 const jwks = entraAuthEnabled
@@ -65,7 +73,7 @@ const jwks = entraAuthEnabled
 async function verifyBearer(token: string): Promise<AuthUser> {
   if (!jwks) throw new Error('Entra auth is not configured.');
   const { payload } = await jwtVerify(token, jwks, {
-    issuer,
+    issuer: issuers,
     audience: audiences,
   });
   return {
@@ -105,7 +113,18 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
         req.user = user;
         next();
       })
-      .catch(() => {
+      .catch((err) => {
+        // TEMP diagnostic: why did verification fail?
+        try {
+          const claims = JSON.parse(Buffer.from(token.split('.')[1] ?? '', 'base64').toString('utf8'));
+          console.error('[auth] bearer verify FAILED:', (err as Error)?.message);
+          console.error('[auth] token claims: iss=%s aud=%s appid=%s scp=%s exp=%s(%s) now=%s',
+            claims.iss, JSON.stringify(claims.aud), claims.appid ?? claims.azp, claims.scp,
+            claims.exp, new Date((claims.exp ?? 0) * 1000).toISOString(), new Date().toISOString());
+          console.error('[auth] API expects: iss=%s audiences=%s', JSON.stringify(issuers), JSON.stringify(audiences));
+        } catch (e) {
+          console.error('[auth] bearer verify FAILED and token undecodable:', (err as Error)?.message);
+        }
         res.status(401).json({ success: false, error: 'Unauthorized — invalid or expired token.' });
       });
     return;

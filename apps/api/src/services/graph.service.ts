@@ -231,11 +231,11 @@ export const graphService = {
   },
 
   /**
-   * Post a Teams notification. Confirm-gated like email. In 'simulate' mode
-   * (default) it records the action without delivering — no admin needed. 'live'
-   * Teams delivery is intentionally not wired: app-only Teams messaging needs
-   * Microsoft's protected-API approval + a Teams app, so live returns a clear
-   * "not configured" error rather than pretending.
+   * Post a Teams notification. Confirm-gated like email. In 'simulate' mode it
+   * records the action without delivering (no admin needed). In 'live' mode it
+   * sends AS the signed-in user (delegated): resolves the recipient, opens or
+   * reuses a 1:1 chat, and posts the message. Requires the delegated
+   * Chat.ReadWrite + ChatMessage.Send scopes and a `to` recipient.
    */
   async notifyTeams(
     user: AuthUser,
@@ -254,16 +254,54 @@ export const graphService = {
       };
     }
 
-    return audited(
+    return audited<{ sent: boolean; simulated: boolean; to: string; message: string; note?: string }>(
       user,
       'NotifyTeams',
       `notifyTeams to=${input.to ?? '(self)'} mode=${mode}`,
       async () => {
         if (mode === 'live') {
-          throw new HttpError(
-            501,
-            'Live Teams delivery is not configured. App-only Teams messaging requires Microsoft protected-API approval and a Teams app. Use simulate mode, or complete that setup first.',
+          const token = user.bearer!;
+          if (!input.to) {
+            throw new HttpError(400, 'A recipient email (to) is required to send a live Teams message.');
+          }
+          // Send AS the signed-in user (delegated): resolve both parties to their
+          // Entra object ids, open (or reuse) a 1:1 chat, then post the message.
+          const meUser = await graphGet<{ id: string }>(token, '/me?$select=id');
+          const recipient = await graphGet<{ id: string }>(
+            token,
+            `/users/${encodeURIComponent(input.to)}?$select=id`,
           );
+          if (recipient.id === meUser.id) {
+            throw new HttpError(
+              400,
+              'Cannot open a 1:1 Teams chat with yourself. Choose a different recipient.',
+            );
+          }
+          const chat = await graphPost<{ id: string }>(token, '/chats', {
+            chatType: 'oneOnOne',
+            members: [
+              {
+                '@odata.type': '#microsoft.graph.aadUserConversationMember',
+                roles: ['owner'],
+                'user@odata.bind': `https://graph.microsoft.com/v1.0/users('${meUser.id}')`,
+              },
+              {
+                '@odata.type': '#microsoft.graph.aadUserConversationMember',
+                roles: ['owner'],
+                'user@odata.bind': `https://graph.microsoft.com/v1.0/users('${recipient.id}')`,
+              },
+            ],
+          });
+          if (!chat?.id) {
+            throw new HttpError(502, 'Could not open a Teams chat with the recipient.');
+          }
+          await graphPost(token, `/chats/${chat.id}/messages`, {
+            body: { content: input.message },
+          });
+          return {
+            data: { sent: true, simulated: false, to: input.to, message: input.message },
+            outputSummary: `sent Teams message to ${input.to}`,
+          };
         }
         return {
           data: {
