@@ -42,7 +42,9 @@ const ASSISTANT_INSTRUCTIONS =
   'call get_ecif_readiness and answer ONLY from its result. This feature does NOT estimate a ' +
   'funding amount — ECIF amounts are assigned through the work scope and approval process, so ' +
   'never invent, infer, or quote an amount. Lead with the ready flag and headline, list EACH ' +
-  'missing prerequisite with its howToFix, then note any caveats. ALWAYS lead the next step with ' +
+  'missing prerequisite with its howToFix, then note any caveats. Offer the returned workScopeDraft ' +
+  'for the seller to paste into ECIF Central, and state the requestType suggestion (Local vs Global) ' +
+  'as a process hint only, never a funding decision. ALWAYS lead the next step with ' +
   'creating the Work Scope in ECIF Central BEFORE the Deal Assistance tab (starting in Deal ' +
   'Assistance just sends the seller back to the work scope). State it is mock process guidance, ' +
   'not an official ECIF request or quote. ' +

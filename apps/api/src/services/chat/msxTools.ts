@@ -253,10 +253,13 @@ export const opportunityTools: Tool[] = [
       'approval process. Returns a MOCK ECIF readiness assessment for an opportunity: a `ready` flag ' +
       'and `score`, a `headline`, a `missing` list (each with `whatsMissing` + `howToFix`) covering ' +
       'the real prerequisites (delivery partner identified, work scope started), a `present` list, ' +
-      'a `nextAction`, and `caveats` (including the ">$50K request needs ' +
+      'a `nextAction`, a `requestType` hint (Local vs Global — a process suggestion from the ' +
+      'partner/workload spread, not a funding decision), a ready-to-paste `workScopeDraft`, and ' +
+      '`caveats` (including the ">$50K request needs ' +
       'two+ milestones" reminder). When answering, LEAD with the ready flag + headline, list EACH ' +
-      'missing prerequisite with its howToFix, note any caveats, and ALWAYS lead the next step with ' +
-      'creating the Work Scope in ECIF Central BEFORE the Deal Assistance tab. Never invent or quote a ' +
+      'missing prerequisite with its howToFix, note any caveats, offer the `workScopeDraft` for the ' +
+      'seller to paste into ECIF Central, state the suggested request type, and ALWAYS lead the next ' +
+      'step with creating the Work Scope in ECIF Central BEFORE the Deal Assistance tab. Never invent or quote a ' +
       'funding amount. It is mock process guidance, never an official ECIF request or quote.',
     parameters: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
     run: (a) => handoffService.ecifReadiness(String(a.id)),

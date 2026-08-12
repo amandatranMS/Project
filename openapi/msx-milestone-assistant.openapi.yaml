@@ -817,6 +817,22 @@ components:
         missing: { type: array, items: { $ref: '#/components/schemas/MissingItem' } }
         present: { type: array, items: { type: string } }
         nextAction: { type: string, description: The single most important next step (leads with Work Scope in ECIF Central) }
+        requestType:
+          type: object
+          description: >
+            Deterministic Local-vs-Global request-type hint from the partner/workload
+            spread across milestones. A process suggestion only — not a funding decision
+            and never a funding amount.
+          properties:
+            suggestion: { type: string, enum: [Local, Global] }
+            reason: { type: string }
+        workScopeDraft:
+          type: string
+          description: >
+            Ready-to-paste ECIF Work Scope draft assembled from existing opportunity +
+            milestone fields (customer, solution area, partner, and each milestone's
+            deliverable/due date/workload) to cut manual re-entry into ECIF Central.
+            Contains no funding amount.
         caveats:
           type: array
           items: { type: string }
