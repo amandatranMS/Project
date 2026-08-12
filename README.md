@@ -14,17 +14,7 @@ team.
 ## Who it's for
 
 Anyone who works an opportunity on the MSX platform — across the full sales and
-delivery lifecycle, not a single role:
-
-- **AE — Account Executive:** owns the customer relationship and the commercial deal.
-- **SE — Solution Engineer:** drives the technical pre-sales motion and milestones.
-- **CSA — Cloud Solution Architect:** leads technical design, deployment, and adoption.
-- **CSAM — Customer Success Account Manager:** owns ongoing success and consumption.
-- **The wider account team:** anyone who needs shared, trustworthy opportunity context.
-
-Everyone above works from the same governed opportunity and milestone data and shares
-the same AI assistant, so context follows the deal instead of living in one person's
-inbox or memory.
+delivery lifecycle
 
 ## The problem I'm solving
 
@@ -179,11 +169,6 @@ See **[docs/security.md](docs/security.md)** for the enable + test runbook.
   PII/PCI matches surface in the **Purview portal** (DSPM for AI / DLP alerts), not in
   Defender for Cloud. See [docs/security.md](docs/security.md).
 
-## Previous Approaches
-
-Originally planned on Power Apps + Dataverse, but DLP restrictions block that path.
-This rebuilds the same MSX mental model as a self-contained full-stack web app with
-its own backend, database, and UI.
 
 ## The MSX model
 
@@ -384,4 +369,3 @@ REST API served at `http://localhost:4000/api`. Full contract in
   from scratch + teardown)
 - [`docs/architecture.md`](docs/architecture.md) — design + diagrams
 - [`docs/api-test.md`](docs/api-test.md) — endpoint-by-endpoint tests
-- [`docs/demo-script.md`](docs/demo-script.md) — guided demo walkthrough
