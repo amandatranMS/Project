@@ -9,8 +9,8 @@ Solution Architects, Customer Success Account Managers, and the wider account te
 It manages **opportunities**
 (parent business records) and **opportunity milestones** (the central working
 records), and demonstrates a **governed agent pattern**: agents can read context,
-make recommendations, and request approval, but a human must approve before any
-new milestone record is created — and every agent action is audited.
+make recommendations, and request approval, but a human must approve before any data
+change or message is executed — and every agent action is audited.
 
 > Not connected to real MSX, Dataverse, Power Apps, Power Automate, or any
 > production Microsoft system. All data is fictional.
@@ -23,35 +23,43 @@ full-stack web application with its own backend, database, and UI.
 
 ## Technology stack
 
-| Layer        | Technology                          |
-| ------------ | ----------------------------------- |
-| Frontend     | React + TypeScript (Vite)           |
-| Backend      | Node.js + Express + TypeScript      |
-| Database     | SQLite                              |
-| ORM          | Prisma                              |
-| Validation   | Zod                                 |
-| API style    | REST + OpenAPI 3.0                  |
-| Styling      | Hand-written professional CSS       |
+| Layer        | Technology                                          |
+| ------------ | --------------------------------------------------- |
+| Frontend     | React + TypeScript (Vite)                           |
+| Backend      | Node.js + Express + TypeScript (ESM)                |
+| Database     | Azure Database for PostgreSQL Flexible Server       |
+| ORM          | Prisma                                              |
+| Validation   | Zod                                                 |
+| API style    | REST + OpenAPI 3.0                                  |
+| Identity     | Microsoft Entra ID (MSAL) + Microsoft Graph         |
+| Styling      | Hand-written professional CSS                       |
 
 ## Monorepo layout
 
 ```
 apps/
   web/     React frontend (Vite)
-  api/     Express backend (REST API)
+  api/     Express backend (REST API) — layered routes → controllers → services
+  foundry-agent/   Microsoft Foundry hosted agent (the default chat engine)
 packages/
   shared/  Shared TypeScript types / allowed-value unions
 prisma/
   schema.prisma   11-table data model
-  seed.ts         synthetic seed data
+  seed.ts         calls the workbook importer (data is not hardcoded)
+scripts/
+  parseWorkbook.ts, workbookMappings.ts   Excel → Prisma import pipeline
 openapi/
   msx-milestone-assistant.openapi.yaml
 docs/
-  api-test.md, demo-script.md, architecture.md
+  api-test.md, demo-script.md, architecture.md, security.md
 ```
 
 npm **workspaces** tie the packages together. The web app talks to the API through
 a Vite dev proxy (`/api` → `http://localhost:4000`).
+
+Records are **not** hardcoded: they are imported from the Excel workbook
+(`data/*.xlsx`) via `scripts/parseWorkbook.ts`, which `prisma/seed.ts` simply calls.
+See the README's *Data import pipeline* section for details.
 
 ## Data model — 11 tables only
 
@@ -89,33 +97,41 @@ erDiagram
 
 ## Agent governance model (core design)
 
-The API enforces the rules — the UI is just a client.
+The API enforces the rules — the UI is just a client. Agents may **read** context and
+**propose** changes, but they can never mutate data or send a message directly. Every
+governed action is submitted as an **`ApprovalRequest`** and only executed when a human
+approves it.
 
-- **Read** context: `GET /api/agent/context/:opportunityId` → audited `ReadContext`.
-- **Recommend**: `POST /api/agent/recommendations` → audited `CreateRecommendation`.
-- **Request approval**: `POST /api/agent/approvals` → audited `SubmitApproval`.
-- **Create milestone**: only via `POST /api/agent/approvals/:id/fulfill` **after** a
-  human approves. Attempting to fulfill a non-approved request returns **403** and
-  is audited as `Denied`.
+- **Read** context: `GET /api/opportunities/:id/context` → audited `Read`.
+- **Recommend**: `POST /api/recommendations` → surfaced as an `AiMilestoneRecommendation`.
+- **Request approval**: `POST /api/approval-requests`, optionally carrying a deferred
+  `action` (`CreateMilestone`, `CreateOpportunity`, `SendOutlookMail`, `NotifyTeams`,
+  `UpdateMilestone`, `UpdateOpportunity`, `UpdateDealTeamMember`, `DeleteMilestone`).
+  The action is encoded onto the existing `ApprovalRequest.errorMessage` column
+  (`MSX_ACTION::` + JSON) — **no extra tables or columns**.
+- **Execute**: only via `PATCH /api/approval-requests/:id/approve`. Approving executes
+  the deferred action (audited by its kind) or, for a recommendation-backed request,
+  performs the mock milestone writeback (audited as `CreateMilestone`).
+- **`reject` / `needs-changes`** never execute anything (`needs-changes` preserves the
+  encoded action for a later approval).
 
 ```mermaid
 sequenceDiagram
   participant A as Agent
   participant API as Express API
   participant H as Human Approver
-  A->>API: read context (ReadContext)
-  A->>API: create recommendation (CreateRecommendation)
-  A->>API: submit approval request (SubmitApproval)
-  A->>API: fulfill before approval
-  API-->>A: 403 Denied (audited)
-  H->>API: approve request
-  A->>API: fulfill after approval
-  API-->>A: 201 milestone created (CreateMilestone)
+  A->>API: GET context (audited Read)
+  A->>API: POST approval-request (carries deferred action)
+  API-->>A: 201 Pending — nothing executed yet
+  H->>API: PATCH .../reject
+  API-->>H: nothing executed (audited)
+  H->>API: PATCH .../approve
+  API-->>H: 200 action executed + audited (e.g. CreateMilestone)
 ```
 
-Every branch writes to `AgentActionAuditLog`, so the full history —
-`ReadContext → CreateRecommendation → SubmitApproval → Denied → CreateMilestone` —
-is queryable via `GET /api/agent/audit` and visible on the Agent Audit Log page.
+Every governed action is written to `AgentActionAuditLog` via `recordAgentAction`
+(`apps/api/src/lib/audit.ts`), so the full history is queryable via
+`GET /api/agent-action-audit-logs` and visible on the Agent Audit Log page.
 
 ## Cloud security governance (Defender + Purview)
 
@@ -128,25 +144,36 @@ controls on the **AI model interactions** (never on the mock tables). See
   agent (`services/chat/foundryProxy.ts`) and the direct Azure OpenAI engine
   (`orchestrator.ts` → `toolLoop.ts`). Enabled via the `enableDefenderForAI` Bicep
   param.
-- **Microsoft Purview DLP** governs the **direct engine only** — Purview does not
-  cover Foundry agents yet. `toolLoop.ts` stamps each direct call with the signed-in
-  user's `user_security_context` (built in `lib/requestContext.ts`), which is what
-  lets Purview classify and enforce per real user.
+- **Microsoft Purview DLP** classifies the prompts/responses sent to the **model
+  deployment**, so it covers the model calls of **both** engines — including the Foundry
+  hosted agent. Policies are only *enforced* (and only alert) when the call carries a
+  delegated **user-context token**: the API calls Foundry On-Behalf-Of the signed-in
+  seller (`lib/foundryAuth.ts`), and the direct engine stamps each call with the user's
+  `user_security_context` (built in `lib/requestContext.ts`). App-only/managed-identity
+  calls are audited but not enforced. What Purview does not yet capture is the **agent as
+  its own entity** (its identity, tool calls, orchestration). See [security.md](security.md).
 
 ## Validation & error handling
 
-- All request bodies are validated with **Zod** schemas (`apps/api/src/schemas.ts`).
-- SQLite has no native enums, so status/type fields are Strings; their allowed
-  values are the single source of truth in `packages/shared` and enforced by Zod.
+- All request bodies are validated with **Zod** schemas
+  (`apps/api/src/validators/schemas.ts`).
+- Status/type fields are stored as Strings so they mirror the workbook columns; their
+  allowed values are the single source of truth in `packages/shared` and are enforced by
+  Zod `z.enum`.
 - A central error handler returns `400` for validation errors, `4xx` for
   `HttpError`, and `500` otherwise.
+- **Every response uses the envelope**: success `{ "success": true, "data": ... }`,
+  error `{ "success": false, "error": "plain message" }`. The web client unwraps `.data`.
 
 ## Running locally
 
 ```bash
-npm run setup   # install + prisma generate + db push + seed
+npm run setup   # install + prisma generate + db push + import-workbook
 npm run dev     # api on :4000, web on :5173
 ```
+
+`npm run setup` requires `DATABASE_URL` (a PostgreSQL connection string) in `.env` —
+see the README's *Getting started* and *Database — Azure PostgreSQL (cloud)* sections.
 
 See `docs/api-test.md` for endpoint-by-endpoint tests and `docs/demo-script.md` for
 a guided walkthrough.
