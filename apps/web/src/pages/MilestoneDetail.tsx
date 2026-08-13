@@ -7,6 +7,8 @@ import { statusBadgeClass, formatDate, formatBool, formatCurrency } from '../ui'
 import MilestoneForm from '../components/form/MilestoneForm';
 import Modal from '../components/Modal';
 import LostToCompetitorDialog from '../components/LostToCompetitorDialog';
+import MilestoneTimeline from '../components/MilestoneTimeline';
+import DetailSkeleton from '../components/DetailSkeleton';
 
 interface MilestoneDetailData extends Milestone {
   statusHistories: { id: string; oldStatus?: string | null; newStatus?: string | null; changedBy?: string | null; reason?: string | null; statusDate?: string | null }[];
@@ -106,7 +108,7 @@ export default function MilestoneDetail() {
   }
 
   if (error) return <p className="error">{error}</p>;
-  if (!data) return <p className="muted">Loading…</p>;
+  if (!data) return <DetailSkeleton />;
 
   return (
     <div className="stack">
@@ -203,23 +205,7 @@ export default function MilestoneDetail() {
 
       <div className="card">
         <h2>Status history</h2>
-        <table>
-          <thead>
-            <tr><th>When</th><th>From</th><th>To</th><th>By</th><th>Reason</th></tr>
-          </thead>
-          <tbody>
-            {data.statusHistories.map((h) => (
-              <tr key={h.id}>
-                <td>{formatDate(h.statusDate)}</td>
-                <td>{choiceLabel(h.oldStatus)}</td>
-                <td><span className={`badge ${statusBadgeClass(h.newStatus)}`}>{choiceLabel(h.newStatus)}</span></td>
-                <td>{h.changedBy ?? '—'}</td>
-                <td>{h.reason ?? '—'}</td>
-              </tr>
-            ))}
-            {data.statusHistories.length === 0 && <tr><td colSpan={5} className="muted">No history.</td></tr>}
-          </tbody>
-        </table>
+        <MilestoneTimeline history={data.statusHistories} />
       </div>
     </div>
   );

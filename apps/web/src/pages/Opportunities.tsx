@@ -114,10 +114,10 @@ export default function Opportunities() {
             <th>TPID</th>
             <th>Solution Area</th>
             <th>Sales Stage</th>
-            <th>Est. Revenue</th>
+            <th className="num">Est. Revenue</th>
             <th>Competitor</th>
             <th>Est. Close Date</th>
-            <th>Milestones</th>
+            <th className="num">Milestones</th>
             <th>Status</th>
           </tr>
         </thead>
@@ -140,10 +140,10 @@ export default function Opportunities() {
               <td>{o.tpid ?? '—'}</td>
               <td>{choiceLabel(o.solutionArea)}</td>
               <td>{choiceLabel(o.salesStage)}</td>
-              <td>{formatCurrency(o.estimatedRevenue)}</td>
+              <td className="num">{formatCurrency(o.estimatedRevenue)}</td>
               <td>{o.competitorName ?? '—'}</td>
               <td>{formatDate(o.closeDate)}</td>
-              <td>{o._count?.milestones ?? 0}</td>
+              <td className="num">{o._count?.milestones ?? 0}</td>
               <td>
                 <span className={`badge ${statusBadgeClass(o.status)}`}>{choiceLabel(o.status)}</span>
               </td>

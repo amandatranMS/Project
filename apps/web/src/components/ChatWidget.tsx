@@ -45,6 +45,26 @@ function formatTime(ts?: number): string {
   }
 }
 
+// Compact "2h ago"-style label for rail items, falling back to a short date
+// once an entry is old enough that a relative label stops being useful.
+function formatRelative(ts?: number): string {
+  if (!ts) return '';
+  const diffMs = Date.now() - ts;
+  const minute = 60_000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+  if (diffMs < minute) return 'Just now';
+  if (diffMs < hour) return `${Math.floor(diffMs / minute)}m ago`;
+  if (diffMs < day) return `${Math.floor(diffMs / hour)}h ago`;
+  if (diffMs < 2 * day) return 'Yesterday';
+  if (diffMs < 7 * day) return `${Math.floor(diffMs / day)}d ago`;
+  try {
+    return new Date(ts).toLocaleDateString([], { month: 'short', day: 'numeric' });
+  } catch {
+    return '';
+  }
+}
+
 const SendIcon = () => (
   <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M22 2 11 13" />
@@ -83,6 +103,27 @@ const UserAvatar = () => (
     </svg>
   </span>
 );
+const ExpandIcon = () => (
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3" />
+  </svg>
+);
+const CollapseIcon = () => (
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+  </svg>
+);
+const RegenerateIcon = () => (
+  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" />
+  </svg>
+);
+const EditIcon = () => (
+  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+    <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+  </svg>
+);
 const ChatBubbleIcon = () => (
   <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
@@ -110,6 +151,7 @@ const LEGACY_TRANSCRIPT_KEY = 'msx-chat-transcript';
 // MSAL account id (falls back to 'local' when auth is disabled for local dev).
 const conversationsKey = (owner: string) => `${BASE_CONVERSATIONS_KEY}::${owner}`;
 const activeKey = (owner: string) => `${BASE_ACTIVE_KEY}::${owner}`;
+const railOpenKey = (owner: string) => `msx-chat-rail-open::${owner}`;
 
 function chatOwnerKey(): string {
   if (authEnabled && msalInstance) {
@@ -175,7 +217,16 @@ function loadConversations(owner: string): Conversation[] {
 export default function ChatWidget() {
   const ownerKey = useMemo(() => chatOwnerKey(), []);
   const [open, setOpen] = useState(false);
-  const [railOpen, setRailOpen] = useState(true);
+  const [railOpen, setRailOpen] = useState<boolean>(() => {
+    try {
+      const raw = localStorage.getItem(railOpenKey(ownerKey));
+      return raw === null ? true : raw === '1';
+    } catch {
+      return true;
+    }
+  });
+  const [maximized, setMaximized] = useState(false);
+  const [railSearch, setRailSearch] = useState('');
   const [conversations, setConversations] = useState<Conversation[]>(() => {
     const loaded = loadConversations(ownerKey);
     return loaded.length ? loaded : [newConversation()];
@@ -208,6 +259,24 @@ export default function ChatWidget() {
     () => [...conversations].sort((a, b) => b.updatedAt - a.updatedAt),
     [conversations],
   );
+
+  const filteredChats = useMemo(() => {
+    const q = railSearch.trim().toLowerCase();
+    if (!q) return orderedChats;
+    return orderedChats.filter((c) => c.title.toLowerCase().includes(q));
+  }, [orderedChats, railSearch]);
+
+  // Global shortcut (Ctrl/Cmd+/) to open or close the assistant from anywhere.
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+        e.preventDefault();
+        setOpen((v) => !v);
+      }
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     const el = listRef.current;
@@ -251,6 +320,13 @@ export default function ChatWidget() {
       /* ignore */
     }
   }, [activeId, ownerKey]);
+  useEffect(() => {
+    try {
+      localStorage.setItem(railOpenKey(ownerKey), railOpen ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  }, [railOpen, ownerKey]);
 
   function newChat() {
     const c = newConversation('foundry');
@@ -386,6 +462,35 @@ export default function ChatWidget() {
     if (r) void runTurn(r.convoId, r.transcript);
   }
 
+  // Re-run the last user turn from scratch, discarding the assistant reply that
+  // followed it. Useful when an answer streamed fine but wasn't useful.
+  function regenerate() {
+    if (!active || busy) return;
+    const msgs = active.messages;
+    const lastUserIdx = [...msgs].map((m) => m.role).lastIndexOf('user');
+    if (lastUserIdx === -1) return;
+    const transcript = msgs.slice(0, lastUserIdx + 1) as StoredTurn[];
+    void runTurn(active.id, transcript);
+  }
+
+  // Pull the last prompt back into the composer for editing and drop it (plus
+  // its reply) from the transcript so resending doesn't duplicate it.
+  function editLastUser() {
+    if (!active || busy) return;
+    const msgs = active.messages;
+    const lastUserIdx = [...msgs].map((m) => m.role).lastIndexOf('user');
+    if (lastUserIdx === -1) return;
+    const text = msgs[lastUserIdx].content;
+    setConversations((prev) =>
+      prev.map((c) => (c.id === active.id ? { ...c, messages: c.messages.slice(0, lastUserIdx) } : c)),
+    );
+    setInput(text);
+    requestAnimationFrame(() => {
+      taRef.current?.focus();
+      autoGrow(taRef.current);
+    });
+  }
+
   async function copyMessage(key: string, text: string) {
     try {
       await navigator.clipboard.writeText(text);
@@ -400,17 +505,27 @@ export default function ChatWidget() {
   const lastMsg = messages[messages.length - 1];
   const lastIsEmptyAssistant = !!lastMsg && lastMsg.role === 'assistant' && lastMsg.content === '';
   const isEmptyChat = messages.every((m) => m.content.trim().length === 0);
+  const lastUserIndex = [...messages].map((m) => m.role).lastIndexOf('user');
+  const lastAssistantIndex = messages.reduce(
+    (found, m, i) => (m.role === 'assistant' && m.content ? i : found),
+    -1,
+  );
+  // The orchestrator always ends a draft turn by asking the user to confirm before
+  // it will submit anything for approval. Detect that so we can offer a one-click
+  // "Confirm & submit" button instead of requiring the user to type it out.
+  const awaitingConfirmation =
+    !busy && lastAssistantIndex === messages.length - 1 && /confirm/i.test(messages[lastAssistantIndex]?.content ?? '');
 
   if (!open) {
     return (
-      <button className="chat-fab" onClick={() => setOpen(true)} aria-label="Open assistant">
+      <button className="chat-fab" onClick={() => setOpen(true)} aria-label="Open assistant" title="Open assistant (Ctrl+/)">
         <ChatBubbleIcon /> Assistant
       </button>
     );
   }
 
   return (
-    <div className="chat-panel" role="dialog" aria-label="Multi-Agent Sales Assistant">
+    <div className={`chat-panel ${maximized ? 'maximized' : ''}`} role="dialog" aria-label="Multi-Agent Sales Assistant">
       <div className={`chat-shell ${railOpen ? 'rail-open' : ''}`}>
         {/* History rail */}
         <aside className="chat-rail">
@@ -423,8 +538,17 @@ export default function ChatWidget() {
               New chat
             </button>
           </div>
+          <div className="chat-rail-search">
+            <input
+              type="search"
+              value={railSearch}
+              onChange={(e) => setRailSearch(e.target.value)}
+              placeholder="Search chats…"
+              aria-label="Search chat history"
+            />
+          </div>
           <div className="chat-rail-list">
-            {orderedChats.map((c) => (
+            {filteredChats.map((c) => (
               <button
                 key={c.id}
                 className={`chat-rail-item ${c.id === active?.id ? 'active' : ''}`}
@@ -434,7 +558,10 @@ export default function ChatWidget() {
                 <svg className="rail-ico" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5z" />
                 </svg>
-                <span className="rail-title">{c.title}</span>
+                <span className="rail-title-col">
+                  <span className="rail-title">{c.title}</span>
+                  <span className="rail-time">{formatRelative(c.updatedAt)}</span>
+                </span>
                 <span
                   className="rail-del"
                   role="button"
@@ -446,6 +573,9 @@ export default function ChatWidget() {
                 </span>
               </button>
             ))}
+            {filteredChats.length === 0 && (
+              <p className="muted" style={{ padding: '0 12px', fontSize: 12.5 }}>No chats match "{railSearch}".</p>
+            )}
           </div>
         </aside>
 
@@ -462,17 +592,25 @@ export default function ChatWidget() {
                 ☰
               </button>
               <strong>Assistant</strong>
-              <span className="chat-engine" title="Answers are generated by the deployed Foundry hosted agent">
+              <span className="badge chat-engine-badge" title="Answers are generated by the deployed Foundry hosted agent">
                 {ENGINE_LABELS.foundry}
               </span>
             </div>
             <div>
+              <button
+                className="icon-btn"
+                aria-label={maximized ? 'Restore panel size' : 'Maximize panel'}
+                title={maximized ? 'Restore panel size' : 'Maximize panel'}
+                onClick={() => setMaximized((v) => !v)}
+              >
+                {maximized ? <CollapseIcon /> : <ExpandIcon />}
+              </button>
               <button className="icon-btn" aria-label="New chat" title="Start a new chat" onClick={newChat}>
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M12 5v14M5 12h14" />
                 </svg>
               </button>
-              <button className="icon-btn" aria-label="Close" onClick={() => setOpen(false)}>
+              <button className="icon-btn" aria-label="Close" title="Close (Ctrl+/)" onClick={() => setOpen(false)}>
                 ×
               </button>
             </div>
@@ -523,6 +661,28 @@ export default function ChatWidget() {
                           {copiedKey === key ? 'Copied' : 'Copy'}
                         </button>
                       ) : null}
+                      {m.role === 'assistant' && i === lastAssistantIndex && !busy ? (
+                        <button
+                          type="button"
+                          className="chat-copy"
+                          onClick={regenerate}
+                          title="Regenerate this response"
+                          aria-label="Regenerate this response"
+                        >
+                          <RegenerateIcon /> Regenerate
+                        </button>
+                      ) : null}
+                      {m.role === 'user' && i === lastUserIndex && !busy ? (
+                        <button
+                          type="button"
+                          className="chat-copy"
+                          onClick={editLastUser}
+                          title="Edit and resend this message"
+                          aria-label="Edit and resend this message"
+                        >
+                          <EditIcon /> Edit
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -539,6 +699,14 @@ export default function ChatWidget() {
                     <span />
                   </div>
                 </div>
+              </div>
+            )}
+
+            {awaitingConfirmation && (
+              <div className="chat-suggests chat-suggests-confirm">
+                <button type="button" className="chat-suggest chat-suggest-confirm" onClick={() => doSend('Confirm. Submit for approval.')}>
+                  <CheckIcon /> Confirm &amp; submit for approval
+                </button>
               </div>
             )}
 
