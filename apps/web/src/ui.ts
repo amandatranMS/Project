@@ -61,3 +61,23 @@ export function formatBool(value?: boolean | null): string {
   if (value == null) return '—';
   return value ? 'Yes' : 'No';
 }
+
+// Human-friendly gap between two dates, e.g. "3 days", "2 hrs", "5 wks".
+// Used to show how long a milestone sat in a given status.
+export function formatDuration(fromIso?: string | null, toIso?: string | null): string | null {
+  if (!fromIso || !toIso) return null;
+  const from = new Date(fromIso).getTime();
+  const to = new Date(toIso).getTime();
+  if (Number.isNaN(from) || Number.isNaN(to)) return null;
+  const ms = Math.max(0, to - from);
+  const mins = Math.round(ms / 60000);
+  if (mins < 60) return `${mins || 1} min${mins === 1 ? '' : 's'}`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs} hr${hrs === 1 ? '' : 's'}`;
+  const days = Math.round(hrs / 24);
+  if (days < 14) return `${days} day${days === 1 ? '' : 's'}`;
+  const weeks = Math.round(days / 7);
+  if (weeks < 8) return `${weeks} wk${weeks === 1 ? '' : 's'}`;
+  const months = Math.round(days / 30);
+  return `${months} mo${months === 1 ? '' : 's'}`;
+}

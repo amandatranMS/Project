@@ -277,6 +277,7 @@ export interface ApprovalRequest {
   requestedBy?: string | null;
   approvedBy?: string | null;
   mockWritebackStatus?: string | null;
+  createdAt?: string;
   opportunity?: { opportunityName: string } | null;
   relatedRecommendation?: { recommendationBusinessId: string; recommendedMilestoneTitle?: string | null } | null;
   relatedMilestone?: { milestoneBusinessId: string; milestoneName: string } | null;

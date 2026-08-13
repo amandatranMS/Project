@@ -7,6 +7,7 @@ import OpportunityForm from '../components/form/OpportunityForm';
 import MilestoneForm from '../components/form/MilestoneForm';
 import DealTeamForm from '../components/form/DealTeamForm';
 import Modal from '../components/Modal';
+import DetailSkeleton from '../components/DetailSkeleton';
 
 interface OpportunityDetailData extends Opportunity {
   milestones: Milestone[];
@@ -54,7 +55,7 @@ export default function OpportunityDetail() {
   }
 
   if (error) return <p className="error">{error}</p>;
-  if (!data) return <p className="muted">Loading…</p>;
+  if (!data) return <DetailSkeleton />;
 
   const milestoneCount = data.milestones.length;
   const canDelete = milestoneCount === 0 || cascade;

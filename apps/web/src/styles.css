@@ -428,6 +428,7 @@ th {
   box-shadow: 0 4px 8px -6px rgba(16, 24, 40, 0.28);
 }
 td { color: var(--text-2); }
+th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
 tr:last-child td { border-bottom: none; }
 tbody tr { transition: background var(--dur-1) var(--ease); }
 tbody tr:hover { background: var(--accent-grad-soft); }
@@ -457,6 +458,71 @@ tbody tr.clickable { cursor: pointer; }
   from { background-position: 100% 50%; }
   to { background-position: 0 50%; }
 }
+
+/* Milestone status timeline — vertical "shipping tracker" style list.
+   A line runs down the left through each dot; the current status is
+   emphasized so users can tell milestone progress at a glance. */
+.timeline { position: relative; }
+.timeline-more { margin-bottom: var(--sp-3); }
+.timeline-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  position: relative;
+}
+.timeline-item {
+  position: relative;
+  display: flex;
+  gap: var(--sp-3);
+  padding: 0 0 var(--sp-5) var(--sp-1);
+}
+.timeline-item:last-child { padding-bottom: 0; }
+/* Connecting line between dots */
+.timeline-item:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 9px;
+  top: 22px;
+  bottom: -4px;
+  width: 2px;
+  background: var(--border-strong);
+}
+.timeline-dot {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  margin-top: 2px;
+  background: var(--surface-alt);
+  border: 2.5px solid var(--border-strong);
+  box-shadow: var(--shadow-2);
+  z-index: 1;
+}
+.timeline-dot.green { background: var(--success); border-color: var(--success); }
+.timeline-dot.blue { background: var(--brand-primary); border-color: var(--brand-primary); }
+.timeline-dot.amber { background: var(--warning); border-color: var(--warning); }
+.timeline-dot.red { background: var(--danger); border-color: var(--danger); }
+.timeline-dot.gray { background: var(--surface-alt); border-color: var(--border-strong); }
+.timeline-item.current .timeline-dot {
+  width: 22px;
+  height: 22px;
+  margin-top: 0;
+  margin-left: -2px;
+  box-shadow: 0 0 0 4px var(--brand-10), var(--shadow-4);
+}
+.timeline-content { flex: 1; min-width: 0; }
+.timeline-head { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.timeline-current-tag {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--brand-dark);
+}
+.timeline-date { font-size: 12.5px; color: var(--text-2); margin-left: auto; }
+.timeline-meta { font-size: 12.5px; margin-top: 3px; }
+.timeline-reason { font-size: 13px; color: var(--text-2); margin-top: 4px; }
+.timeline-item.current .timeline-content .badge { box-shadow: var(--shadow-2); }
 
 .approval-fields { margin-top: var(--sp-2); min-width: 280px; }
 .approval-fields summary {
@@ -530,12 +596,21 @@ tbody tr.clickable { cursor: pointer; }
 .badge {
   display: inline-flex;
   align-items: center;
+  gap: 5px;
   padding: 3px 10px;
   border-radius: var(--r-pill);
   font-size: 12px;
   font-weight: 600;
   line-height: 1.5;
   border: 1px solid transparent;
+}
+.badge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: 0 0 auto;
 }
 .badge.gray { background: #eef0f5; color: #4b5563; border-color: #e2e5ee; }
 .badge.blue { background: var(--brand-10); color: var(--brand-dark); border-color: var(--brand-20); }
@@ -749,6 +824,17 @@ select:focus, .filters input:focus {
   overflow: hidden;
   z-index: 55;
   animation: chat-in var(--dur-3) var(--ease-out) both;
+  transition: width var(--dur-2) var(--ease-out), height var(--dur-2) var(--ease-out), right var(--dur-2) var(--ease-out), bottom var(--dur-2) var(--ease-out), border-radius var(--dur-2) var(--ease-out);
+}
+.chat-panel.maximized {
+  right: var(--sp-4);
+  bottom: var(--sp-4);
+  top: var(--sp-4);
+  left: var(--sp-4);
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
 }
 @keyframes chat-in {
   from { opacity: 0; transform: translateY(24px) scale(0.96); }
@@ -775,6 +861,18 @@ select:focus, .filters input:focus {
   cursor: pointer;
 }
 .chat-engine option { color: #000; }
+.chat-engine-badge {
+  font-size: 11px;
+  padding: 3px 9px 3px 8px;
+  border-radius: var(--r-pill);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+.chat-engine-badge::before {
+  background: #7dd3fc;
+  box-shadow: 0 0 0 2px rgba(125, 211, 252, 0.25);
+}
 .chat-header .icon-btn { color: #c3cdec; }
 .chat-header .icon-btn:hover { color: #fff; background: rgba(255, 255, 255, 0.14); }
 
@@ -924,6 +1022,13 @@ select:focus, .filters input:focus {
 .chat-suggest:hover { border-color: var(--brand-40); color: var(--brand-primary); transform: translateY(-1px); }
 .chat-suggest:disabled { opacity: 0.5; cursor: default; transform: none; }
 
+/* Inline "confirm and submit" prompt, offered after the assistant asks the user
+   to confirm a drafted action — saves retyping the confirmation phrase. Styled
+   the same as the other suggestion chips so it fits the normal chat flow. */
+.chat-suggests-confirm { animation: msg-in var(--dur-2) var(--ease-out) both; }
+.chat-suggest-confirm { display: inline-flex; align-items: center; gap: 6px; }
+.chat-suggest-confirm svg { width: 14px; height: 14px; }
+
 /* Error bar with retry */
 .chat-errbar {
   align-self: stretch;
@@ -1032,6 +1137,19 @@ select:focus, .filters input:focus {
 }
 .chat-newbtn:hover { filter: brightness(1.06); transform: translateY(-1px); box-shadow: var(--shadow-8); }
 
+.chat-rail-search { padding: 0 12px 8px; }
+.chat-rail-search input {
+  width: 100%;
+  font: inherit;
+  font-size: 12.5px;
+  padding: 6px 10px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+.chat-rail-search input:focus { outline: none; border-color: var(--brand-primary); box-shadow: 0 0 0 3px var(--brand-10); }
+
 .chat-rail-list {
   flex: 1;
   overflow-y: auto;
@@ -1063,7 +1181,9 @@ select:focus, .filters input:focus {
   box-shadow: inset 0 0 0 1px var(--brand-20);
 }
 .chat-rail-item .rail-ico { flex: 0 0 auto; opacity: 0.65; }
-.chat-rail-item .rail-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-rail-item .rail-title-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.chat-rail-item .rail-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-rail-item .rail-time { font-size: 10.5px; font-weight: 500; color: var(--muted); opacity: 0.8; }
 .chat-rail-item .rail-del {
   flex: 0 0 auto;
   display: inline-grid;

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api, type AuditLog as AuditLogEntry } from '../api/client';
 import { statusBadgeClass, formatDate } from '../ui';
 
@@ -24,6 +24,8 @@ export default function AuditLog() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<AuditLogEntry | null>(null);
+  // API already returns newest-first; default to that and let the user flip it.
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
 
   useEffect(() => {
     api
@@ -32,6 +34,15 @@ export default function AuditLog() {
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
+
+  const sortedItems = useMemo(() => {
+    const withTime = items.map((item) => ({
+      item,
+      time: new Date(item.timestamp ?? item.createdAt).getTime(),
+    }));
+    withTime.sort((a, b) => (sortOrder === 'desc' ? b.time - a.time : a.time - b.time));
+    return withTime.map((w) => w.item);
+  }, [items, sortOrder]);
 
   const conversation = parseConversation(selected?.conversation);
 
@@ -45,6 +56,13 @@ export default function AuditLog() {
         action and the conversation (prompts &amp; answers) that produced it.
       </p>
       {error && <p className="error">{error}</p>}
+      <div className="row" style={{ marginBottom: 'var(--sp-3)' }}>
+        <label className="muted" htmlFor="audit-sort" style={{ fontSize: 13 }}>Sort by time</label>
+        <select id="audit-sort" value={sortOrder} onChange={(e) => setSortOrder(e.target.value as 'desc' | 'asc')}>
+          <option value="desc">Latest first</option>
+          <option value="asc">Earliest first</option>
+        </select>
+      </div>
       <div className="table-wrap">
       <table>
         <thead>
@@ -68,7 +86,7 @@ export default function AuditLog() {
                 </td>
               </tr>
             ))}
-          {!loading && items.map((l) => {
+          {!loading && sortedItems.map((l) => {
             const hasConvo = Boolean(parseConversation(l.conversation));
             return (
               <tr key={l.id} className="clickable" onClick={() => setSelected(l)}>

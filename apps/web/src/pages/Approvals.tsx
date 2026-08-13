@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMsal } from '@azure/msal-react';
 import { Link } from 'react-router-dom';
 import { choiceLabel, LOST_TO_COMPETITOR } from '@msx/shared';
@@ -78,6 +78,9 @@ export default function Approvals() {
   const [confirmingLostId, setConfirmingLostId] = useState<string | null>(null);
   const [managerName, setManagerName] = useState<string | null>(null);
   const [confirmingTeamsId, setConfirmingTeamsId] = useState<string | null>(null);
+  // Requests come back ordered by business ID; default to newest-first by
+  // creation time and let the user flip it to review oldest requests first.
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
 
   function load() {
     api
@@ -88,6 +91,12 @@ export default function Approvals() {
   }
 
   useEffect(load, []);
+
+  const sortedItems = useMemo(() => {
+    const withTime = items.map((item) => ({ item, time: new Date(item.createdAt ?? 0).getTime() }));
+    withTime.sort((a, b) => (sortOrder === 'desc' ? b.time - a.time : a.time - b.time));
+    return withTime.map((w) => w.item);
+  }, [items, sortOrder]);
 
   /** True when approving this request will move a milestone to Lost To Competitor. */
   function movesToLost(a: ApprovalRequest): boolean {
@@ -226,6 +235,13 @@ export default function Approvals() {
       </p>
       {error && <p className="error">{error}</p>}
       {message && <p style={{ color: 'var(--success)' }}>{message}</p>}
+      <div className="row" style={{ marginBottom: 'var(--sp-3)' }}>
+        <label className="muted" htmlFor="approvals-sort" style={{ fontSize: 13 }}>Sort by time</label>
+        <select id="approvals-sort" value={sortOrder} onChange={(e) => setSortOrder(e.target.value as 'desc' | 'asc')}>
+          <option value="desc">Latest first</option>
+          <option value="asc">Earliest first</option>
+        </select>
+      </div>
       <div className="table-wrap">
       <table>
         <thead>
@@ -248,7 +264,7 @@ export default function Approvals() {
                 </td>
               </tr>
             ))}
-          {!loading && items.map((a) => (
+          {!loading && sortedItems.map((a) => (
             <tr key={a.id}>
               <td>{a.approvalRequestBusinessId}</td>
               <td>
