@@ -15,10 +15,11 @@ from __future__ import annotations
 import difflib
 from contextvars import ContextVar, Token
 from typing import Annotated, Any
+from urllib.parse import quote
 
 from pydantic import Field
 
-from msx_client import MsxClient
+from msx_client import MsxApiError, MsxClient
 from msx_session import get_session_id
 
 # Controlled choice values (mirror packages/shared) so the model emits values the
@@ -38,7 +39,7 @@ WORKLOADS = [
     "M365 Copilot for Microsoft 365", "Microsoft Sentinel", "Microsoft Purview",
     "Azure Migration", "Copilot Studio", "Defender XDR", "Teams Premium",
 ]
-CUSTOMER_COMMITMENTS = ["Uncommitted", "Verbal", "Committed", "Contracted"]
+CUSTOMER_COMMITMENTS = ["Committed", "Uncommitted"]
 DELIVERED_BY = ["Microsoft", "Partner", "Customer", "Joint"]
 AZURE_CAPACITY_TYPES = ["---", "Azure Commit", "MACC", "Open", "CSP", "EA"]
 PREFERRED_AZURE_REGIONS = [
@@ -187,6 +188,13 @@ def _submit_action_approval(
     if opportunity_name:
         payload["opportunityName"] = opportunity_name
     approval = _mc.post("/api/approval-requests", json=payload) or {}
+    if not approval.get("approvalRequestBusinessId"):
+        # The POST must echo the persisted request's business id. If it didn't,
+        # nothing was stored — raise so the calling tool surfaces a clean error
+        # instead of falsely reporting submittedForApproval=true with no row.
+        raise MsxApiError(
+            "Approval request was not persisted — the API returned no approvalRequestBusinessId."
+        )
     captured = _captured_submissions.get()
     if captured is not None and approval.get("approvalRequestBusinessId"):
         captured.append(_trim_approval(approval))
@@ -391,9 +399,21 @@ def list_opportunities(
     return [_trim_opportunity(o) for o in data]
 
 
-def get_opportunity(id: Annotated[str, Field(description="The opportunity id or business id (e.g. OPP-003).")]) -> Any:
-    """Get one opportunity's detail (includes its milestones) by id or business id."""
-    return _mc.get(f"/api/opportunities/{id}")
+def get_opportunity(
+    id: Annotated[
+        str,
+        Field(
+            description=(
+                "The opportunity id in ANY format — the internal id, or a business id like "
+                "OPP-003 (seed data) or a runtime id like OPP-MSRO2XT3949, with or without the "
+                "OPP- prefix and in any case — OR the opportunity name (exact or a distinctive "
+                "partial). Never reject a value for its format; pass whatever the user gave."
+            )
+        ),
+    ]
+) -> Any:
+    """Get one opportunity's detail (includes its milestones) by id (any format) or name."""
+    return _mc.get(f"/api/opportunities/{quote(str(id), safe='')}")
 
 
 def get_handoff_readiness(id: Annotated[str, Field(description="The opportunity id or business id (e.g. OPP-003).")]) -> Any:
@@ -404,7 +424,7 @@ def get_handoff_readiness(id: Annotated[str, Field(description="The opportunity 
     whenever the user asks if an opportunity/deal is ready to hand off, is handoff-ready, what is
     missing before handoff, or about CSA/CSAM readiness for a deal.
     """
-    return _mc.get(f"/api/opportunities/{id}/handoff-readiness")
+    return _mc.get(f"/api/opportunities/{quote(str(id), safe='')}/handoff-readiness")
 
 
 def get_ecif_readiness(id: Annotated[str, Field(description="The opportunity id or business id (e.g. OPP-003).")]) -> Any:
@@ -424,7 +444,7 @@ def get_ecif_readiness(id: Annotated[str, Field(description="The opportunity id 
     creating the Work Scope in ECIF Central BEFORE Deal Assistance. It is mock process guidance,
     never an official ECIF request or quote.
     """
-    return _mc.get(f"/api/opportunities/{id}/ecif-readiness")
+    return _mc.get(f"/api/opportunities/{quote(str(id), safe='')}/ecif-readiness")
 
 
 def create_opportunity(
@@ -909,6 +929,10 @@ def propose_milestone_for_approval(
     )
     if not isinstance(approval, dict) or approval.get("error"):
         return approval
+    if not approval.get("approvalRequestBusinessId"):
+        return {
+            "error": "Approval request was not persisted (no approvalRequestBusinessId returned); the milestone was NOT submitted.",
+        }
 
     captured_fields = approval.get("milestoneFields")
     if approval.get("actionKind") != "CreateMilestone" or not isinstance(captured_fields, dict):

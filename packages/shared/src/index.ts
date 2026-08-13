@@ -19,12 +19,6 @@ export const SALES_STAGES = [
   'Manage & Optimize',
 ] as const;
 export const OPPORTUNITY_STATUSES = ['Active', 'On Hold', 'Won', 'Lost', 'Closed'] as const;
-// Opportunity-level forecast category — how confident the seller/management are that
-// the deal closes in the forecast period. This is the MSX "forecast object": the
-// opportunity moves Uncommitted → Best Case → Committed as key milestones complete.
-// (Best Case is also called "Upside".) Distinct from milestone customer commitment,
-// which tracks execution/readiness of a single milestone, not the forecast.
-export const FORECAST_CATEGORIES = ['Uncommitted', 'Best Case', 'Committed'] as const;
 
 // ---- Milestone ----
 export const MILESTONE_STATUSES = [
@@ -53,11 +47,11 @@ export const WORKLOADS = [
   'Defender XDR',
   'Teams Premium',
 ] as const;
-// Milestone-level customer commitment tracks the customer's execution/readiness
-// commitment to THIS milestone. It is deliberately NOT the opportunity forecast
-// category (Uncommitted / Committed / Best Case / Upside), which is an
-// opportunity-level concept — so these values avoid the forecast-category terms.
-export const CUSTOMER_COMMITMENTS = ['Exploring', 'Verbal', 'Confirmed', 'Contracted'] as const;
+// Milestone-level customer commitment is a two-state flag: "Committed" means the
+// milestone is a firm commitment for its target date; "Uncommitted" means it is
+// not. A milestone auto-flips Uncommitted → Committed when its estDate passes
+// (see milestoneCommitment.service.ts) unless it is already in a terminal status.
+export const CUSTOMER_COMMITMENTS = ['Committed', 'Uncommitted'] as const;
 export const DELIVERED_BY = ['Microsoft', 'Partner', 'Customer', 'Joint'] as const;
 export const MILESTONE_CATEGORIES = ['Production', 'Pilot', 'Workshop', 'Assessment', 'Deployment', 'Adoption'] as const;
 export const AZURE_CAPACITY_TYPES = ['---', 'Azure Commit', 'MACC', 'Open', 'CSP', 'EA'] as const;
@@ -92,7 +86,6 @@ export const CHOICES = {
   solutionArea: SOLUTION_AREAS,
   salesStage: SALES_STAGES,
   opportunityStatus: OPPORTUNITY_STATUSES,
-  forecastCategory: FORECAST_CATEGORIES,
   milestoneStatus: MILESTONE_STATUSES,
   workload: WORKLOADS,
   customerCommitment: CUSTOMER_COMMITMENTS,

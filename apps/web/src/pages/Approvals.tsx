@@ -56,7 +56,6 @@ const opportunityFieldLabels: Array<[keyof OpportunityApprovalFields, string]> =
   ['solutionArea', 'Solution Area'],
   ['salesStage', 'Sales Stage'],
   ['status', 'Status'],
-  ['forecastCategory', 'Forecast Category'],
   ['estimatedRevenue', 'Estimated Revenue'],
   ['closeDate', 'Close Date'],
   ['aeOwner', 'AE Owner'],

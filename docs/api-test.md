@@ -48,7 +48,6 @@ curl -X POST http://localhost:4000/api/opportunities \
     "solutionArea": "Azure",
     "salesStage": "Qualify",
     "status": "Open",
-    "forecastCategory": "Best Case",
     "estimatedRevenue": 250000,
     "aeOwner": "Demo AE",
     "assignedSE": "Demo SE"
@@ -89,7 +88,7 @@ curl -X POST http://localhost:4000/api/milestones \
     "milestoneCategory": "Workshop",
     "milestoneStatus": "On Track",
     "workload": "Azure Migration",
-    "customerCommitment": "Verbal",
+    "customerCommitment": "Committed",
     "owner": "Demo SE"
   }'
 ```

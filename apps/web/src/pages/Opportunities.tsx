@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { SOLUTION_AREAS, SALES_STAGES, OPPORTUNITY_STATUSES, FORECAST_CATEGORIES, choiceLabel } from '@msx/shared';
+import { SOLUTION_AREAS, SALES_STAGES, OPPORTUNITY_STATUSES, choiceLabel } from '@msx/shared';
 import { api, type Opportunity } from '../api/client';
 import { statusBadgeClass, formatCurrency, formatDate } from '../ui';
 import FilterSelect from '../components/FilterSelect';
@@ -18,7 +18,6 @@ export default function Opportunities() {
   const [account, setAccount] = useState('');
   const [solutionArea, setSolutionArea] = useState('');
   const [salesStage, setSalesStage] = useState('');
-  const [forecastCategory, setForecastCategory] = useState('');
   const [competitor, setCompetitor] = useState('');
   const [milestones, setMilestones] = useState('');
   const [status, setStatus] = useState('');
@@ -55,20 +54,18 @@ export default function Opportunities() {
         (!account || o.customerName === account) &&
         (!solutionArea || o.solutionArea === solutionArea) &&
         (!salesStage || o.salesStage === salesStage) &&
-        (!forecastCategory || o.forecastCategory === forecastCategory) &&
         (!competitor || o.competitorName === competitor) &&
         (!milestones || String(o._count?.milestones ?? 0) === milestones) &&
         (!status || o.status === status)
       );
     });
-  }, [items, search, account, solutionArea, salesStage, forecastCategory, competitor, milestones, status]);
+  }, [items, search, account, solutionArea, salesStage, competitor, milestones, status]);
 
   const clearAll = () => {
     setSearch('');
     setAccount('');
     setSolutionArea('');
     setSalesStage('');
-    setForecastCategory('');
     setCompetitor('');
     setMilestones('');
     setStatus('');
@@ -96,7 +93,6 @@ export default function Opportunities() {
         <FilterSelect label="Account" value={account} options={accounts} onChange={setAccount} allLabel="All accounts" />
         <FilterSelect label="Solution Area" value={solutionArea} options={SOLUTION_AREAS} onChange={setSolutionArea} allLabel="All solution areas" />
         <FilterSelect label="Sales Stage" value={salesStage} options={SALES_STAGES} onChange={setSalesStage} allLabel="All sales stages" />
-        <FilterSelect label="Forecast" value={forecastCategory} options={FORECAST_CATEGORIES} onChange={setForecastCategory} allLabel="All forecasts" />
         <FilterSelect label="Competitor" value={competitor} options={competitors} onChange={setCompetitor} allLabel="All competitors" />
         <FilterSelect label="Milestones" value={milestones} options={milestoneCounts} onChange={setMilestones} allLabel="Any count" />
         <FilterSelect label="Status" value={status} options={OPPORTUNITY_STATUSES} onChange={setStatus} allLabel="All statuses" />
@@ -118,7 +114,6 @@ export default function Opportunities() {
             <th>TPID</th>
             <th>Solution Area</th>
             <th>Sales Stage</th>
-            <th>Forecast</th>
             <th>Est. Revenue</th>
             <th>Competitor</th>
             <th>Est. Close Date</th>
@@ -130,7 +125,7 @@ export default function Opportunities() {
           {loading &&
             Array.from({ length: 6 }).map((_, i) => (
               <tr key={`sk-${i}`} className="skeleton-row">
-                <td colSpan={12}>
+                <td colSpan={11}>
                   <span className="skeleton-line" />
                 </td>
               </tr>
@@ -145,11 +140,6 @@ export default function Opportunities() {
               <td>{o.tpid ?? '—'}</td>
               <td>{choiceLabel(o.solutionArea)}</td>
               <td>{choiceLabel(o.salesStage)}</td>
-              <td>
-                {o.forecastCategory
-                  ? <span className={`badge ${statusBadgeClass(o.forecastCategory)}`}>{o.forecastCategory}</span>
-                  : '—'}
-              </td>
               <td>{formatCurrency(o.estimatedRevenue)}</td>
               <td>{o.competitorName ?? '—'}</td>
               <td>{formatDate(o.closeDate)}</td>
@@ -161,7 +151,7 @@ export default function Opportunities() {
           ))}
           {!loading && filtered.length === 0 && !error && (
             <tr>
-              <td colSpan={12} className="muted">
+              <td colSpan={11} className="muted">
                 No opportunities match your search or filters.
               </td>
             </tr>

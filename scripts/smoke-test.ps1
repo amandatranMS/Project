@@ -133,7 +133,7 @@ Check 'POST /api/milestones (create, connect by opportunityName)' {
     milestoneName    = "Discovery Workshop $stamp"
     opportunityName  = $oppName
     workload         = 'Copilot Studio'
-    customerCommitment = 'Verbal'
+    customerCommitment = 'Committed'
     deliveredBy      = 'Microsoft'
     milestoneCategory = 'Workshop'
     milestoneStatus  = 'On Track'

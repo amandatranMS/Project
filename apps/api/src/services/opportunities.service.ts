@@ -1,7 +1,9 @@
+import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { HttpError } from '../lib/httpError.js';
 import { genId } from '../lib/ids.js';
 import { recordAgentAction } from '../lib/audit.js';
+import { milestoneCommitmentService, COMMITTED_VALUE } from './milestoneCommitment.service.js';
 import type { AuthUser } from '../lib/entraAuth.js';
 import { opportunityBroadcastService, type BroadcastMode } from './opportunityBroadcast.service.js';
 import type { z } from 'zod';
@@ -48,6 +50,57 @@ const childInclude = {
   auditLogs: { orderBy: { createdAt: 'desc' } },
 } as const;
 
+/** Related records loaded for the opportunity detail screen. */
+const detailInclude = {
+  milestones: { orderBy: { milestoneBusinessId: 'asc' } },
+  dealTeamMembers: true,
+  collaborationNotes: { orderBy: { createdOn: 'desc' } },
+  recommendations: { orderBy: { recommendationBusinessId: 'asc' } },
+} as const;
+
+/**
+ * Build a Prisma `where` that resolves an opportunity from a human- or agent-supplied
+ * reference in ANY reasonable format: the internal id, the business id (e.g. OPP-001 or a
+ * runtime OPP-MSRO2XT3949), or the opportunity name. Matching is case-insensitive and
+ * whitespace-trimmed, and tolerates a missing "OPP-" prefix on the business id, so the
+ * same value works no matter how the user typed it.
+ */
+function opportunityRefWhere(term: string): Prisma.OpportunityWhereInput {
+  const raw = term.trim();
+  const ci = 'insensitive' as const;
+  const idForms = /^opp-/i.test(raw) ? [raw] : [raw, `OPP-${raw}`];
+  return {
+    OR: [
+      { id: raw },
+      ...idForms.map((v) => ({ opportunityBusinessId: { equals: v, mode: ci } })),
+      { opportunityName: { equals: raw, mode: ci } },
+    ],
+  };
+}
+
+/**
+ * Resolve an opportunity reference (id, business id, or name — in any format) to the
+ * internal id. Tries an exact/prefix-tolerant, case-insensitive match first, then falls
+ * back to an unambiguous partial-name match (a single opportunity whose name contains the
+ * term). Returns null when nothing matches or a partial term is ambiguous.
+ */
+async function resolveOpportunityId(term: string): Promise<string | null> {
+  const raw = term.trim();
+  if (!raw) return null;
+  const exact = await prisma.opportunity.findFirst({
+    where: opportunityRefWhere(raw),
+    select: { id: true },
+  });
+  if (exact) return exact.id;
+  if (raw.length < 3) return null;
+  const partial = await prisma.opportunity.findMany({
+    where: { opportunityName: { contains: raw, mode: 'insensitive' } },
+    select: { id: true },
+    take: 2,
+  });
+  return partial.length === 1 ? partial[0]!.id : null;
+}
+
 /** Owns opportunity persistence, related-record views, broadcasts, and write auditing. */
 export const opportunitiesService = {
   /** List filtered opportunities with milestone counts for summary screens. */
@@ -59,25 +112,32 @@ export const opportunitiesService = {
     });
   },
 
-  /** Load the detail-screen projection by internal id or workbook business id. */
-  get(id: string) {
-    // Accept either the internal id or the business id (e.g. "OPP-002").
-    return prisma.opportunity.findFirst({
-      where: { OR: [{ id }, { opportunityBusinessId: id }] },
-      include: {
-        milestones: { orderBy: { milestoneBusinessId: 'asc' } },
-        dealTeamMembers: true,
-        collaborationNotes: { orderBy: { createdOn: 'desc' } },
-        recommendations: { orderBy: { recommendationBusinessId: 'asc' } },
-      },
+  /** Load the detail-screen projection by internal id, business id, or name (any format). */
+  async get(ref: string) {
+    const id = await resolveOpportunityId(ref);
+    if (!id) return null;
+    const opportunity = await prisma.opportunity.findUnique({
+      where: { id },
+      include: detailInclude,
     });
+    // Self-heal the embedded milestone list: commit any that are now past-due.
+    if (opportunity?.milestones?.length) {
+      const flipped = await milestoneCommitmentService.reconcile(opportunity.milestones);
+      if (flipped.size) {
+        for (const m of opportunity.milestones) {
+          if (flipped.has(m.id)) m.customerCommitment = COMMITTED_VALUE;
+        }
+      }
+    }
+    return opportunity;
   },
 
-  /** Full 360° context: opportunity plus every related record. */
-  context(id: string) {
-    // Accept either the internal id or the business id (e.g. "OPP-002").
-    return prisma.opportunity.findFirst({
-      where: { OR: [{ id }, { opportunityBusinessId: id }] },
+  /** Full 360° context: opportunity plus every related record. Resolves ref in any format. */
+  async context(ref: string) {
+    const id = await resolveOpportunityId(ref);
+    if (!id) return null;
+    return prisma.opportunity.findUnique({
+      where: { id },
       include: childInclude,
     });
   },
@@ -143,12 +203,13 @@ export const opportunitiesService = {
     return { ...existing, teamsBroadcast: broadcastResult.teamsBroadcast, alreadyExisted: true as const };
   },
 
-  async update(id: string, input: UpdateInput, actor?: string) {
-    // Accept either the internal id or the business id (e.g. "OPP-002") so the
-    // agent can target an opportunity the same way a human does.
-    const existing = await prisma.opportunity.findFirst({
-      where: { OR: [{ id }, { opportunityBusinessId: id }] },
-    });
+  async update(ref: string, input: UpdateInput, actor?: string) {
+    // Resolve the opportunity from an id, business id, or name in any format so the
+    // agent can target it the same way a human does.
+    const resolvedId = await resolveOpportunityId(ref);
+    const existing = resolvedId
+      ? await prisma.opportunity.findUnique({ where: { id: resolvedId } })
+      : null;
     if (!existing) throw new HttpError(404, 'Opportunity not found.');
     const { closeDate, lastUpdated, ...rest } = input;
     const opportunity = await prisma.opportunity.update({
@@ -180,11 +241,14 @@ export const opportunitiesService = {
    * Deletes an opportunity. Blocks by default when it still has milestones;
    * pass cascade=true to remove the opportunity and all its related records.
    */
-  async remove(id: string, cascade: boolean) {
-    const existing = await prisma.opportunity.findUnique({
-      where: { id },
-      include: { _count: { select: { milestones: true } } },
-    });
+  async remove(ref: string, cascade: boolean) {
+    const resolvedId = await resolveOpportunityId(ref);
+    const existing = resolvedId
+      ? await prisma.opportunity.findUnique({
+          where: { id: resolvedId },
+          include: { _count: { select: { milestones: true } } },
+        })
+      : null;
     if (!existing) throw new HttpError(404, 'Opportunity not found.');
 
     const milestoneCount = existing._count.milestones;
@@ -197,7 +261,7 @@ export const opportunitiesService = {
 
     // The Prisma schema cascades milestones, notes and deal-team members, and
     // sets related recommendations/approvals/notifications/logs to null.
-    await prisma.opportunity.delete({ where: { id } });
+    await prisma.opportunity.delete({ where: { id: existing.id } });
 
     await recordAgentAction({
       agentName: 'system',
@@ -210,6 +274,6 @@ export const opportunitiesService = {
           : 'No milestones were attached',
     });
 
-    return { id, opportunityBusinessId: existing.opportunityBusinessId, milestonesDeleted: milestoneCount };
+    return { id: existing.id, opportunityBusinessId: existing.opportunityBusinessId, milestonesDeleted: milestoneCount };
   },
 };

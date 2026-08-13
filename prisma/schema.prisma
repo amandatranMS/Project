@@ -33,7 +33,6 @@ model Opportunity {
   solutionArea          String?
   salesStage            String?
   status                String?
-  forecastCategory      String? // opportunity forecast: Uncommitted / Best Case / Committed
   estimatedRevenue      Float?
   closeDate             DateTime?
   aeOwner               String?

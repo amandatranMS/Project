@@ -83,6 +83,15 @@ _APPROVAL_RULE = (
     "approvalRequestBusinessId. STOP and tell the user it is Pending and a human "
     "must approve it in the Approvals log before anything happens. Never claim the "
     "action was done — you cannot approve requests."
+    " TRUTH RULE: only say something was submitted or is Pending when the tool "
+    "result actually contains submittedForApproval=true AND a non-empty "
+    "approvalRequestBusinessId — and ALWAYS show that approvalRequestBusinessId so the "
+    "user can find it in the Approvals log. If the tool result instead contains an "
+    "'error' (for example 'Explicit confirmation required'), a requiredAction, or a "
+    "requiredQuestion, do NOT say anything was submitted: do exactly what it asks — "
+    "present the editable draft again or ask the requiredQuestion — and resubmit only "
+    "after the user confirms. Never fabricate an approvalRequestBusinessId or report a "
+    "Pending request you did not actually receive one for."
 )
 
 # Governance rule: a milestone is created ONLY when a human approves an approval
@@ -143,6 +152,20 @@ _SEARCH_RULE = (
     "what it returned (each hit lists the _matchedFields that matched)."
 )
 
+# ID-format rule: business ids are prefix-typed but the part after the dash may be
+# numeric (seed data) OR alphanumeric (minted at runtime), so the model must not
+# reject a valid id just because it doesn't look like "OPP-003".
+_ID_FORMAT_RULE = (
+    " ID FORMATS: opportunity ids start with OPP- and milestone ids with MS-, but the part "
+    "after the dash may be short and numeric (seed data: OPP-003, MS-001) OR longer and "
+    "alphanumeric when minted at runtime (e.g. OPP-MSRO2XT3949, MS-1F3K7Q2). Treat EVERY "
+    "OPP-/MS- value as valid and act on it directly: get_opportunity accepts an opportunity id "
+    "in ANY of these formats (with or without the OPP- prefix, any case) OR an opportunity name "
+    "(exact or a distinctive partial). NEVER reject, second-guess, or tell the user an id is "
+    "invalid or 'not a standard format' — pass whatever id or name the user gave straight to the "
+    "lookup tool, and only fall back to search_records for non-id field values."
+)
+
 _MCP_SERVER_PATH = os.path.join(os.path.dirname(__file__), "msx_mcp_server.py")
 
 def _dashboard_tools() -> list:
@@ -192,7 +215,7 @@ def build_subagents(client) -> list[Agent]:
                 "handoff notes, call get_milestone_handoff_readiness and answer from its result — "
                 "lead with what is missing (each item's howToFix) and offer the returned "
                 "suggestedDescription to paste into the milestone; do not answer from get_milestone "
-                "raw fields." + _APPROVAL_RULE + _CONFIRM_RULE + _GROUNDING_RULE + _SEARCH_RULE + _GOVERNANCE_RULE + _LOST_TO_COMPETITOR_RULE
+                "raw fields." + _APPROVAL_RULE + _CONFIRM_RULE + _GROUNDING_RULE + _SEARCH_RULE + _ID_FORMAT_RULE + _GOVERNANCE_RULE + _LOST_TO_COMPETITOR_RULE
             ),
             tools=[list_milestones, get_milestone, get_milestone_handoff_readiness, get_opportunity, search_records, propose_milestone_for_approval, update_milestone, delete_milestone],
         ),
@@ -278,7 +301,7 @@ def build_subagents(client) -> list[Agent]:
                 "a new opportunity is drafted or created, proactively ask whether it will need ECIF; "
                 "if yes, call get_ecif_readiness and walk through the prerequisites and the "
                 "Work-Scope-first next step."
-                + _APPROVAL_RULE + _CONFIRM_RULE + _GROUNDING_RULE + _SEARCH_RULE
+                + _APPROVAL_RULE + _CONFIRM_RULE + _GROUNDING_RULE + _SEARCH_RULE + _ID_FORMAT_RULE
             ),
             tools=[
                 list_opportunities,

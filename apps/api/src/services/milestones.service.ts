@@ -5,6 +5,7 @@ import { connectOpportunity } from '../lib/connect.js';
 import { recordAgentAction } from '../lib/audit.js';
 import { assertCompetitorForLostStatus } from '../lib/lostToCompetitor.js';
 import { maybeNotifyManager, type MilestoneNotifyContext } from './managerNotifications.service.js';
+import { milestoneCommitmentService, COMMITTED_VALUE } from './milestoneCommitment.service.js';
 import type { z } from 'zod';
 import type { createMilestoneSchema, updateMilestoneSchema } from '../validators/schemas.js';
 
@@ -21,17 +22,23 @@ export type MilestoneUpdateContext = MilestoneNotifyContext;
 /** Owns milestone CRUD, relationship checks, write auditing, and status side effects. */
 export const milestonesService = {
   /** List milestones with compact parent-opportunity context. */
-  list(where: { opportunityId?: string; milestoneStatus?: string }) {
-    return prisma.opportunityMilestone.findMany({
+  async list(where: { opportunityId?: string; milestoneStatus?: string }) {
+    const rows = await prisma.opportunityMilestone.findMany({
       where,
       orderBy: { milestoneBusinessId: 'asc' },
       include: { opportunity: { select: { id: true, opportunityName: true, customerName: true } } },
     });
+    // Self-heal: commit any past-due milestone before returning it.
+    const flipped = await milestoneCommitmentService.reconcile(rows);
+    if (flipped.size) {
+      for (const r of rows) if (flipped.has(r.id)) r.customerCommitment = COMMITTED_VALUE;
+    }
+    return rows;
   },
 
   /** Load one milestone and the related records used by its detail screen. */
-  get(id: string) {
-    return prisma.opportunityMilestone.findFirst({
+  async get(id: string) {
+    const milestone = await prisma.opportunityMilestone.findFirst({
       where: { OR: [{ id }, { milestoneBusinessId: id }] },
       include: {
         opportunity: true,
@@ -41,6 +48,12 @@ export const milestonesService = {
         collaborationNotes: true,
       },
     });
+    if (milestone) {
+      // Self-heal: if the target date has passed while Committed, flip before returning.
+      const flipped = await milestoneCommitmentService.reconcile([milestone]);
+      if (flipped.has(milestone.id)) milestone.customerCommitment = COMMITTED_VALUE;
+    }
+    return milestone;
   },
 
   /** Create under an existing opportunity and audit the completed write. */

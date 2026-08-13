@@ -82,7 +82,7 @@ export interface ReadinessResult {
 }
 
 /** The committed-intent values that count as a real deal (not exploratory). */
-const COMMITTED = new Set(['Committed', 'Contracted']);
+const COMMITTED = new Set(['Committed']);
 
 /**
  * Score an opportunity's handoff readiness from data already on the record.
@@ -99,7 +99,7 @@ export function scoreHandoff(ctx: ReadinessContext): ReadinessResult {
       key: 'intent',
       item: 'Customer intent',
       whatsMissing: 'No milestone shows committed customer intent.',
-      howToFix: 'Confirm the customer plans to deploy and set a milestone commitment to Committed or Contracted.',
+      howToFix: 'Confirm the customer plans to deploy and set the milestone commitment to Committed.',
       passed: milestones.some((m) => COMMITTED.has(String(m.customerCommitment ?? ''))),
     },
     {

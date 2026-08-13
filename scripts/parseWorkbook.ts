@@ -61,6 +61,18 @@ function toStringOrNull(value: unknown): string | null {
   return String(value).trim();
 }
 
+/**
+ * Collapse the workbook's legacy customer-commitment vocabulary to the two-state
+ * model the app now uses (Committed / Uncommitted). Firm signals (Confirmed,
+ * Contracted, or an explicit "Committed") become "Committed"; everything else
+ * (Exploring, Verbal, ...) becomes "Uncommitted". Blank stays null.
+ */
+function normalizeCommitment(value: unknown): 'Committed' | 'Uncommitted' | null {
+  const v = toStringOrNull(value);
+  if (v === null) return null;
+  return /^(committed|confirmed|contracted)$/i.test(v) ? 'Committed' : 'Uncommitted';
+}
+
 /** Yes/No (and common variants) → boolean. Blank → null. */
 function convertBool(value: unknown): boolean | null {
   if (isBlank(value)) return null;
@@ -217,6 +229,9 @@ export async function loadMilestones() {
   const rows = readSheet(SHEET_NAMES.milestone);
   return loadRows('OpportunityMilestone', rows, async (row) => {
     const data = mapRow(row, milestoneMapping);
+    // The workbook still uses the legacy commitment vocabulary; collapse it to the
+    // two-state Committed/Uncommitted model the app now enforces.
+    data.customerCommitment = normalizeCommitment(data.customerCommitment);
     const opportunity = connectOpportunity(row);
     if (!opportunity) throw new Error('missing/unknown Opportunity lookup');
     await prisma.opportunityMilestone.create({ data: { ...data, opportunity } as never });

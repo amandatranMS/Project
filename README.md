@@ -149,7 +149,7 @@ and pipeline value by sales stage. Click any slice or bar to filter the whole pa
 data, stack several filters together, and clear them with one button.
 
 **Opportunities.** A searchable, filterable list of every deal. Search by name, account,
-or ID, and narrow the list by account, solution area, sales stage, forecast, competitor,
+or ID, and narrow the list by account, solution area, sales stage, competitor,
 status, and more. Open one to see its full picture: customer and deal details, its
 milestones, the people on the deal team, notes, and AI suggestions. From here you can
 create a new opportunity, edit it, add milestones or team members, or delete it

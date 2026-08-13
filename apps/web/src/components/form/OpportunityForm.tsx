@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { SOLUTION_AREAS, SALES_STAGES, OPPORTUNITY_STATUSES, FORECAST_CATEGORIES } from '@msx/shared';
+import { SOLUTION_AREAS, SALES_STAGES, OPPORTUNITY_STATUSES } from '@msx/shared';
 import { api, announceOpportunity, type Opportunity } from '../../api/client';
 import Modal from '../Modal';
 import OpportunityCreatedNotifyDialog from '../OpportunityCreatedNotifyDialog';
@@ -23,7 +23,6 @@ export default function OpportunityForm({ initial, onClose, onSaved }: Props) {
     solutionArea: initial?.solutionArea ?? '',
     salesStage: initial?.salesStage ?? '',
     status: initial?.status ?? '',
-    forecastCategory: initial?.forecastCategory ?? '',
     estimatedRevenue: initial?.estimatedRevenue != null ? String(initial.estimatedRevenue) : '',
     closeDate: isoToDateInput(initial?.closeDate),
     competitorName: initial?.competitorName ?? '',
@@ -76,7 +75,6 @@ export default function OpportunityForm({ initial, onClose, onSaved }: Props) {
       solutionArea: clean(form.solutionArea),
       salesStage: clean(form.salesStage),
       status: clean(form.status),
-      forecastCategory: clean(form.forecastCategory),
       estimatedRevenue: form.estimatedRevenue.trim() === '' ? undefined : Number(form.estimatedRevenue),
       closeDate: clean(form.closeDate),
       competitorName: clean(form.competitorName),
@@ -167,7 +165,6 @@ export default function OpportunityForm({ initial, onClose, onSaved }: Props) {
         <SelectField label="Solution area" value={form.solutionArea} onChange={set('solutionArea')} options={SOLUTION_AREAS} />
         <SelectField label="Sales stage" value={form.salesStage} onChange={set('salesStage')} options={SALES_STAGES} />
         <SelectField label="Status" value={form.status} onChange={set('status')} options={OPPORTUNITY_STATUSES} />
-        <SelectField label="Forecast category" value={form.forecastCategory} onChange={set('forecastCategory')} options={FORECAST_CATEGORIES} />
         <NumberField label="Estimated revenue" value={form.estimatedRevenue} onChange={set('estimatedRevenue')} />
         <DateField label="Estimated close date" value={form.closeDate} onChange={set('closeDate')} />
         <TextField label="Competitor" value={form.competitorName} onChange={set('competitorName')} />

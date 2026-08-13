@@ -82,7 +82,7 @@ export interface MilestoneHandoffResult {
 }
 
 /** The commitment values that count as real deployment intent (not exploratory). */
-const COMMITTED = new Set(['Committed', 'Contracted']);
+const COMMITTED = new Set(['Committed']);
 
 /** A milestone description is only "substantive" once it has some real content. */
 const MIN_DESCRIPTION_LENGTH = 15;
@@ -137,7 +137,7 @@ export function scoreMilestoneHandoff(m: HandoffMilestone): MilestoneHandoffResu
       key: 'intent',
       item: 'Customer intent',
       whatsMissing: 'The milestone does not record whether the customer actually plans to deploy (buying is not intent).',
-      howToFix: 'Set the commitment to Committed/Contracted and state real-vs-exploratory intent in the description.',
+      howToFix: 'Set the commitment to Committed and state real-vs-exploratory intent in the description.',
       passed: COMMITTED.has(String(m.customerCommitment ?? '')),
     },
     {

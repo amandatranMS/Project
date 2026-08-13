@@ -8,22 +8,19 @@ export function statusBadgeClass(status?: string | null): string {
     case 'Approved':
     case 'Active':
     case 'Success':
-    case 'Confirmed':
-    case 'Contracted':
     case 'Committed':
       return 'green';
     case 'In Progress':
     case 'Reviewed':
     case 'Read':
     case 'Submitted':
-    case 'Best Case':
       return 'blue';
     case 'At Risk':
     case 'Pending':
     case 'On Hold':
     case 'Needs Changes':
     case 'Warning':
-    case 'Verbal':
+    case 'Uncommitted':
       return 'amber';
     case 'Blocked':
     case 'Lost':

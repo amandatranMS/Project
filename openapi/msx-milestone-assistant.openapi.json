@@ -239,6 +239,84 @@
         }
       }
     },
+    "/api/opportunities/{id}/handoff-readiness": {
+      "get": {
+        "tags": [
+          "Opportunities"
+        ],
+        "summary": "Capability #1 — score whether this opportunity is ready to hand off from pre-sales (AE/SE) to delivery (CSA/CSAM). Reports a 0–100 score, a `ready` flag, a `headline`, each MISSING item (with whatsMissing + howToFix), the checks already `present`, and `nextSteps`. Read-only; audited as a Read in the Agent Action Audit Log.\n",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdParam"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope with a HandoffReadiness result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Envelope"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/HandoffReadiness"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/api/opportunities/{id}/ecif-readiness": {
+      "get": {
+        "tags": [
+          "Opportunities"
+        ],
+        "summary": "Capability #3 — MOCK ECIF (End Customer Investment Funds) readiness & process guidance for an opportunity. Assesses whether the deal is ready to REQUEST ECIF against the real prerequisites (delivery partner identified, work scope started) and returns a `ready` flag, a `score`, a `headline`, a `missing` list (each with `whatsMissing` + `howToFix`), a `present` list, a `nextAction` that leads with creating the Work Scope in ECIF Central before Deal Assistance, and `caveats` (including the \">$50K request needs two+ milestones\" reminder). It does NOT estimate a funding amount — ECIF amounts are assigned through the work scope and approval process. Derived only from existing milestone fields; it does NOT create or submit a real ECIF request. Read-only; audited as a Read.\n",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdParam"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope with an EcifReadiness result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Envelope"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/EcifReadiness"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
     "/api/opportunities/{id}/announce": {
       "post": {
         "tags": [
@@ -577,6 +655,45 @@
         "responses": {
           "200": {
             "description": "Deleted"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/api/milestones/{id}/handoff-readiness": {
+      "get": {
+        "tags": [
+          "Milestones"
+        ],
+        "summary": "Capability #2 — check whether ONE milestone carries the CSA-critical handoff info (customer intent, what was promised, deployment details, BANT, who to contact). Returns a 0–100 score, a `ready` flag, a `headline`, MISSING items (whatsMissing + howToFix), `present`, `nextSteps`, and a paste-ready `suggestedDescription` scaffold for the milestone. Informational only — it never blocks a save. Audited as a Read.\n",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdParam"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope with a MilestoneHandoffReadiness result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Envelope"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MilestoneHandoffReadiness"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
           },
           "404": {
             "description": "Not found"
@@ -942,14 +1059,6 @@
                       },
                       "status": {
                         "type": "string"
-                      },
-                      "forecastCategory": {
-                        "type": "string",
-                        "enum": [
-                          "Uncommitted",
-                          "Best Case",
-                          "Committed"
-                        ]
                       },
                       "estimatedRevenue": {
                         "type": "number"
@@ -1502,14 +1611,6 @@
           "status": {
             "type": "string"
           },
-          "forecastCategory": {
-            "type": "string",
-            "enum": [
-              "Uncommitted",
-              "Best Case",
-              "Committed"
-            ]
-          },
           "estimatedRevenue": {
             "type": "number"
           },
@@ -1574,10 +1675,8 @@
           "customerCommitment": {
             "type": "string",
             "enum": [
-              "Exploring",
-              "Verbal",
-              "Confirmed",
-              "Contracted"
+              "Committed",
+              "Uncommitted"
             ]
           },
           "deliveredBy": {
@@ -1741,6 +1840,183 @@
           },
           "handoffNotes": {
             "type": "string"
+          }
+        }
+      },
+      "MissingItem": {
+        "type": "object",
+        "description": "One CSA-critical handoff item that is not yet captured.",
+        "properties": {
+          "item": {
+            "type": "string",
+            "description": "The missing item"
+          },
+          "whatsMissing": {
+            "type": "string",
+            "description": "Plain-language description of the gap"
+          },
+          "howToFix": {
+            "type": "string",
+            "description": "The concrete action that closes the gap"
+          }
+        }
+      },
+      "HandoffReadiness": {
+        "type": "object",
+        "description": "Capability",
+        "properties": {
+          "opportunityId": {
+            "type": "string"
+          },
+          "opportunityBusinessId": {
+            "type": "string"
+          },
+          "opportunityName": {
+            "type": "string"
+          },
+          "score": {
+            "type": "integer",
+            "description": "0–100 share of readiness checks passed"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "headline": {
+            "type": "string",
+            "description": "One-line answer leading with the ready flag"
+          },
+          "missing": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MissingItem"
+            }
+          },
+          "present": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "nextSteps": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "MilestoneHandoffReadiness": {
+        "type": "object",
+        "description": "Capability",
+        "properties": {
+          "milestoneId": {
+            "type": "string"
+          },
+          "milestoneBusinessId": {
+            "type": "string"
+          },
+          "milestoneName": {
+            "type": "string"
+          },
+          "score": {
+            "type": "integer"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "headline": {
+            "type": "string"
+          },
+          "missing": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MissingItem"
+            }
+          },
+          "present": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "nextSteps": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "suggestedDescription": {
+            "type": "string",
+            "description": "Paste-ready \"CSA Handoff Notes\" scaffold for the milestone description."
+          }
+        }
+      },
+      "EcifReadiness": {
+        "type": "object",
+        "description": "Capability #3 — MOCK ECIF readiness & process guidance. A transparent, deterministic assessment over existing opportunity + milestone fields; it does NOT create or submit a real ECIF request, and it does NOT estimate a funding amount (ECIF amounts are assigned through the work scope and approval process).\n",
+        "properties": {
+          "opportunityId": {
+            "type": "string"
+          },
+          "opportunityBusinessId": {
+            "type": "string"
+          },
+          "opportunityName": {
+            "type": "string"
+          },
+          "score": {
+            "type": "integer",
+            "description": "Percent of prerequisites met (0–100)"
+          },
+          "ready": {
+            "type": "boolean",
+            "description": "True when every prerequisite is met"
+          },
+          "headline": {
+            "type": "string"
+          },
+          "missing": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MissingItem"
+            }
+          },
+          "present": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "nextAction": {
+            "type": "string",
+            "description": "The single most important next step (leads with Work Scope in ECIF Central)"
+          },
+          "requestType": {
+            "type": "object",
+            "description": "Deterministic Local-vs-Global request-type hint from the partner/workload spread across milestones. A process suggestion only — not a funding decision and never a funding amount.\n",
+            "properties": {
+              "suggestion": {
+                "type": "string",
+                "enum": [
+                  "Local",
+                  "Global"
+                ]
+              },
+              "reason": {
+                "type": "string"
+              }
+            }
+          },
+          "workScopeDraft": {
+            "type": "string",
+            "description": "Ready-to-paste ECIF Work Scope draft assembled from existing opportunity + milestone fields (customer, solution area, partner, and each milestone's deliverable/due date/workload) to cut manual re-entry into ECIF Central. Contains no funding amount.\n"
+          },
+          "caveats": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Always includes the mock-guidance disclaimer (no funding amount is estimated), plus any process reminders."
           }
         }
       }

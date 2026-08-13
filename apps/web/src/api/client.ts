@@ -151,7 +151,6 @@ export interface Opportunity {
   solutionArea?: string | null;
   salesStage?: string | null;
   status?: string | null;
-  forecastCategory?: string | null;
   estimatedRevenue?: number | null;
   closeDate?: string | null;
   aeOwner?: string | null;
@@ -258,7 +257,6 @@ export interface OpportunityApprovalFields {
   solutionArea?: string | null;
   salesStage?: string | null;
   status?: string | null;
-  forecastCategory?: string | null;
   estimatedRevenue?: number | null;
   closeDate?: string | null;
   aeOwner?: string | null;
