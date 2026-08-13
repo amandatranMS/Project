@@ -6,6 +6,11 @@
 > Every code reference below was verified against the current branch (see
 > [§12 Verified code anchors](#12-verified-code-anchors)). Recommended first build step:
 > **P1 — the hard gate** (§11), so the block is demoable before layering on the deadline sweep.
+>
+> **Also inside:** [§14 Broader roadmap](#14-broader-roadmap--additional-candidates-same-merve-sync)
+> captures the other enhancement ideas from the same sync (CSA visibility, milestone intelligence,
+> partner/duplicate, Unified capture, transcript intelligence); [§15](#15-collaboration--next-steps-from-the-sync)
+> has the follow-up commitments.
 
 ---
 
@@ -283,3 +288,125 @@ Confirmed present on `merve-features` @ the current HEAD while refining this doc
 
 ### Next step
 Build **P1 (the hard gate)** first so the block is demoable, then layer on the P2 deadline sweep.
+
+---
+
+## 14. Broader roadmap — additional candidates (same Merve sync)
+
+The BANT gate above (Parts I, §§1–13) was the first concrete feature. The same conversation surfaced
+six more enhancement ideas. They're captured here as **future candidates** — most are discovery-stage,
+not committed designs — each tied back to what already exists in this codebase and to the project's
+hard rules (**exactly 11 tables**, **business data stays synthetic/mock**, **real Entra + Graph allowed
+under Option B**, **every governed write stays approval-gated and audited**).
+
+### 14.1 CSA visibility before handoff
+
+- **Problem.** CSAs are often looped in only *after* a milestone is committed — yet sizing, deployment
+  planning, and technical validation need CSA input earlier.
+- **Proposal.** Surface upcoming milestones to CSAs *before* commitment: notify the CSA role when a
+  milestone enters the approaching-deadline window or is proposed for commitment, give CSAs a read view
+  of pre-sales milestones on the opportunity, and attach the existing handoff-readiness summary to that
+  early notification.
+- **Value.** CSAs join before commitment and can catch issues before deployment planning begins — no
+  "surprise committed milestone."
+- **Fits this codebase.** A direct extension of Part B/C: reuse `AgentNotification.notifyRole` to target
+  CSAs, firing on the approaching-deadline bucket and on any agent-proposed `UpdateMilestone` that would
+  commit. The pre-handoff summary is already produced by `scoreMilestoneHandoff()` / the
+  `handoff-readiness` endpoint. CSA identity/role can come from Entra/Graph (Option B), audited via
+  `recordAgentAction`. **No new tables.**
+- **Stage / size.** Small once P2 (the alert sweep) exists — largely a `notifyRole` + threshold addition.
+
+### 14.2 Automatic milestone intelligence
+
+- **Problem.** Leaders open milestones one-by-one to piece together status, ownership, blockers, sizing,
+  last update, and commitment state.
+- **Proposal.** Expand the dashboard + milestone agent to produce on demand: concise per-milestone
+  summaries, a **blocked-milestones** report, status roll-ups, ownership tracking, and update history.
+- **Value.** Less time hunting through records, more time resolving the actual blockers.
+- **Fits this codebase.** Update history already lives in **`MilestoneStatusHistory`** (table #3);
+  roll-ups can be persisted in **`DashboardMetricSnapshot`** (table #11); blocker/risk data is embedded
+  on `OpportunityMilestone` (there is deliberately **no blocker table** — 11-table rule). Expose as read
+  endpoints + an agent read tool (mirroring `get_milestone_handoff_readiness`); the summaries are
+  generated text, not stored business data. **No new tables.**
+- **Stage / size.** Medium; read-only, so the read paths need no approval-gating.
+
+### 14.3 Partner visibility *(constrained)*
+
+- **Problem.** When a partner delivers, Microsoft teams may have limited insight into partner activity,
+  progress, delays, and risk — and partner delays cause milestone slippage that hits quarterly outcomes.
+- **Proposal (discovery).** Explore what partner information already exists on the record, whether
+  partner status can be surfaced on the milestone/opportunity, and how partner-related delay/risk could
+  feed the agent's at-risk reporting.
+- **Value.** Better insight into shared-delivery projects.
+- **Fits this codebase — key constraint.** The hard rules **forbid a `Partner` table** (and forbid real
+  partner/MSX data). Partner context must live in **embedded fields on `Opportunity` /
+  `OpportunityMilestone`** and stay **synthetic/mock**. So this is scoped to: surface existing embedded
+  partner/risk signal and fold it into at-risk reporting (14.2) and deadline escalation (Part B) —
+  *not* a new partner entity and *not* a real partner-system integration.
+- **Stage / size.** Discovery first (confirm which embedded fields carry partner signal), then small,
+  folded into 14.2.
+
+### 14.4 Duplicate milestone detection
+
+- **Problem.** Duplicate milestones occasionally exist, creating confusion over which one is the
+  system-of-record for execution and reporting.
+- **Proposal.** Have the agent detect likely duplicates (same opportunity + similar
+  name/workload/category), flag them, surface the inconsistency, and help the user pick the active one —
+  proposing the loser be marked with the existing **`Hygiene/Duplicate`** status.
+- **Value.** Cleaner pipeline management, less reporting confusion.
+- **Fits this codebase.** Milestones already carry a `@unique` `milestoneBusinessId`, and
+  **`Hygiene/Duplicate` is already a recognized terminal status** (it's in the commitment sweep's FROZEN
+  set). Detection is a read-only heuristic; any resolution (marking one `Hygiene/Duplicate`) flows
+  through the **approval gate** as a deferred `UpdateMilestone` and is audited — never auto-applied.
+  **No new tables.**
+- **Stage / size.** Small–medium; a detection heuristic + a recommendation/approval surface.
+
+### 14.5 Unified opportunity capture
+
+- **Problem.** CSAs spot new opportunities during delivery but rarely record them — the Unified creation
+  process is administrative overhead they deprioritize, even though leadership wants them tracked.
+- **Proposal (discovery).** Merve to walk through the Unified process (how opportunities are created
+  today, the pain points, where automation helps). Then evaluate letting the agent *draft* an
+  opportunity from delivery context for one-click human approval.
+- **Value.** Opportunities captured during engagements instead of lost.
+- **Fits this codebase.** The agent **already** supports `CreateOpportunity` as an approval-gated
+  deferred action, so the enforcement pattern exists — this item is about lowering capture friction.
+  Business data stays **mock**; every create stays **human-approved** and audited. **No new tables.**
+- **Stage / size.** Discovery-gated (needs Merve's process detail) → then medium.
+
+### 14.6 Meeting-transcript intelligence (Graph / Teams)
+
+- **Problem.** Key customer context is discussed in meetings but never reaches the system of record;
+  CSAs lack time to hand-document opportunities, milestone updates, and customer requests.
+- **Proposal (forward-looking).** Let the agent read Teams meeting transcripts via Graph to detect
+  candidate opportunities, extract action items, spot milestone-related discussion, and surface customer
+  context — turning conversation into structured drafts. *(Merve flagged strong interest.)*
+- **Value.** Converts tribal/meeting knowledge into structured business records with far less manual
+  effort.
+- **Fits this codebase — Option B rules apply.** This is exactly the **authorized real integration**:
+  Entra sign-in + Graph (Teams/Outlook) *are* allowed. Guardrails are mandatory — every Graph read is
+  **gated behind an authenticated user** and **audited via `recordAgentAction`**; **real Graph data is
+  never persisted into the 11 mock tables**; and anything the agent proposes (new opportunity, milestone
+  update) goes through the **approval gate** as a recommendation / `ApprovalRequest`, never a direct
+  write.
+- **Stage / size.** Large — the marquee forward-looking item. Sequence it *after* the gate + alerts so
+  there's already a governed write path for whatever a transcript proposes.
+
+---
+
+## 15. Collaboration & next steps (from the sync)
+
+Captured so the thread can resume after Merve is back.
+
+**Merve to provide**
+- A detailed walkthrough of the **Unified** opportunity process (current creation flow + pain points).
+- Clarification on **CSA workflows**.
+- Continued input on automation opportunities.
+- Review of the final project materials + recording.
+
+**Amanda to drive**
+- Document all findings (this doc).
+- Continue the **readiness-validation** concept — the BANT gate, §§1–13 above.
+- Research the **Unified** opportunity process (14.5).
+- Investigate **transcript-driven** automation (14.6).
+- Produce a **roadmap of future enhancements** before end of internship (this §14).
