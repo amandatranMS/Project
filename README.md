@@ -258,7 +258,7 @@ prisma/            schema.prisma + seed.ts (calls the workbook importer)
 scripts/           parseWorkbook.ts + workbookMappings.ts (Excel → Prisma import)
 data/              the Excel workbook (single source of truth)
 openapi/           msx-milestone-assistant.openapi.yaml
-docs/              architecture.md, api-test.md, demo-script.md, security.md
+docs/              architecture.md, api-test.md, security.md, bant-gated-milestone-progression.md
 redteam/           adversarial testing that exercises the Defender/Purview controls
 ```
 
