@@ -44,18 +44,19 @@ The **Multi-Agent Sales Assistant** is a self-contained web app that mimics a si
 their **milestones**, and the team knowledge around them. It's for **anyone who works an
 opportunity on the MSX platform** — Account Executives (AE), Solution Engineers (SE),
 Cloud Solution Architects (CSA), Customer Success Account Managers (CSAM), and the wider
-account team. On top of the normal app sits a
-**multi-agent AI assistant** that can read the data, draft new opportunities/milestones,
-and draft Teams/Outlook messages — but **it can never change data or send a message on its
-own**. Every agent action becomes an **Approval Request** that a human must approve, and
-**every** governed action is written to an **audit log**.
+account team.
 
-Why it exists: opportunities run for months across many people and roles; context gets lost
-during **handoffs** (ironically, the same problem this document solves for the project
-itself) — for example when a deal passes from pre-sales (AE/SE) to delivery and adoption
-(CSA/CSAM), or any time an account changes hands. The
-assistant centralizes that context and surfaces "what happened / what's at risk / what to do
-next" while staying **governed and auditable**.
+On top of that ordinary app sits a **multi-agent AI assistant**. It can read the data, draft
+new opportunities and milestones, and draft Teams/Outlook messages — but **it can never change
+data or send a message on its own**. Every action it wants to take becomes an **Approval
+Request** that a human must approve first, and **every** governed action is written to an
+**audit log**.
+
+Why it exists: opportunities run for months across many people and roles, and context gets
+lost during **handoffs** — when a deal passes from pre-sales (AE/SE) to delivery and adoption
+(CSA/CSAM), or any time an account changes hands. The assistant centralizes that context and
+surfaces "what happened / what's at risk / what to do next" while staying **governed and
+auditable**. (The irony that this project needed its own handoff document is not lost on us.)
 
 **One sentence:** a governed, human-in-the-loop, multi-agent assistant over a mock MSX
 dataset, deployed on Azure with real Entra identity, Microsoft Graph, and AI security
@@ -71,12 +72,12 @@ flowchart TD
     API -->|Prisma| DB[(Azure PostgreSQL Flexible Server<br/>11 mock tables)]
     API -->|default engine| FA[Foundry hosted agent<br/>agent-framework-agent-basic-responses]
     API -.->|off by default| INAPP[In-app TS engine<br/>direct Azure OpenAI]
-    FA --> MODEL[Model deployment gpt-5-mini]
-    INAPP --> MODEL
+    FA --> M1[gpt-5.4-mini deployment]
+    INAPP --> M2[gpt-5-mini deployment]
 
     API -->|On-Behalf-Of| GRAPH[Microsoft Graph<br/>Teams / Outlook / user hierarchy]
-    MODEL -.->|threat alerts| DEF[Defender for Cloud - AI XDR]
-    MODEL -.->|PII/PCI DLP| PUR[Microsoft Purview]
+    M1 -.->|threat alerts + DLP| SEC[Defender for AI XDR<br/>+ Microsoft Purview]
+    M2 -.->|threat alerts + DLP| SEC
 
     subgraph Governance
       APR[Approval Request queue<br/>human approves]
@@ -97,27 +98,55 @@ and is then recorded in `AgentActionAuditLog`.
 | API | Node + Express + TypeScript (ESM), Prisma, Zod | `apps/api` → Container App `msx-api` |
 | Database | Azure Database for PostgreSQL Flexible Server | `rg-msx-milestone-api`, holds the 11 mock tables |
 | Hosted agent | Microsoft Foundry hosted agent (Responses protocol) | `apps/foundry-agent` → Foundry project (Canada East) |
-| Model | `gpt-5-mini` deployment | Foundry / Azure OpenAI |
+| Model | **Two** deployments in one AI account: `gpt-5.4-mini` (hosted agent) and `gpt-5-mini` (in-app engine) | Foundry / Azure OpenAI |
 | Identity | One Entra app registration (MSAL + OBO) | Entra ID |
 | Security | Defender for AI + Purview DLP | Subscription / tenant scope |
 | Contract | REST + OpenAPI | `openapi/msx-milestone-assistant.openapi.yaml` |
 
+> **Two models, not one.** The Foundry AI account holds **two** deployments, and they are not
+> interchangeable. The hosted agent (the engine actually serving chat) runs **`gpt-5.4-mini`**
+> — set by `AZURE_AI_MODEL_DEPLOYMENT_NAME` in the `azd` env `msx` and provisioned by
+> `azure.yaml`. The in-app TS engine, which is off by default, runs **`gpt-5-mini`** via
+> `AZURE_OPENAI_DEPLOYMENT` on the Container App. If you change one, you have **not** changed
+> the other. Confirm both with:
+>
+> ```powershell
+> az cognitiveservices account deployment list -g rg-agent-framework-agent-basic-responses-dev `
+>   -n <ai-account> --query "[].{name:name,model:properties.model.name}" -o table
+> ```
+
 ## A3. The multi-agent assistant, explained
 
-**Important handoff detail:** the repo contains **three** agent implementations. Knowing
-which is which prevents confusion later.
+**Important handoff detail:** the repo contains **three** agent implementations. Only one of
+them serves traffic. Knowing which is which prevents a lot of confusion later.
 
-| # | Implementation | Location | Status | Notes |
+| # | Implementation | Status | Specialists | Model |
 |---|---|---|---|---|
-| 1 | **Foundry hosted agent** | `apps/foundry-agent/agent-framework-agent-basic-responses` | **Deployed & default** | The production engine, and a **genuine multi-agent orchestrator**: `subagents.py` defines **five specialists** — `milestone`, `governance`, `dashboard`, `opportunity`, `communications` — and `main.py` registers each as an `ask_*` delegate tool on the orchestrator. Every chat turn routes here unless the in-app engine is explicitly enabled. Deployed via `azd` env `msx`. |
-| 2 | **In-app TS engine** | `apps/api/src/services/chat/` (`orchestrator.ts`, `toolLoop.ts`, `msxTools.ts`) | **Off by default** | A single "flat" agent that calls the MSX tools directly (specialists were flattened into one agent to halve latency). Re-enable with `IN_APP_ENGINE_ENABLED=true`. **Reduced capability** — no communications (email/Teams), no `update_opportunity` / `update_deal_team_member`. |
-| 3 | **Python reference orchestrator** | `apps/agent` (`orchestrator.py`, `agents.py`, `tools.py`) | **Reference / standalone** | An earlier, partial cut of the design: an orchestrator delegating to **milestone / opportunity / dashboard** specialists only (no governance or communications). Not called by the API; useful as documentation of the pattern. |
+| 1 | **Foundry hosted agent** | **Deployed & default** | All five | `gpt-5.4-mini` |
+| 2 | **In-app TS engine** | Off by default | Flattened to one | `gpt-5-mini` |
+| 3 | **Python reference** (`apps/agent`) | Reference only, not wired up | Three of five | n/a |
 
-The README describes a five-specialist design (milestone, governance, opportunity,
-communications, dashboard). The **deployed Foundry agent implements all five** — the
-five-specialist framing is the current wiring, not just a roadmap. The other two
-implementations are narrower: the in-app TS engine is deliberately flattened into one agent,
-and the `apps/agent` Python reference covers three of the five.
+**1 — Foundry hosted agent** · `apps/foundry-agent/agent-framework-agent-basic-responses`
+The production engine, and a genuine multi-agent orchestrator: `subagents.py` defines five
+specialists (`milestone`, `governance`, `dashboard`, `opportunity`, `communications`) and
+`main.py` registers each as an `ask_*` delegate tool. Every chat turn routes here unless the
+in-app engine is explicitly enabled. Deployed via `azd` env `msx`.
+
+**2 — In-app TS engine** · `apps/api/src/services/chat/` (`orchestrator.ts`, `toolLoop.ts`,
+`msxTools.ts`)
+A single flat agent that calls the MSX tools directly — the specialists were deliberately
+collapsed into one agent to halve latency. Re-enable with `IN_APP_ENGINE_ENABLED=true`, but
+know that it is **reduced capability**: no communications (email/Teams), and no
+`update_opportunity` / `update_deal_team_member`.
+
+**3 — Python reference orchestrator** · `apps/agent` (`orchestrator.py`, `agents.py`,
+`tools.py`)
+An earlier, partial cut of the design — an orchestrator delegating to milestone, opportunity,
+and dashboard specialists only (no governance, no communications). The API never calls it. Keep
+it as documentation of the pattern, or delete it; it is not load-bearing.
+
+The README describes a five-specialist design, and the **deployed Foundry agent genuinely
+implements all five** — that framing is the current wiring, not a roadmap.
 
 **Governance flow (applies to whichever engine is active):**
 
@@ -181,7 +210,7 @@ Dockerfile, docker-entrypoint.sh   API container image + startup (db push + seed
 | Container Registry (ACR) | `ca34643b5fc3acr` (Container App identity has **AcrPull**; anonymous pull disabled) |
 | PostgreSQL | Azure Database for PostgreSQL **Flexible Server** (server host is inside `DATABASE_URL`; holds the 11 mock tables) |
 | **Foundry resource group** | `rg-agent-framework-agent-basic-responses-dev` — **Canada East** |
-| Foundry project + AI account | AI Foundry project hosting the agent + `gpt-5-mini` model deployment |
+| Foundry project + AI account | AI Foundry project hosting the agent + **two** model deployments (`gpt-5.4-mini` for the hosted agent, `gpt-5-mini` for the in-app engine) |
 | Hosted agent | `agent-framework-agent-basic-responses` (deployed via `azd` env **`msx`**) |
 | Agent identity | User-assigned managed identity (Entra Agent ID) created by the Foundry Bicep |
 | Monitoring | Application Insights + Log Analytics (created by the Foundry infra) |
@@ -248,7 +277,7 @@ az containerapp secret list -g rg-msx-milestone-api -n msx-api --query "[].name"
 | Dependency | What it's for | Cost / licensing note |
 |---|---|---|
 | Azure subscription | Hosts all resources | Pay-as-you-go on the sub above |
-| Microsoft Foundry project + `gpt-5-mini` | The hosted agent + model | Per-token model billing; regional to Canada East |
+| Microsoft Foundry project + models | The hosted agent + its `gpt-5.4-mini` / `gpt-5-mini` deployments | Per-token model billing; regional to Canada East |
 | Microsoft Entra ID | Sign-in + OBO | Included with the tenant |
 | Microsoft Graph | Teams/Outlook sends, user hierarchy | Needs admin-consented delegated scopes |
 | **Microsoft Defender for Cloud — AI plan** | Jailbreak / data-leak alerts on the AI account | **Standard tier is billed** (30-day free trial). Toggle `ENABLE_DEFENDER_FOR_AI` / `az security pricing`. |
@@ -387,9 +416,10 @@ version-management path. Full rollback + stop-conditions are in `.azure/deployme
 
 ## D5. Cost & scaling
 
-- **Main cost drivers:** the `gpt-5-mini` model (per token), Defender for AI (**Standard,
-  billed**), the PostgreSQL Flexible Server (always-on compute + storage), and the Container
-  App (scales to a small floor). Purview needs a **license**.
+- **Main cost drivers:** the model deployments (per token — `gpt-5.4-mini` carries the live
+  traffic), Defender for AI (**Standard, billed**), the PostgreSQL Flexible Server (always-on
+  compute + storage), and the Container App (scales to a small floor). Purview needs a
+  **license**.
 - **To trim cost while keeping it live:** ensure the Container App min-replicas is low; pick
   the smallest viable Postgres SKU; keep the model deployment modest. Check current spend:
   ```powershell
@@ -462,7 +492,7 @@ pg_dump "<DATABASE_URL>" -Fc -f archive\msx-data.dump
 Everything below re-creates the solution in a **fresh** environment. This is the scenario
 where `azd provision` **is** allowed (unlike the redeploy runbook).
 
-**Prereqes:** Azure CLI + `azd` (`azd ext install microsoft.foundry`), Docker, Node 18+, an
+**Prerequisites:** Azure CLI + `azd` (`azd ext install microsoft.foundry`), Docker, Node 18+, an
 Azure subscription, and a tenant where you can admin-consent Graph permissions.
 
 **Step 1 — Foundry project, model, identity, monitoring (IaC):**
@@ -470,7 +500,7 @@ Azure subscription, and a tenant where you can admin-consent Graph permissions.
 cd apps\foundry-agent\agent-framework-agent-basic-responses
 azd auth login
 azd env new msx                      # or any name
-azd up                               # provisions Foundry project + gpt-5-mini + UAMI + App Insights, then deploys the agent
+azd up                               # provisions Foundry project + gpt-5.4-mini + UAMI + App Insights, then deploys the agent
 ```
 This runs the Bicep in `apps/foundry-agent/infra` (`main.bicep`) and prints the agent's
 Responses endpoint — save it as `FOUNDRY_AGENT_ENDPOINT`.
@@ -503,9 +533,14 @@ az containerapp create -g rg-msx-milestone-api -n msx-api `
   --secrets database-url="<DATABASE_URL>" `
   --env-vars DATABASE_URL=secretref:database-url PORT=4000 GRAPH_SEND_MODE=simulate `
              AAD_TENANT_ID=<t> AAD_CLIENT_ID=<c> AAD_CLIENT_SECRET=secretref:... `
-             FOUNDRY_AGENT_ENDPOINT=<from step 1> AZURE_OPENAI_ENDPOINT=<...> AZURE_OPENAI_DEPLOYMENT=gpt-5-mini
+             FOUNDRY_AGENT_ENDPOINT=<from step 1> AZURE_OPENAI_ENDPOINT=<...> AZURE_OPENAI_DEPLOYMENT=gpt-5.4-mini
 # grant the app's managed identity AcrPull on <acr>
 ```
+> **Note on the model name here.** `azd up` in Step 1 provisions **only `gpt-5.4-mini`**, so a
+> from-scratch rebuild should point `AZURE_OPENAI_DEPLOYMENT` at that. The *existing* live
+> environment sets it to `gpt-5-mini` because a second, older deployment is still present in
+> that AI account. Either works — but the deployment you name must actually exist, or the
+> in-app engine will fail the moment someone enables it.
 The container entrypoint runs `prisma db push` and **seeds from the workbook when empty**, so
 the 11 tables + mock data appear automatically on first boot. Verify `/api/health`.
 
@@ -562,7 +597,7 @@ Be upfront with the next owner — a good handoff surfaces the rough edges.
 | **Web hosting** | The React app **runs locally only** — there is no Azure web resource. For a fully cloud handoff, host it as an Azure **Static Web App** or a second Container App and point it at the API FQDN. |
 | **Three agent engines** | Only the **Foundry hosted agent** is deployed/active. The **TS in-app engine** is off (`IN_APP_ENGINE_ENABLED=false`) and the **Python `apps/agent`** orchestrator is a standalone reference. Decide which to keep long-term. |
 | **Engine capability parity** | The engines are **not** feature-equivalent. The Foundry agent has all five specialists incl. communications; the in-app TS engine has **no** email/Teams tools and no `update_opportunity` / `update_deal_team_member`; `apps/agent` covers three of five. If you enable the in-app engine, expect missing capabilities — not just slower ones. |
-| **Automated tests** | The API has a **vitest** suite covering the approval gate — run `npm test` from the repo root. `apps/api/tests/approvalGate.test.ts` pins the human-in-the-loop invariants (reject/needs-changes execute nothing, approve executes exactly once and audits, double-approve is rejected, tampered payloads are refused) and `apps/api/tests/agentToolsGovernance.test.ts` asserts no in-app agent tool mutates data directly. Both suites are fully mocked — they need **no database and no Azure** — and both were mutation-verified (deliberately breaking the gate makes them fail). Still **uncovered**: the web app, the Foundry agent, and true end-to-end integration. The other test file is `apps/foundry-agent/agent-framework-agent-basic-responses/tests/test_msx_session.py` (session-handle regressions, run with `pytest`). Broader validation is `npm run build` + `scripts/smoke-test.ps1` + `docs/api-test.md`. |
+| **Automated tests** | `npm test` runs 23 approval-gate tests (`apps/api/tests/`) — fully mocked, so no database or Azure, ~1 second. They pin the gate itself (reject and needs-changes execute nothing; approve executes exactly once and audits; double-approve and tampered payloads are refused) and assert no in-app agent tool writes directly. Both suites were mutation-verified. **Not covered:** the web app, the Foundry agent, and true end-to-end integration. The Foundry agent has its own `pytest` file for session handles. |
 | **Client secret lifetime** | OBO depends on `AAD_CLIENT_SECRET`; it **expires**. Rotate on handover and track the expiry (D6/D7). |
 | **Graph = live** | `GRAPH_SEND_MODE=live` on the Container App means real Teams/Outlook sends. Opportunity-broadcast can message **every eligible tenant member** — test with `simulate`. |
 | **ACR admin** | ACR admin user was left enabled per an earlier instruction; prefer identity-based `AcrPull` and consider disabling admin. |
