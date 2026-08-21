@@ -63,12 +63,19 @@ Verified against `main` while writing this doc. This is the honest starting line
 
 ### The most important structural gap
 
-> **The Graph read methods are NOT exposed as agent tools.** `msxTools.ts` registers 13 tools —
-> all MSX CRUD + the three readiness tools — and **zero** Graph tools. So the agent can *send*
-> mail/Teams (via the approval gate) but **cannot read** Outlook or Teams. Every "analyze my
-> emails and meetings" ask (Rachel #1, Merve 14.6, Jeff's notification engine) is blocked on
-> this one wiring gap, even though the underlying `graphService.messages()` /
-> `graphService.teamsMessages()` reads already exist and are already audited.
+> **Correction (re-verified against the deployed agent).** An earlier draft of this
+> roadmap said "the Graph read methods are NOT exposed as agent tools." That was true of
+> the in-app TypeScript engine's `msxTools.ts`, which has since been **deleted** — it was
+> never the engine serving live chat. The **deployed Foundry agent already registers
+> `read_outlook` and `read_teams`** on its communications specialist
+> (`apps/foundry-agent/.../subagents.py`), and they call
+> `/api/graph/outlook/messages` and `/api/graph/teams/messages` On-Behalf-Of the
+> signed-in user.
+>
+> So the wiring D2–D5 were blocked on **already exists**. What remains unproven is the
+> layer *above* it: turning what the agent reads into recommendations and stage-progression
+> proposals. Re-test D2–D5 against the live agent before planning work on them — their
+> "agent can't call them" status below is stale.
 
 ---
 
@@ -190,8 +197,8 @@ Every ask from all four stakeholders. **Status** is against `main` today.
 
 | # | Ask | Who | Status | Lands in | Size |
 | --- | --- | --- | --- | --- | --- |
-| D1 | **Expose Graph reads as agent tools** *(unblocks D2–D5, Merve 14.6)* | — | ❌ **0 Graph tools registered** | `services/chat/msxTools.ts` | **S — highest leverage** |
-| D2 | Analyze Outlook emails / Teams chats / meeting transcripts | Rachel, Merve (14.6) | 🟡 reads exist, agent can't call them | `graph.service.ts` + D1 | M |
+| D1 | **Expose Graph reads as agent tools** *(was listed as blocking D2–D5)* | — | ✅ **Already done** — `read_outlook` / `read_teams` are registered on the deployed agent | `apps/foundry-agent/.../subagents.py` | **done — verify by asking the agent to read your inbox** |
+| D2 | Analyze Outlook emails / Teams chats / meeting transcripts | Rachel, Merve (14.6) | 🟡 reads are wired; quality of the analysis is untested | `graph.service.ts` + the communications specialist | M |
 | D3 | "Based on your meetings this week, we recommend these changes to opportunity X" + one-click accept/reject | Rachel | ❌ none | `AiMilestoneRecommendation` + `ApprovalRequest` — **pattern already exists** | M |
 | D4 | Recommend stage progression (e.g. Stage 3 → Stage 4) from real signal | Rachel | ❌ none | deferred `UpdateOpportunity` via approval gate | M |
 | D5 | Suggest blockers, next steps, executive summaries from conversation | Rachel | ❌ none | same pipeline | M |
