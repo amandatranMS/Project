@@ -1,6 +1,6 @@
 # Feature Design: BANT-Gated Milestone Progression + Deadline Alerts
 
-> **Status:** Proposed (not yet built) · **Branch:** `merve-features` · **Last refined:** 2026-08-13
+> **Status:** Proposed (not yet built) · **Branch:** `merve-features` (now merged into `main`) · **Last refined:** 2026-08-13
 >
 > **How to resume:** This is a grounded design, not code. Nothing here is implemented yet.
 > Every code reference below was verified against the current branch (see
@@ -11,6 +11,11 @@
 > captures the other enhancement ideas from the same sync (CSA visibility, milestone intelligence,
 > partner/duplicate, Unified capture, transcript intelligence); [§15](#15-collaboration--next-steps-from-the-sync)
 > has the follow-up commitments.
+>
+> **Wider context:** [`stakeholder-feedback-roadmap.md`](./stakeholder-feedback-roadmap.md) merges
+> this doc's §14/§15 with the later Janet / Rachel / Jeff syncs into one prioritized gap register,
+> and marks every item against what is actually built on `main` today. The BANT gate below is
+> item **B4** there — still the recommended next build.
 
 ---
 
