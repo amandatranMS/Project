@@ -63,9 +63,9 @@ controls (Defender for AI + Purview DLP).
 
 ## A2. Architecture at a glance
 
-
+```mermaid
 flowchart TD
-    [Account team user in browser] -->|MSAL sign-in| W[React web app - apps/web - runs locally]
+    U[Account team user in browser] -->|MSAL sign-in| W[React web app - apps/web - runs locally]
     W -->|HTTPS with signed-in user token, via Vite proxy| API[Express API - msx-api Container App - port 4000]
 
     API -->|Prisma| DB[(Azure PostgreSQL Flexible Server<br/>11 mock tables)]
@@ -79,9 +79,11 @@ flowchart TD
     MODEL -.->|PII/PCI DLP| PUR[Microsoft Purview]
 
     subgraph Governance
-      API --> APR[Approval Request queue<br/>human approves]
-      APR --> AUD[Agent Action Audit Log]
+      APR[Approval Request queue<br/>human approves]
+      AUD[Agent Action Audit Log]
     end
+    API --> APR
+    APR -->|approve only| AUD
 ```
 
 **Read-and-propose, never act.** The agent reads context and submits an `ApprovalRequest`
@@ -107,14 +109,15 @@ which is which prevents confusion later.
 
 | # | Implementation | Location | Status | Notes |
 |---|---|---|---|---|
-| 1 | **Foundry hosted agent** | `apps/foundry-agent/agent-framework-agent-basic-responses` | **Deployed & default** | The production engine. Every chat turn routes here unless the in-app engine is explicitly enabled. Deployed via `azd` env `msx`. |
-| 2 | **In-app TS engine** | `apps/api/src/services/chat/` (`orchestrator.ts`, `toolLoop.ts`, `msxTools.ts`) | **Off by default** | A single "flat" agent that calls the MSX tools directly (specialists were flattened into one agent to halve latency). Re-enable with `IN_APP_ENGINE_ENABLED=true`. |
-| 3 | **Python reference orchestrator** | `apps/agent` (`orchestrator.py`, `agents.py`, `tools.py`) | **Reference / standalone** | The original multi-agent design: an orchestrator delegating to **milestone / opportunity / dashboard** specialists. Not called by the API; useful as documentation of the pattern. |
+| 1 | **Foundry hosted agent** | `apps/foundry-agent/agent-framework-agent-basic-responses` | **Deployed & default** | The production engine, and a **genuine multi-agent orchestrator**: `subagents.py` defines **five specialists** — `milestone`, `governance`, `dashboard`, `opportunity`, `communications` — and `main.py` registers each as an `ask_*` delegate tool on the orchestrator. Every chat turn routes here unless the in-app engine is explicitly enabled. Deployed via `azd` env `msx`. |
+| 2 | **In-app TS engine** | `apps/api/src/services/chat/` (`orchestrator.ts`, `toolLoop.ts`, `msxTools.ts`) | **Off by default** | A single "flat" agent that calls the MSX tools directly (specialists were flattened into one agent to halve latency). Re-enable with `IN_APP_ENGINE_ENABLED=true`. **Reduced capability** — no communications (email/Teams), no `update_opportunity` / `update_deal_team_member`. |
+| 3 | **Python reference orchestrator** | `apps/agent` (`orchestrator.py`, `agents.py`, `tools.py`) | **Reference / standalone** | An earlier, partial cut of the design: an orchestrator delegating to **milestone / opportunity / dashboard** specialists only (no governance or communications). Not called by the API; useful as documentation of the pattern. |
 
-The README describes a five-specialist target design (milestone, governance, opportunity,
-communications, dashboard). That is the **conceptual model**; the shipped engines implement a
-subset (the Foundry agent + the flattened TS engine expose milestone, opportunity, dashboard,
-and search tools). Treat the five-specialist framing as the roadmap, not the current wiring.
+The README describes a five-specialist design (milestone, governance, opportunity,
+communications, dashboard). The **deployed Foundry agent implements all five** — the
+five-specialist framing is the current wiring, not just a roadmap. The other two
+implementations are narrower: the in-app TS engine is deliberately flattened into one agent,
+and the `apps/agent` Python reference covers three of the five.
 
 **Governance flow (applies to whichever engine is active):**
 
@@ -137,6 +140,7 @@ apps/
   api/            Express backend (all REST routes, governance, Graph, chat engines)
     src/services/chat/   in-app TS engine + Foundry proxy + Defender screen
     src/lib/audit.ts     recordAgentAction() — the audit choke point
+    tests/               vitest approval-gate + agent-governance suites (`npm test`)
   foundry-agent/  Microsoft Foundry hosted agent (azd project + Bicep infra)
   agent/          Python reference orchestrator + specialists (not wired to the API)
 packages/shared/  shared TS types + controlled choice lists (enforced by Zod)
@@ -144,7 +148,8 @@ prisma/           schema.prisma (11 models), seed.ts (calls the workbook importe
 scripts/          parseWorkbook.ts, workbookMappings.ts, ensureSeed.ts, smoke-test.ps1
 data/             MSX_Mirror_Necessary_Tables_Import_10_More_Entries.xlsx  (source of truth)
 openapi/          msx-milestone-assistant.openapi.yaml   (keep in sync with the API)
-docs/             architecture.md, security.md, demo-script.md, api-test.md
+docs/             architecture.md, security.md, api-test.md, bant-gated-milestone-progression.md
+redteam/          adversarial tests that exercise the Defender/Purview controls
 .azure/           deployment-plan.md  (the existing one-time REDEPLOY runbook)
 Dockerfile, docker-entrypoint.sh   API container image + startup (db push + seed-if-empty)
 ```
@@ -152,8 +157,8 @@ Dockerfile, docker-entrypoint.sh   API container image + startup (db push + seed
 **Existing docs to lean on** (don't duplicate them — this handoff links to them):
 - `docs/architecture.md` — design + diagrams + the 11-table model.
 - `docs/security.md` — the enable-and-test runbook for Defender for AI + Purview DLP.
-- `docs/demo-script.md` — guided demo walkthrough.
-- `docs/api-test.md` — endpoint-by-endpoint tests.
+- `docs/api-test.md` — endpoint-by-endpoint tests (also the basis for a live demo walkthrough).
+- `docs/bant-gated-milestone-progression.md` — BANT-gated milestone design + roadmap.
 - `.azure/deployment-plan.md` — a detailed, already-validated **redeploy** runbook for the
   existing resources (reuse this for routine redeploys in Option 1).
 
@@ -300,10 +305,17 @@ live API, redeploy the API image, redeploy the Foundry agent, and read logs/metr
 # 1. Install + generate client + push schema + load the workbook (needs DATABASE_URL in .env)
 npm run setup
 
-# 2. Run API (:4000) + web (:5173) together
+# 2. Fastest signal — governance tests. No database, no Azure, no .env required.
+npm test
+
+# 3. Run API (:4000) + web (:5173) together
 npm run dev
 # open http://localhost:5173  — confirm the mock banner, sign-in, dashboard, approvals
 ```
+
+> `npm test` is the quickest way to prove a checkout is sane: it runs the approval-gate
+> suites in under a second with everything mocked. If it fails, the human-in-the-loop
+> guarantee described in Part A is broken — treat that as a release blocker, not a flake.
 
 Health check against the **live** API:
 
@@ -399,6 +411,10 @@ version-management path. Full rollback + stop-conditions are in `.azure/deployme
 5. **Rotate the client secret** on handover: create a new secret on the app registration,
    put it in the API's `AAD_CLIENT_SECRET` (root `.env` locally / Container App secret in
    Azure), then remove the old one so the departing author's copy stops working.
+   **Caveat:** `MSX_SESSION_SECRET` (which signs the session handles the hosted agent uses
+   for its tool callbacks) **falls back to `AAD_CLIENT_SECRET` when unset**, so rotating the
+   client secret silently invalidates in-flight session handles. Set `MSX_SESSION_SECRET` to
+   its own dedicated random value to decouple the two before you rotate.
 6. **Keep Defender for AI + Purview DLP on** if the compliance story matters (see
    `docs/security.md`).
 
@@ -545,7 +561,8 @@ Be upfront with the next owner — a good handoff surfaces the rough edges.
 |---|---|
 | **Web hosting** | The React app **runs locally only** — there is no Azure web resource. For a fully cloud handoff, host it as an Azure **Static Web App** or a second Container App and point it at the API FQDN. |
 | **Three agent engines** | Only the **Foundry hosted agent** is deployed/active. The **TS in-app engine** is off (`IN_APP_ENGINE_ENABLED=false`) and the **Python `apps/agent`** orchestrator is a standalone reference. Decide which to keep long-term. |
-| **Spec vs. wiring** | The README's **five-specialist** design is the target; the shipped engines implement a subset (flattened agent + milestone/opportunity/dashboard/search tools). |
+| **Engine capability parity** | The engines are **not** feature-equivalent. The Foundry agent has all five specialists incl. communications; the in-app TS engine has **no** email/Teams tools and no `update_opportunity` / `update_deal_team_member`; `apps/agent` covers three of five. If you enable the in-app engine, expect missing capabilities — not just slower ones. |
+| **Automated tests** | The API has a **vitest** suite covering the approval gate — run `npm test` from the repo root. `apps/api/tests/approvalGate.test.ts` pins the human-in-the-loop invariants (reject/needs-changes execute nothing, approve executes exactly once and audits, double-approve is rejected, tampered payloads are refused) and `apps/api/tests/agentToolsGovernance.test.ts` asserts no in-app agent tool mutates data directly. Both suites are fully mocked — they need **no database and no Azure** — and both were mutation-verified (deliberately breaking the gate makes them fail). Still **uncovered**: the web app, the Foundry agent, and true end-to-end integration. The other test file is `apps/foundry-agent/agent-framework-agent-basic-responses/tests/test_msx_session.py` (session-handle regressions, run with `pytest`). Broader validation is `npm run build` + `scripts/smoke-test.ps1` + `docs/api-test.md`. |
 | **Client secret lifetime** | OBO depends on `AAD_CLIENT_SECRET`; it **expires**. Rotate on handover and track the expiry (D6/D7). |
 | **Graph = live** | `GRAPH_SEND_MODE=live` on the Container App means real Teams/Outlook sends. Opportunity-broadcast can message **every eligible tenant member** — test with `simulate`. |
 | **ACR admin** | ACR admin user was left enabled per an earlier instruction; prefer identity-based `AcrPull` and consider disabling admin. |
@@ -559,8 +576,8 @@ Be upfront with the next owner — a good handoff surfaces the rough edges.
 A 60–90 min live walkthrough closes most handoff gaps. Suggested agenda:
 
 1. **(10 min)** Problem + the governance idea (Part A1, A3) — demo one approval + audit.
-2. **(15 min)** Live demo using `docs/demo-script.md` (dashboard → opportunity → agent draft →
-   approve → Teams/Outlook).
+2. **(15 min)** Live demo of the golden path (dashboard → opportunity → agent draft →
+   approve → Teams/Outlook); use `docs/api-test.md` for the endpoint-level equivalent.
 3. **(15 min)** Architecture + repo tour (Part A2/A4); the three engines; where audit happens.
 4. **(15 min)** Inventory + access (Parts B/C) — hand over secrets securely, add access, and
    **rotate the client secret together**.
@@ -596,6 +613,7 @@ redeploy the API and the agent (Option 1) **or** rebuild from zero in a test env
 # --- Local dev ---
 npm run setup                     # install + prisma generate + db push + import workbook
 npm run dev                       # API :4000 + web :5173
+npm test                          # approval-gate governance suites (mocked; no DB/Azure needed)
 npm run build                     # build shared + api + web
 npm run import-workbook           # reset tables + reload from the Excel workbook
 

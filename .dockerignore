@@ -11,6 +11,8 @@ apps/foundry-agent
 docs
 openapi
 *.md
+**/tests
+**/vitest.config.ts
 prisma/dev.db
 prisma/*.db
 .env

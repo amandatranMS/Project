@@ -41,6 +41,19 @@ function requireExplicitConfirmation(args: Record<string, unknown>) {
   }
 }
 
+/**
+ * Best-effort lookup of the parent opportunity name so a queued approval request
+ * shows which deal it belongs to. Never blocks the approval if the read fails.
+ */
+async function opportunityNameForMilestone(id: string): Promise<string | undefined> {
+  try {
+    const milestone = (await milestonesService.get(id)) as { opportunity?: { opportunityName?: string } } | null;
+    return milestone?.opportunity?.opportunityName ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function trimMilestone(m: any) {
   return {
@@ -174,7 +187,8 @@ export const milestoneTools: Tool[] = [
   },
   {
     name: 'update_milestone',
-    description: 'Update fields on an existing milestone by id.',
+    description:
+      'Request an update to fields on an existing milestone by id. This does NOT change anything — it submits an approval request that a human must approve first.',
     parameters: {
       type: 'object',
       properties: {
@@ -188,15 +202,49 @@ export const milestoneTools: Tool[] = [
     },
     run: async (a) => {
       const { id, ...rest } = a;
-      const input = updateMilestoneSchema.parse(rest);
-      return trimMilestone(await milestonesService.update(String(id), input));
+      const fields = updateMilestoneSchema.parse(rest);
+      const milestoneId = String(id);
+      const changes = Object.entries(fields)
+        .map(([k, v]) => `${k}=${String(v)}`)
+        .join(', ');
+      const approval = await approvalRequestsService.create(
+        createApprovalSchema.parse({
+          requestName: `Update milestone ${milestoneId}${changes ? `: ${changes}` : ''}`,
+          opportunityName: await opportunityNameForMilestone(milestoneId),
+          requestedBy: 'InAppAgent',
+          action: { kind: 'UpdateMilestone', milestoneId, ...fields },
+        }),
+      );
+      return {
+        submittedForApproval: true,
+        approvalRequestBusinessId: approval.approvalRequestBusinessId,
+        approvalStatus: approval.approvalStatus,
+        note: 'Pending human approval in the Approvals log. The milestone is NOT changed until a human approves.',
+      };
     },
   },
   {
     name: 'delete_milestone',
-    description: 'Delete a milestone by id (its status history is also removed).',
+    description:
+      'Request deletion of a milestone by id. This does NOT delete anything — it submits an approval request that a human must approve first.',
     parameters: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
-    run: (a) => milestonesService.remove(String(a.id)),
+    run: async (a) => {
+      const milestoneId = String(a.id);
+      const approval = await approvalRequestsService.create(
+        createApprovalSchema.parse({
+          requestName: `Delete milestone ${milestoneId}`,
+          opportunityName: await opportunityNameForMilestone(milestoneId),
+          requestedBy: 'InAppAgent',
+          action: { kind: 'DeleteMilestone', milestoneId },
+        }),
+      );
+      return {
+        submittedForApproval: true,
+        approvalRequestBusinessId: approval.approvalRequestBusinessId,
+        approvalStatus: approval.approvalStatus,
+        note: 'Pending human approval in the Approvals log. The milestone is NOT deleted until a human approves.',
+      };
+    },
   },
 ];
 

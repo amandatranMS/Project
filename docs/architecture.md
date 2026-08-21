@@ -51,7 +51,7 @@ scripts/
 openapi/
   msx-milestone-assistant.openapi.yaml
 docs/
-  api-test.md, demo-script.md, architecture.md, security.md
+  api-test.md, architecture.md, security.md, bant-gated-milestone-progression.md
 ```
 
 npm **workspaces** tie the packages together. The web app talks to the API through
@@ -175,5 +175,5 @@ npm run dev     # api on :4000, web on :5173
 `npm run setup` requires `DATABASE_URL` (a PostgreSQL connection string) in `.env` —
 see the README's *Getting started* and *Database — Azure PostgreSQL (cloud)* sections.
 
-See `docs/api-test.md` for endpoint-by-endpoint tests and `docs/demo-script.md` for
-a guided walkthrough.
+See `docs/api-test.md` for endpoint-by-endpoint tests and a guided walkthrough of the
+golden path.
