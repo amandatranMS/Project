@@ -382,12 +382,12 @@ Check 'GET /api/opportunities/does-not-exist -> 404' {
 
 # --------------------------------------------------------------------- Chat
 Write-Host "`nChat assistant (requires AI config)" -ForegroundColor Yellow
-Check 'POST /api/chat (in-app engine)' {
-  $body = @{ messages = @(@{ role = 'user'; content = 'List the milestones for this opportunity.' }); engine = 'in-app' }
+Check 'POST /api/chat' {
+  $body = @{ messages = @(@{ role = 'user'; content = 'List the milestones for this opportunity.' }) }
   $r = Invoke-Api POST '/api/chat' $body
   if ($r.Status -eq 200 -and $r.Json.data.reply) { return $true }
-  # A 500 here is almost always missing Azure OpenAI credentials, not an app bug.
-  if ($r.Status -eq 500) { throw 'SKIP: needs Azure OpenAI config (set AZURE_OPENAI_* / az login).' }
+  # A 500 here is almost always a missing/unreachable Foundry agent, not an app bug.
+  if ($r.Status -eq 500) { throw 'SKIP: needs the Foundry hosted agent (set FOUNDRY_AGENT_ENDPOINT / az login).' }
   throw "status $($r.Status): $($r.Raw)"
 }
 

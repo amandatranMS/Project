@@ -360,8 +360,6 @@ export const chatSchema = z.object({
       }),
     )
     .min(1),
-  // The in-app engine is disabled; the Foundry hosted agent is the only engine.
-  engine: z.enum(['in-app', 'foundry']).optional().default('foundry'),
 });
 
 // ---- Universal search ----

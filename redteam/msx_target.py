@@ -39,7 +39,6 @@ class TargetConfig:
     def __init__(self) -> None:
         base = os.environ.get("MSX_API_BASE_URL", "http://localhost:4000").rstrip("/")
         self.chat_url = f"{base}/api/chat"
-        self.engine = os.environ.get("MSX_CHAT_ENGINE", "foundry")
         self.api_key = os.environ.get("MSX_API_KEY", "").strip()
         self.user_bearer = os.environ.get("MSX_USER_BEARER", "").strip()
         self.timeout_s = float(os.environ.get("MSX_REQUEST_TIMEOUT", "120"))
@@ -141,7 +140,6 @@ def build_target(config: TargetConfig | None = None):
     ) -> dict[str, list[dict[str, str]]]:
         payload = {
             "messages": _normalize_messages(messages),
-            "engine": cfg.engine,
         }
         timeout = aiohttp.ClientTimeout(total=cfg.timeout_s)
         try:

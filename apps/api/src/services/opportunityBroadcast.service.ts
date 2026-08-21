@@ -17,7 +17,7 @@ import { graphService } from './graph.service.js';
  *    after the opportunity is saved. On agree it calls `announce()` below, which
  *    posts the Teams DM (confirmed) and is audited by graphService.notifyTeams.
  *
- *  - **Direct agent create ('queue'):** the in-app assistant and REST service creates
+ *  - **Direct agent create ('queue'):** the assistant and REST service creates
  *    persist the opportunity immediately with no prior approval, so the agent must
  *    never send directly. We queue a Pending ApprovalRequest carrying a deferred
  *    `NotifyTeams` action; the message only goes out when a human approves it in the
@@ -171,7 +171,7 @@ async function queueTeamsBroadcastApproval(opp: Opportunity) {
   });
 
   // This bypasses approvalRequestsService.create, so log the submission here to
-  // match how in-app agent approvals are audited — the agent queuing a send is
+  // match how agent approvals are audited — the agent queuing a send is
   // itself a governed action, even though nothing is delivered until approval.
   await recordAgentAction({
     agentName: 'OpportunityBroadcast',

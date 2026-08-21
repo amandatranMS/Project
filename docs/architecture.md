@@ -140,16 +140,14 @@ controls on the **AI model interactions** (never on the mock tables). See
 [security.md](security.md) for the enable/test runbook.
 
 - **Microsoft Defender for Cloud (→ Defender XDR)** attaches to the shared
-  Foundry `AIServices` account, so it covers **both** engines — the Foundry hosted
-  agent (`services/chat/foundryProxy.ts`) and the direct Azure OpenAI engine
-  (`orchestrator.ts` → `toolLoop.ts`). Enabled via the `enableDefenderForAI` Bicep
-  param.
+  Foundry `AIServices` account, so it covers every chat turn — all of which go to
+  the Foundry hosted agent (`services/chat/foundryProxy.ts`). Enabled via the
+  `enableDefenderForAI` Bicep param.
 - **Microsoft Purview DLP** classifies the prompts/responses sent to the **model
-  deployment**, so it covers the model calls of **both** engines — including the Foundry
-  hosted agent. Policies are only *enforced* (and only alert) when the call carries a
+  deployment**, so it covers the model calls the Foundry hosted agent makes. Policies
+  are only *enforced* (and only alert) when the call carries a
   delegated **user-context token**: the API calls Foundry On-Behalf-Of the signed-in
-  seller (`lib/foundryAuth.ts`), and the direct engine stamps each call with the user's
-  `user_security_context` (built in `lib/requestContext.ts`). App-only/managed-identity
+  seller (`lib/foundryAuth.ts`). App-only/managed-identity
   calls are audited but not enforced. What Purview does not yet capture is the **agent as
   its own entity** (its identity, tool calls, orchestration). See [security.md](security.md).
 

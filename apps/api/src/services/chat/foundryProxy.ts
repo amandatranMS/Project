@@ -4,7 +4,7 @@ import {
   getFoundryAppToken,
   getFoundryUserToken,
 } from '../../lib/foundryAuth.js';
-import type { ChatMessage, TokenSink } from './toolLoop.js';
+import type { ChatMessage, TokenSink } from './types.js';
 
 /**
  * Option A (demo): forward the conversation to the deployed Foundry hosted
@@ -128,7 +128,7 @@ function hintForFailure(status: number, code?: string): string {
   if (status === 429) {
     return 'The assistant is temporarily busy — the model hit its per-minute rate limit. Wait a few seconds and send your message again.';
   }
-  return 'This is usually a transient cloud issue — try again, or switch to the in-app engine.';
+  return 'This is usually a transient cloud issue — wait a moment and try again.';
 }
 
 // Tunables (override via .env). The hosted agent + its tool callbacks can be
@@ -334,7 +334,7 @@ export async function runFoundryAgent(
       throw new HttpError(
         aborted ? 504 : 502,
         aborted
-          ? `The Foundry hosted agent didn't respond within ${Math.round(REQUEST_TIMEOUT_MS / 1000)}s. It may still be finishing — check the Agent Audit Log before retrying, or switch to the in-app engine.`
+          ? `The Foundry hosted agent didn't respond within ${Math.round(REQUEST_TIMEOUT_MS / 1000)}s. It may still be finishing — check the Agent Audit Log before retrying.`
           : `Could not reach the Foundry hosted agent: ${err instanceof Error ? err.message : String(err)}`,
       );
     }

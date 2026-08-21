@@ -850,17 +850,6 @@ select:focus, .filters input:focus {
 }
 .chat-header > div { display: flex; align-items: center; gap: var(--sp-3); }
 .chat-header strong { margin-right: 2px; font-weight: 700; }
-.chat-engine {
-  font: inherit;
-  font-size: 12px;
-  padding: 5px 8px;
-  border-radius: var(--r-sm);
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  background: rgba(255, 255, 255, 0.14);
-  color: #fff;
-  cursor: pointer;
-}
-.chat-engine option { color: #000; }
 .chat-engine-badge {
   font-size: 11px;
   padding: 3px 9px 3px 8px;

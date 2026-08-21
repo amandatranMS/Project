@@ -61,19 +61,17 @@ export const api = {
 };
 
 // ---- Chat assistant ----
-export type ChatEngine = 'in-app' | 'foundry';
 export interface ChatTurn {
   role: 'user' | 'assistant';
   content: string;
 }
 export interface ChatResult {
   reply: string;
-  engine: ChatEngine;
 }
 
 /** Send the running transcript to the assistant and get the next reply. */
-export function sendChat(messages: ChatTurn[], engine: ChatEngine) {
-  return api.post<ChatResult>('/chat', { messages, engine });
+export function sendChat(messages: ChatTurn[]) {
+  return api.post<ChatResult>('/chat', { messages });
 }
 
 /**
@@ -83,14 +81,13 @@ export function sendChat(messages: ChatTurn[], engine: ChatEngine) {
  */
 export async function sendChatStream(
   messages: ChatTurn[],
-  engine: ChatEngine,
   onDelta: (delta: string) => void,
   signal?: AbortSignal,
 ): Promise<string> {
   const res = await fetch(`${BASE}/chat/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
-    body: JSON.stringify({ messages: messages.map((m) => ({ role: m.role, content: m.content })), engine }),
+    body: JSON.stringify({ messages: messages.map((m) => ({ role: m.role, content: m.content })) }),
     signal,
   });
   if (!res.ok || !res.body) {

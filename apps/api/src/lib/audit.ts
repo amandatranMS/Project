@@ -1,6 +1,5 @@
 import { prisma } from './prisma.js';
 import { genId } from './ids.js';
-import { getAgentContext } from './agentContext.js';
 import { currentOwnerId } from './requestContext.js';
 
 /**
@@ -27,11 +26,6 @@ export async function recordAgentAction(params: {
    */
   ownerId?: string | null;
 }) {
-  // If this action happened during an in-app assistant turn, capture the
-  // conversation so it can be reviewed from the audit log.
-  const turn = getAgentContext();
-  const conversation = turn ? JSON.stringify(turn.conversation) : undefined;
-
   const entry = await prisma.agentActionAuditLog.create({
     data: {
       auditBusinessId: genId('AU'),
@@ -46,14 +40,9 @@ export async function recordAgentAction(params: {
       outputSummary: params.outputSummary,
       securityEvent: params.securityEvent ?? false,
       result: params.result ?? 'Success',
-      conversation,
       ownerId: params.ownerId ?? currentOwnerId(),
     },
   });
-
-  // Remember this row so chatService can stamp the final answer onto it once the
-  // turn completes.
-  if (turn) turn.createdAuditIds.push(entry.id);
 
   return entry;
 }

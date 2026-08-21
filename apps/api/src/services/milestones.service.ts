@@ -15,7 +15,7 @@ type UpdateInput = z.infer<typeof updateMilestoneSchema>;
 /**
  * Extra context for a status-changing update: who is acting (for the Graph
  * manager-email side effect) and whether they acknowledged that email. Optional
- * so non-UI callers (e.g. the disabled in-app tool) simply never send.
+ * so non-UI callers (e.g. REST/agent tool callbacks) simply never send.
  */
 export type MilestoneUpdateContext = MilestoneNotifyContext;
 

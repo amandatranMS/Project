@@ -204,13 +204,12 @@ See **[docs/security.md](docs/security.md)** for the enable + test runbook.
 - **Microsoft Defender for Cloud → Defender XDR** — threat protection for AI
   services, enabled via `ENABLE_DEFENDER_FOR_AI` (Bicep) or
   `az security pricing create -n AI --tier Standard`. Raises jailbreak /
-  data-leakage / credential-theft alerts on the AIServices account, so it covers
-  **both** the hosted agent and the direct engine. The direct engine also stamps
-  each model call with the signed-in user's `user_security_context` so alerts are
-  attributable to the real seller.
+  data-leakage / credential-theft alerts on the AIServices account, which every
+  chat turn passes through. Alerts are attributed to the app's identity rather than
+  to the individual seller — see `docs/security.md` §1c for how to change that.
 - **Microsoft Purview (DLP for AI)** — the Defender "data security for AI
   interactions" bridge shares **model-level** prompts/responses with Purview, so DLP
-  for PII/PCI applies to the **direct** engine *and* to the model calls the Foundry
+  for PII/PCI applies to the model calls the Foundry
   agent makes under the hood. Needs a Purview license. _Note:_ Purview does not yet
   capture the **agent as its own entity** (identity, tool calls, orchestration), and
   PII/PCI matches surface in the **Purview portal** (DSPM for AI / DLP alerts), not in
@@ -410,10 +409,9 @@ a real message never goes out without a human deciding:
 - **Human creates it** — after clicking **Create**, a popup asks whether to send the
   visibility message. Agreeing calls `POST /api/opportunities/:id/announce` and the
   Teams DM is sent as the signed-in user. Declining just closes the form.
-- **An agent creates it** — whether the in-app assistant or the Foundry hosted
-  agent, the agent never sends. A **Pending** `ApprovalRequest` carrying a deferred
-  `NotifyTeams` action is queued; the same consent popup appears when a human
-  approves it on the **Approvals** page, and only then is it delivered.
+- **An agent creates it** — the agent never sends. A **Pending** `ApprovalRequest`
+  carrying a deferred `NotifyTeams` action is queued; the same consent popup appears
+  when a human approves it on the **Approvals** page, and only then is it delivered.
 ## API
 
 REST API served at `http://localhost:4000/api`. Full contract in

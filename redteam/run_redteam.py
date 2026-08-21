@@ -146,7 +146,7 @@ async def run_defender(args, project, credential, cfg: TargetConfig):
     scan_name = args.scan_name or f"msx-defender-{_timestamp()}"
     output_path = os.path.join(args.output_dir, f"{scan_name}.json")
     _log(
-        f"DEFENDER run → target {cfg.chat_url} (engine={cfg.engine}); "
+        f"DEFENDER run → target {cfg.chat_url}; "
         f"{len(risk_categories)} risk categories × {args.num_objectives} objectives; "
         f"strategies={[getattr(s, 'name', str(s)) for s in strategies] or 'baseline only'}"
     )
@@ -191,7 +191,7 @@ async def run_dlp(args, project, credential, cfg: TargetConfig):
     scan_name = args.scan_name or f"msx-dlp-{_timestamp()}"
     output_path = os.path.join(args.output_dir, f"{scan_name}.json")
     _log(
-        f"DLP run → target {cfg.chat_url} (engine={cfg.engine}); seeds={seed_file}; "
+        f"DLP run → target {cfg.chat_url}; seeds={seed_file}; "
         f"DLP {'ENFORCING (user token present)' if cfg.dlp_enforcing else 'AUDIT-ONLY'}. "
         "Seeds sent baseline (no encoding) so sensitive-info-types survive classification."
     )

@@ -43,7 +43,6 @@ async def main_async(attack: bool) -> None:
     load_dotenv()
     cfg = TargetConfig()
     print(f"target      : {cfg.chat_url}")
-    print(f"engine      : {cfg.engine}")
     print(f"api-key hdr : {'yes' if cfg.api_key else 'no'}")
     print(f"user token  : {'yes (DLP will enforce)' if cfg.dlp_enforcing else 'no (DLP audit-only)'}")
 
