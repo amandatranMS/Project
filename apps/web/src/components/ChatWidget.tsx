@@ -186,27 +186,40 @@ function newConversation(): Conversation {
  * "Confirm & submit for approval" button vanish for every other phrasing.
  */
 const SIGN_OFF_ASK =
-  /\b(?:confirm|sign\s*off|shall\s+I\s+(?:submit|send|post|notify|proceed|go\s+ahead)|(?:would|do)\s+you\s+(?:like|want)\s+me\s+to\s+(?:submit|send|post|notify|proceed|go\s+ahead)|ready\s+(?:to\s+(?:submit|send)|for\s+(?:submission|approval))|submit\s+(?:this|it|the\s+draft)\s+for\s+approval|let\s+me\s+know\s+if\s+(?:you'?d\s+like|you\s+would\s+like|you\s+want|there\s+are)\s+(?:any\s+)?(?:changes|edits|adjustments)|reply\s+["']?yes["']?|say\s+["']?(?:yes|go)["']?)\b/i;
+  /\b(?:confirm|sign\s*off|shall\s+I\s+(?:submit|send|post|notify|proceed|go\s+ahead)|(?:would|do)\s+you\s+(?:like|want)\s+me\s+to\s+(?:submit|send|post|notify|proceed|go\s+ahead)|ready\s+(?:to\s+(?:submit|send)|for\s+(?:submission|approval))|submit\s+(?:this|it|the\s+draft)\s+for\s+approval|before\s+(?:I|we)\s+submit|before\s+(?:this|it)\s+goes\s+(?:to|for)\s+approval|goes\s+to\s+approval|for\s+submission|let\s+me\s+know\s+if\s+(?:you'?d\s+like|you\s+would\s+like|you\s+want|there\s+are)\s+(?:any\s+)?(?:changes|edits|adjustments)|reply\s+["']?yes["']?|say\s+["']?(?:yes|go)["']?)\b/i;
 
 /**
- * The turn already produced an approval request, so don't offer to submit it again.
- * Deliberately matches only completed-submission phrasing — a draft that says "this
- * will be submitted for approval once you confirm" must still show the button.
+ * A completed submission. `APR-…` (the approval request business id) is the
+ * definitive marker — the agent only ever prints one after a real submission.
  */
 const ALREADY_SUBMITTED =
-  /\b(?:i'?ve\s+submitted|i\s+have\s+submitted|(?:has|have)\s+been\s+submitted|was\s+submitted|submitted\s+successfully|approval\s+request\s+(?:has\s+been\s+)?(?:created|submitted)|created\s+(?:an\s+)?approval\s+request)\b/i;
+  /\bAPR-[A-Z0-9]{4,}\b|\bsubmitted\s+for\s+approval\s*:\s*yes\b|\b(?:i'?ve\s+submitted|i\s+have\s+submitted|(?:has|have)\s+been\s+submitted|was\s+submitted|submitted\s+successfully|submitted\s+the\s+\w+\s+for\s+(?:human\s+)?approval|approval\s+request\s+(?:has\s+been\s+)?(?:created|submitted)|created\s+(?:an\s+)?approval\s+request)\b/i;
 
 /**
- * Confidence annotations the assistant must attach to every value of a new-record
- * draft ("[Known]", "[Assumption—High]", "[Not applicable—assumed]"). Several of
- * these in one turn is the strongest available signal that a real draft is on screen.
+ * Negated submission statements. The agent reassures the user on almost every DRAFT
+ * turn ("This is only a draft.", "Nothing has been submitted for approval."), and the
+ * literal substring "has been submitted" inside that sentence otherwise reads as a
+ * completed submission and wrongly hides the button. Stripped before the check above,
+ * and used as positive evidence that a draft is pending.
+ */
+const NEGATED_SUBMISSION = /\b(?:nothing|not|never|no)\b[^.\n]{0,60}?\bsubmi\w*/gi;
+
+/** "This is only a draft" / "nothing was submitted yet" — something IS pending. */
+const PENDING_DRAFT_NOTE =
+  /\b(?:nothing\s+(?:has\s+been|was|is)\s+submitted|not\s+(?:yet\s+)?submitted|(?:this\s+is\s+)?only\s+a\s+draft|draft\s+only|does\s+not\s+exist\s+until\s+approved)\b/i;
+
+/**
+ * Confidence annotations the assistant attaches to values of a new-record draft
+ * ("[Known]", "[Assumption—High]", "[Not applicable—assumed]"). Strong draft evidence,
+ * though the agent does not always include them.
  */
 const DRAFT_ANNOTATION = /\[(?:known|assumption[^\]]*|not\s+applicable[^\]]*)\]/gi;
 
 /**
  * Field labels taken from the `create_*` tool schemas, matched only as a "Label:" line
  * item. A draft must cover every field the tool accepts, so several distinct labels in
- * one turn means a record draft — not prose that happens to name a field.
+ * one turn means a record draft — not prose that happens to name a field. On its own
+ * this is NOT enough: a detail listing of existing records repeats the same labels.
  */
 const DRAFT_FIELD_LABEL =
   /(?:^|\n)\s*(?:[-*\u2022]|\|)?\s*\**\s*(milestone name|opportunity name|customer name|customer commitment|milestone status|milestone category|solution area|sales stage|estimated revenue|close date|est(?:imated)? date|assigned se|ae owner|delivered by|workload|partner name|status reason|risk impact|risk description|mitigation plan|blocked reason|blocked owner|competitor name|azure capacity type|preferred azure region|business problem|next step|consumption phase)\**\s*:/gi;
@@ -226,19 +239,30 @@ function countDistinct(text: string, re: RegExp): number {
   return new Set(found.map((m) => m.toLowerCase().replace(/[^a-z]/g, ''))).size;
 }
 
-/**
- * Is there genuinely something pending that a human could approve?
- *
- * A sign-off phrase alone is NOT enough: the read-only handoff- and ECIF-readiness
- * answers legitimately say "Confirm the customer plans to deploy" and "Confirm the
- * Work Scope …, then submit the ECIF request", and neither has anything to approve.
- * So we require evidence that an actual governed write is drafted on screen.
- */
+/** Is a governed write actually drafted on screen (rather than merely discussed)? */
 function hasApprovableDraft(text: string): boolean {
   if (countDistinct(text, DRAFT_ANNOTATION) >= 2) return true;
   if (countDistinct(text, DRAFT_FIELD_LABEL) >= 3) return true;
   if (countDistinct(text, MESSAGE_DRAFT_LABEL) >= 2) return true;
   return WRITE_RESTATEMENT.test(text) && RECORD_REFERENCE.test(text);
+}
+
+/**
+ * Is a governed write drafted and waiting on the user to sign off?
+ *
+ * Three independent conditions must hold, because no single one is reliable:
+ *  1. a draft is really on screen — the read-only ECIF/handoff readiness answers say
+ *     "Confirm the customer plans to deploy" with nothing to approve;
+ *  2. it has not already been submitted — checked after removing negated statements,
+ *     since drafts say "Nothing has been submitted for approval";
+ *  3. the turn is inviting sign-off — either an explicit ask, or the "this is only a
+ *     draft" note. A plain record listing repeats field labels but has neither, so it
+ *     is correctly excluded.
+ */
+function isAwaitingApprovalConfirmation(text: string): boolean {
+  if (!hasApprovableDraft(text)) return false;
+  if (ALREADY_SUBMITTED.test(text.replace(NEGATED_SUBMISSION, ' '))) return false;
+  return SIGN_OFF_ASK.test(text.slice(-500)) || PENDING_DRAFT_NOTE.test(text);
 }
 
 function loadConversations(owner: string): Conversation[] {
@@ -577,14 +601,8 @@ export default function ChatWidget() {
   // trailing empty assistant bubble (a turn that streamed only tool calls) can't
   // suppress the button.
   const lastAssistantText = lastAssistantIndex > lastUserIndex ? (messages[lastAssistantIndex]?.content ?? '') : '';
-  // Show the button ONLY when a governed write is actually drafted and waiting on the
-  // user. The sign-off ask is matched on the tail, where that ask lives; the draft and
-  // already-submitted checks read the whole turn.
-  const awaitingConfirmation =
-    !busy &&
-    hasApprovableDraft(lastAssistantText) &&
-    SIGN_OFF_ASK.test(lastAssistantText.slice(-500)) &&
-    !ALREADY_SUBMITTED.test(lastAssistantText);
+  // Show the button ONLY when a governed write is drafted and waiting on the user.
+  const awaitingConfirmation = !busy && isAwaitingApprovalConfirmation(lastAssistantText);
 
   if (!open) {
     return (
