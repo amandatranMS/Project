@@ -181,6 +181,70 @@ function newConversation(engine: ChatEngine = 'foundry'): Conversation {
   return { id: genId(), title: 'New chat', engine, messages: [], updatedAt: Date.now() };
 }
 
+/**
+ * Does the assistant's closing line ask the user to sign off before it submits?
+ *
+ * Chat always runs on the hosted Foundry agent, whose instructions live in Foundry —
+ * not in `orchestrator.ts` — so it words this ask freely ("Shall I submit this?",
+ * "Ready to submit?"). Matching only the literal word "confirm" made the
+ * "Confirm & submit for approval" button vanish for every other phrasing.
+ */
+const SIGN_OFF_ASK =
+  /\b(?:confirm|sign\s*off|shall\s+I\s+(?:submit|send|post|notify|proceed|go\s+ahead)|(?:would|do)\s+you\s+(?:like|want)\s+me\s+to\s+(?:submit|send|post|notify|proceed|go\s+ahead)|ready\s+(?:to\s+(?:submit|send)|for\s+(?:submission|approval))|submit\s+(?:this|it|the\s+draft)\s+for\s+approval|let\s+me\s+know\s+if\s+(?:you'?d\s+like|you\s+would\s+like|you\s+want|there\s+are)\s+(?:any\s+)?(?:changes|edits|adjustments)|reply\s+["']?yes["']?|say\s+["']?(?:yes|go)["']?)\b/i;
+
+/**
+ * The turn already produced an approval request, so don't offer to submit it again.
+ * Deliberately matches only completed-submission phrasing — a draft that says "this
+ * will be submitted for approval once you confirm" must still show the button.
+ */
+const ALREADY_SUBMITTED =
+  /\b(?:i'?ve\s+submitted|i\s+have\s+submitted|(?:has|have)\s+been\s+submitted|was\s+submitted|submitted\s+successfully|approval\s+request\s+(?:has\s+been\s+)?(?:created|submitted)|created\s+(?:an\s+)?approval\s+request)\b/i;
+
+/**
+ * Confidence annotations the assistant must attach to every value of a new-record
+ * draft ("[Known]", "[Assumption—High]", "[Not applicable—assumed]"). Several of
+ * these in one turn is the strongest available signal that a real draft is on screen.
+ */
+const DRAFT_ANNOTATION = /\[(?:known|assumption[^\]]*|not\s+applicable[^\]]*)\]/gi;
+
+/**
+ * Field labels taken from the `create_*` tool schemas, matched only as a "Label:" line
+ * item. A draft must cover every field the tool accepts, so several distinct labels in
+ * one turn means a record draft — not prose that happens to name a field.
+ */
+const DRAFT_FIELD_LABEL =
+  /(?:^|\n)\s*(?:[-*\u2022]|\|)?\s*\**\s*(milestone name|opportunity name|customer name|customer commitment|milestone status|milestone category|solution area|sales stage|estimated revenue|close date|est(?:imated)? date|assigned se|ae owner|delivered by|workload|partner name|status reason|risk impact|risk description|mitigation plan|blocked reason|blocked owner|competitor name|azure capacity type|preferred azure region|business problem|next step|consumption phase)\**\s*:/gi;
+
+/** An Outlook/Teams message draft, which is approval-gated like a record write. */
+const MESSAGE_DRAFT_LABEL = /(?:^|\n)\s*\**\s*(?:subject|body|message)\**\s*:/gi;
+
+/** "I'll set …", "This will update …" — how an update/delete draft restates itself. */
+const WRITE_RESTATEMENT =
+  /\b(?:i'?ll|i\s+will|i'?m\s+(?:about\s+to|ready\s+to)|this\s+will|going\s+to)\s+(?:\w+\s+){0,3}(?:creat|updat|chang|set|delet|remov|send|post|notif)\w*\b/i;
+
+/** A concrete record the restated write would touch. */
+const RECORD_REFERENCE = /\b(?:MS-[A-Z0-9]+|OPP-[A-Z0-9]+|milestone|opportunity|deal team)\b/i;
+
+function countDistinct(text: string, re: RegExp): number {
+  const found = text.match(re) ?? [];
+  return new Set(found.map((m) => m.toLowerCase().replace(/[^a-z]/g, ''))).size;
+}
+
+/**
+ * Is there genuinely something pending that a human could approve?
+ *
+ * A sign-off phrase alone is NOT enough: the read-only handoff- and ECIF-readiness
+ * answers legitimately say "Confirm the customer plans to deploy" and "Confirm the
+ * Work Scope …, then submit the ECIF request", and neither has anything to approve.
+ * So we require evidence that an actual governed write is drafted on screen.
+ */
+function hasApprovableDraft(text: string): boolean {
+  if (countDistinct(text, DRAFT_ANNOTATION) >= 2) return true;
+  if (countDistinct(text, DRAFT_FIELD_LABEL) >= 3) return true;
+  if (countDistinct(text, MESSAGE_DRAFT_LABEL) >= 2) return true;
+  return WRITE_RESTATEMENT.test(text) && RECORD_REFERENCE.test(text);
+}
+
 function loadConversations(owner: string): Conversation[] {
   try {
     const raw = localStorage.getItem(conversationsKey(owner));
@@ -510,11 +574,21 @@ export default function ChatWidget() {
     (found, m, i) => (m.role === 'assistant' && m.content ? i : found),
     -1,
   );
-  // The orchestrator always ends a draft turn by asking the user to confirm before
-  // it will submit anything for approval. Detect that so we can offer a one-click
+  // The assistant ends a draft turn by asking the user to sign off before it will
+  // submit anything for approval. Detect that so we can offer a one-click
   // "Confirm & submit" button instead of requiring the user to type it out.
+  // Compare against the last *user* turn rather than `messages.length - 1` so a
+  // trailing empty assistant bubble (a turn that streamed only tool calls) can't
+  // suppress the button.
+  const lastAssistantText = lastAssistantIndex > lastUserIndex ? (messages[lastAssistantIndex]?.content ?? '') : '';
+  // Show the button ONLY when a governed write is actually drafted and waiting on the
+  // user. The sign-off ask is matched on the tail, where that ask lives; the draft and
+  // already-submitted checks read the whole turn.
   const awaitingConfirmation =
-    !busy && lastAssistantIndex === messages.length - 1 && /confirm/i.test(messages[lastAssistantIndex]?.content ?? '');
+    !busy &&
+    hasApprovableDraft(lastAssistantText) &&
+    SIGN_OFF_ASK.test(lastAssistantText.slice(-500)) &&
+    !ALREADY_SUBMITTED.test(lastAssistantText);
 
   if (!open) {
     return (
