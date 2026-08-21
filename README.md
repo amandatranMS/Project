@@ -294,6 +294,7 @@ Then open **http://localhost:5173**.
 | `npm run prisma:generate`  | regenerate the Prisma client after schema changes      |
 | `npm run db:push`          | push the Prisma schema to the PostgreSQL database      |
 | `npm run build`            | build shared, api, and web                             |
+| `npm test`                 | run the approval-gate governance tests (no DB needed)  |
 
 ## Database — Azure PostgreSQL (cloud)
 
@@ -394,6 +395,11 @@ The whole point of the POC: agents are useful but **gated**.
 5. A **human approves** on the Approvals page.
 6. Agent **fulfills** the approved request → milestone created, audited as
    `CreateMilestone`.
+
+This gate is **enforced by tests**, not just convention — `npm test` runs
+`apps/api/tests/approvalGate.test.ts` and `apps/api/tests/agentToolsGovernance.test.ts`,
+which fail if a rejected request ever executes, if an approval executes twice, or if an
+agent tool mutates data without going through an approval request.
 
 ## Notify the team on a new opportunity (Teams)
 

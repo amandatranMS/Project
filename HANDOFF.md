@@ -140,6 +140,7 @@ apps/
   api/            Express backend (all REST routes, governance, Graph, chat engines)
     src/services/chat/   in-app TS engine + Foundry proxy + Defender screen
     src/lib/audit.ts     recordAgentAction() — the audit choke point
+    tests/               vitest approval-gate + agent-governance suites (`npm test`)
   foundry-agent/  Microsoft Foundry hosted agent (azd project + Bicep infra)
   agent/          Python reference orchestrator + specialists (not wired to the API)
 packages/shared/  shared TS types + controlled choice lists (enforced by Zod)
@@ -304,10 +305,17 @@ live API, redeploy the API image, redeploy the Foundry agent, and read logs/metr
 # 1. Install + generate client + push schema + load the workbook (needs DATABASE_URL in .env)
 npm run setup
 
-# 2. Run API (:4000) + web (:5173) together
+# 2. Fastest signal — governance tests. No database, no Azure, no .env required.
+npm test
+
+# 3. Run API (:4000) + web (:5173) together
 npm run dev
 # open http://localhost:5173  — confirm the mock banner, sign-in, dashboard, approvals
 ```
+
+> `npm test` is the quickest way to prove a checkout is sane: it runs the approval-gate
+> suites in under a second with everything mocked. If it fails, the human-in-the-loop
+> guarantee described in Part A is broken — treat that as a release blocker, not a flake.
 
 Health check against the **live** API:
 
@@ -554,7 +562,7 @@ Be upfront with the next owner — a good handoff surfaces the rough edges.
 | **Web hosting** | The React app **runs locally only** — there is no Azure web resource. For a fully cloud handoff, host it as an Azure **Static Web App** or a second Container App and point it at the API FQDN. |
 | **Three agent engines** | Only the **Foundry hosted agent** is deployed/active. The **TS in-app engine** is off (`IN_APP_ENGINE_ENABLED=false`) and the **Python `apps/agent`** orchestrator is a standalone reference. Decide which to keep long-term. |
 | **Engine capability parity** | The engines are **not** feature-equivalent. The Foundry agent has all five specialists incl. communications; the in-app TS engine has **no** email/Teams tools and no `update_opportunity` / `update_deal_team_member`; `apps/agent` covers three of five. If you enable the in-app engine, expect missing capabilities — not just slower ones. |
-| **Automated tests** | There is **no `npm test`** and no automated coverage for the API, the web app, or the in-app engine. The only test file is `apps/foundry-agent/agent-framework-agent-basic-responses/tests/test_msx_session.py` (session-handle regressions, run with `pytest`). Validation today is `npm run build` + `scripts/smoke-test.ps1` + `docs/api-test.md`. Adding API-level tests around the approval gate is the highest-value first investment. |
+| **Automated tests** | The API has a **vitest** suite covering the approval gate — run `npm test` from the repo root. `apps/api/tests/approvalGate.test.ts` pins the human-in-the-loop invariants (reject/needs-changes execute nothing, approve executes exactly once and audits, double-approve is rejected, tampered payloads are refused) and `apps/api/tests/agentToolsGovernance.test.ts` asserts no in-app agent tool mutates data directly. Both suites are fully mocked — they need **no database and no Azure** — and both were mutation-verified (deliberately breaking the gate makes them fail). Still **uncovered**: the web app, the Foundry agent, and true end-to-end integration. The other test file is `apps/foundry-agent/agent-framework-agent-basic-responses/tests/test_msx_session.py` (session-handle regressions, run with `pytest`). Broader validation is `npm run build` + `scripts/smoke-test.ps1` + `docs/api-test.md`. |
 | **Client secret lifetime** | OBO depends on `AAD_CLIENT_SECRET`; it **expires**. Rotate on handover and track the expiry (D6/D7). |
 | **Graph = live** | `GRAPH_SEND_MODE=live` on the Container App means real Teams/Outlook sends. Opportunity-broadcast can message **every eligible tenant member** — test with `simulate`. |
 | **ACR admin** | ACR admin user was left enabled per an earlier instruction; prefer identity-based `AcrPull` and consider disabling admin. |
@@ -605,6 +613,7 @@ redeploy the API and the agent (Option 1) **or** rebuild from zero in a test env
 # --- Local dev ---
 npm run setup                     # install + prisma generate + db push + import workbook
 npm run dev                       # API :4000 + web :5173
+npm test                          # approval-gate governance suites (mocked; no DB/Azure needed)
 npm run build                     # build shared + api + web
 npm run import-workbook           # reset tables + reload from the Excel workbook
 
