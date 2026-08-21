@@ -6,7 +6,6 @@ node_modules
 .github
 .azure
 **/.venv
-apps/agent
 apps/foundry-agent
 docs
 openapi

@@ -209,6 +209,21 @@ Check 'POST /api/approval-requests (approve-path create)' {
     relatedRecommendationBusinessId = $script:recBusinessId
     requestStatus                   = 'Submitted'
     requestedBy                     = 'MilestoneAdvisor'
+    # A recommendation-backed approval must carry the complete deferred action the
+    # API will execute on approval (enforced by createApprovalSchema.superRefine).
+    action                          = @{
+      kind                     = 'CreateMilestone'
+      competitorBlankConfirmed = $true
+      milestoneName            = "Deployment Readiness $stamp"
+      opportunityName          = $oppName
+      workload                 = 'Copilot Studio'
+      customerCommitment       = 'Committed'
+      deliveredBy              = 'Microsoft'
+      milestoneCategory        = 'Workshop'
+      milestoneStatus          = 'On Track'
+      riskImpact               = 'Low'
+      owner                    = 'Demo SE'
+    }
   }
   $r = Invoke-Api POST '/api/approval-requests' $body
   $script:approveId = $r.Json.data.id

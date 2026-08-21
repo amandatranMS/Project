@@ -12,7 +12,7 @@ import { createRemoteJWKSet, jwtVerify } from 'jose';
  *     token is stashed on `req.user.bearer` so Phase 2 can do an On-Behalf-Of
  *     exchange for Microsoft Graph (Teams / Outlook / org hierarchy).
  *
- *  2. **Service** — a machine-to-machine caller (the Python/Foundry agent). Two
+ *  2. **Service** — a machine-to-machine caller (the Foundry hosted agent). Two
  *     forms are accepted: an app-only Entra token (`Authorization: Bearer`,
  *     issued to the agent identity via client credentials / workload-identity
  *     federation) so Conditional Access can govern the agent, OR the legacy

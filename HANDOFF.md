@@ -113,27 +113,15 @@ and is then recorded in `AgentActionAuditLog`.
 
 ## A3. The multi-agent assistant, explained
 
-Chat is served by a **single** implementation: the Foundry hosted agent. The repo also
-contains an unused Python sketch of the same idea. Knowing which is which prevents a lot of
-confusion later.
+Chat is served by a **single** implementation: the Foundry hosted agent. There is no second
+engine and no fallback — if the Foundry agent is down, chat is down.
 
-| # | Implementation | Status | Specialists | Model |
-| --- | --- | --- | --- | --- |
-| 1 | **Foundry hosted agent** | **Deployed — serves every chat turn** | All five | `gpt-5.4-mini` |
-| 2 | **Python reference** (`apps/agent`) | Reference only, not wired up | Three of five | n/a |
-
-**1 — Foundry hosted agent** · `apps/foundry-agent/agent-framework-agent-basic-responses`
+**Foundry hosted agent** · `apps/foundry-agent/agent-framework-agent-basic-responses`
 The production engine, and a genuine multi-agent orchestrator: `subagents.py` defines five
 specialists (`milestone`, `governance`, `dashboard`, `opportunity`, `communications`) and
 `main.py` registers each as an `ask_*` delegate tool. Every chat turn routes here. Deployed
-via `azd` env `msx`. Its prompt lives in Foundry, **not** in this repo — so changing the
-assistant's wording means redeploying the agent, not editing `apps/api`.
-
-**2 — Python reference orchestrator** · `apps/agent` (`orchestrator.py`, `agents.py`,
-`tools.py`)
-An earlier, partial cut of the design — an orchestrator delegating to milestone, opportunity,
-and dashboard specialists only (no governance, no communications). The API never calls it. Keep
-it as documentation of the pattern, or delete it; it is not load-bearing.
+via `azd` env `msx` on `gpt-5.4-mini`. Its prompt lives in Foundry, **not** in this repo — so
+changing the assistant's wording means redeploying the agent, not editing `apps/api`.
 
 The README describes a five-specialist design, and the **deployed Foundry agent genuinely
 implements all five** — that framing is the current wiring, not a roadmap.
@@ -161,7 +149,6 @@ apps/
     src/lib/audit.ts     recordAgentAction() — the audit choke point
     tests/               vitest approval-gate + agent-governance suites (`npm test`)
   foundry-agent/  Microsoft Foundry hosted agent (azd project + Bicep infra)
-  agent/          Python reference orchestrator + specialists (not wired to the API)
 packages/shared/  shared TS types + controlled choice lists (enforced by Zod)
 prisma/           schema.prisma (11 models), seed.ts (calls the workbook importer)
 scripts/          parseWorkbook.ts, workbookMappings.ts, ensureSeed.ts, smoke-test.ps1
@@ -580,7 +567,6 @@ Be upfront with the next owner — a good handoff surfaces the rough edges.
 | Area | Item |
 | --- | --- |
 | **Web hosting** | The React app **runs locally only** — there is no Azure web resource. For a fully cloud handoff, host it as an Azure **Static Web App** or a second Container App and point it at the API FQDN. |
-| **Unused Python reference agent** | `apps/agent` is a standalone Python sketch (three of five specialists, no governance or communications). Nothing calls it. Keep it as documentation of the pattern or delete it — it is not load-bearing. |
 | **Automated tests** | `npm test` runs 11 approval-gate tests (`apps/api/tests/approvalGate.test.ts`) — fully mocked, so no database or Azure, ~2 seconds. They pin the gate itself: reject and needs-changes execute nothing; approve executes exactly once and audits it; double-approve and tampered payloads are refused. The suite was mutation-verified (deliberately broken to confirm it fails). **Not covered:** the web app, the Foundry agent, and true end-to-end integration. The Foundry agent has its own `pytest` file for session handles. |
 | **Client secret lifetime** | OBO depends on `AAD_CLIENT_SECRET`; it **expires**. Rotate on handover and track the expiry (D6/D7). |
 | **Graph = live** | `GRAPH_SEND_MODE=live` on the Container App means real Teams/Outlook sends. Opportunity-broadcast can message **every eligible tenant member** — test with `simulate`. |
