@@ -88,7 +88,7 @@ export const milestonesService = {
     return milestone;
   },
 
-  /** Apply a partial update, audit changed fields, then evaluate notification rules. */
+  /** Apply a partial update, record any status transition, audit changed fields, then evaluate notification rules. */
   async update(id: string, input: UpdateInput, ctx?: MilestoneUpdateContext) {
     const existing = await prisma.opportunityMilestone.findFirst({
       where: { OR: [{ id }, { milestoneBusinessId: id }] },
