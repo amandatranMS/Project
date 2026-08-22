@@ -21,7 +21,7 @@ export const milestonesController = {
     sendOk(res, data);
   }),
 
-  /** Capability #2: which CSA-critical handoff items this milestone captures, plus a description scaffold. */
+  /** Which CSA-critical handoff items this milestone captures, plus a description scaffold. */
   handoffReadiness: asyncHandler(async (req, res) => {
     const data = await handoffService.milestoneReadiness(req.params.id);
     sendOk(res, data);

@@ -3,7 +3,7 @@ import { entraAuthEnabled } from './entraAuth.js';
 import { HttpError } from './httpError.js';
 
 /**
- * Microsoft Graph access via the On-Behalf-Of (OBO) flow — Phase 2.
+ * Microsoft Graph access via the On-Behalf-Of (OBO) flow.
  *
  * The web app signs the user in and calls our API with an access token whose
  * audience is THIS app. Here we exchange that token (the "user assertion") for a

@@ -7,7 +7,7 @@ import { assessEcifReadiness } from '../lib/ecifReadiness.js';
 import { opportunitiesService } from './opportunities.service.js';
 
 /**
- * Handoff feature service (Capability #1: readiness check).
+ * Handoff feature service (opportunity-level readiness check).
  *
  * Reuses the existing 360° context read, scores it with the pure readiness
  * module, and records the assessment in the Agent Action Audit Log so the
@@ -36,7 +36,7 @@ export const handoffService = {
   },
 
   /**
-   * Capability #2: check whether ONE milestone carries the CSA-critical handoff
+   * Check whether ONE milestone carries the CSA-critical handoff
    * info (customer intent, what was promised, deployment, BANT, who to contact)
    * and return a paste-ready description scaffold for the SE. Informational only
    * — it never blocks a save.
@@ -66,7 +66,7 @@ export const handoffService = {
   },
 
   /**
-   * Capability #3: assess whether an opportunity is ready to REQUEST ECIF (End
+   * Assess whether an opportunity is ready to REQUEST ECIF (End
    * Customer Investment Funds) and what the next step is — the real prerequisites
    * (delivery partner and work scope) plus the >$50K/two-milestone rule as a
    * non-costed reminder. It does NOT estimate a funding amount: Adam's walkthrough

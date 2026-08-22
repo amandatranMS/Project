@@ -14,7 +14,7 @@ interface Envelope<T> {
 
 /**
  * Returns an `Authorization: Bearer` header for the signed-in user, or {} when
- * auth is disabled (local dev before the Phase 0 app registration exists).
+ * auth is disabled (local dev, before the Entra app registration exists).
  */
 async function authHeader(): Promise<Record<string, string>> {
   if (!authEnabled || !msalInstance) return {};

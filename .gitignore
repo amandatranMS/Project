@@ -8,6 +8,11 @@ dist/
 build/
 *.tsbuildinfo
 
+# Compiled output of vite.config.ts. Vite resolves vite.config.js BEFORE
+# vite.config.ts, so a stray compiled copy silently overrides the real config.
+apps/web/vite.config.js
+apps/web/vite.config.d.ts
+
 # Prisma / SQLite database
 prisma/dev.db
 prisma/dev.db-journal

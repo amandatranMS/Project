@@ -39,13 +39,13 @@ export const opportunitiesController = {
     sendOk(res, data);
   }),
 
-  /** Capability #1: score this opportunity's readiness to hand off to delivery. */
+  /** Score this opportunity's readiness to hand off to delivery. */
   handoffReadiness: asyncHandler(async (req, res) => {
     const data = await handoffService.readiness(req.params.id);
     sendOk(res, data);
   }),
 
-  /** Capability #3: assess ECIF request readiness + funding guidance (process guide). */
+  /** Assess ECIF request readiness + funding guidance (process guide). */
   ecifReadiness: asyncHandler(async (req, res) => {
     const data = await handoffService.ecifReadiness(req.params.id);
     sendOk(res, data);

@@ -9,7 +9,7 @@ import { createRemoteJWKSet, jwtVerify } from 'jose';
  *
  *  1. **User** — a bearer JWT issued by Entra for the signed-in seller. The web
  *     app (MSAL) obtains it and sends `Authorization: Bearer <token>`. The raw
- *     token is stashed on `req.user.bearer` so Phase 2 can do an On-Behalf-Of
+ *     token is stashed on `req.user.bearer` so the Graph layer can do an On-Behalf-Of
  *     exchange for Microsoft Graph (Teams / Outlook / org hierarchy).
  *
  *  2. **Service** — a machine-to-machine caller (the Foundry hosted agent). Two
@@ -18,7 +18,7 @@ import { createRemoteJWKSet, jwtVerify } from 'jose';
  *     federation) so Conditional Access can govern the agent, OR the legacy
  *     `x-api-key` header, kept as a fallback during rollout.
  *
- * Config (set once Phase 0 app registration is done):
+ * Config (set once the Entra app registration exists):
  *   AAD_TENANT_ID         — directory (tenant) id of your Foundry tenant
  *   AAD_CLIENT_ID         — application (client) id of the registered app
  *   AGENT_ALLOWED_APP_IDS — optional CSV allowlist of app ids that may call as a
@@ -26,7 +26,7 @@ import { createRemoteJWKSet, jwtVerify } from 'jose';
  *   API_KEY               — optional shared secret for the agent (unchanged)
  *
  * If neither AAD_TENANT_ID/AAD_CLIENT_ID nor API_KEY are set, the gate is
- * disabled (local dev), so the app keeps running until Phase 0 is complete.
+ * disabled (local dev), so the app keeps running before the app registration exists.
  */
 
 export interface AuthUser {
@@ -40,7 +40,7 @@ export interface AuthUser {
   name?: string;
   /** UPN / email from the token, if present. */
   email?: string;
-  /** Raw bearer token — needed for the Graph On-Behalf-Of flow in Phase 2. */
+  /** Raw bearer token — needed for the Graph On-Behalf-Of flow (see lib/graph.ts). */
   bearer?: string;
   /** Calling application id (azp/appid) when a service authenticated via Entra. */
   appId?: string;

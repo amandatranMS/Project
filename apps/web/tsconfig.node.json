@@ -5,7 +5,13 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "allowSyntheticDefaultImports": true,
-    "strict": true
+    "strict": true,
+    // Send the emit somewhere harmless. This project only exists to type-check
+    // vite.config.ts, but `tsc -b` would otherwise write vite.config.js next to the
+    // source — and Vite resolves vite.config.js BEFORE vite.config.ts, so the stale
+    // build output silently wins over the file you actually edit. (A referenced
+    // project may not set "noEmit", hence outDir.)
+    "outDir": "./node_modules/.tmp/tsconfig.node"
   },
   "include": ["vite.config.ts"]
 }

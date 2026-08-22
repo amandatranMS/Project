@@ -3,14 +3,14 @@ import { PublicClientApplication, type Configuration } from '@azure/msal-browser
 /**
  * MSAL (Microsoft Entra ID) configuration for the web app — Option B real login.
  *
- * Values come from Vite env vars, set once the Phase 0 app registration exists:
+ * Values come from Vite env vars, set once the Entra app registration exists:
  *   VITE_AAD_CLIENT_ID   — application (client) id
  *   VITE_AAD_TENANT_ID   — directory (tenant) id of your Foundry tenant
  *   VITE_AAD_REDIRECT_URI (optional) — defaults to the current origin
  *   VITE_API_SCOPE       — the API scope you exposed, e.g. api://<clientId>/access_as_user
  *
  * If VITE_AAD_CLIENT_ID / VITE_AAD_TENANT_ID are absent, login is disabled and
- * the app renders directly (local dev), so nothing breaks before Phase 0.
+ * the app renders directly (local dev), so nothing breaks without a registration.
  */
 
 const clientId = import.meta.env.VITE_AAD_CLIENT_ID as string | undefined;

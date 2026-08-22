@@ -1,5 +1,5 @@
 /**
- * Handoff readiness scoring (Capability #1).
+ * Handoff readiness scoring.
  *
  * Pure, dependency-free assessment of whether an opportunity is ready to hand off
  * from the pre-sales team (AE/SE) to the delivery team (CSA/CSAM). It ONLY reads

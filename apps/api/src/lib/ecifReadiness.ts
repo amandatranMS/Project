@@ -1,5 +1,5 @@
 /**
- * ECIF readiness & process guidance (Capability #3).
+ * ECIF readiness & process guidance.
  *
  * ECIF (End Customer Investment Funds) amounts are decided and ASSIGNED through the
  * real process (work scope -> approvals -> PO), so this feature deliberately does

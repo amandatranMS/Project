@@ -1,5 +1,5 @@
 /**
- * Milestone-level handoff-info check (Capability #2, per Kevin's feedback).
+ * Milestone-level handoff-info check (from Kevin's stakeholder feedback).
  *
  * Kevin's core point: when a milestone is handed to CSU, the CSA often gets "a
  * blind date" — no customer intent, no deployment info, no explanation of what

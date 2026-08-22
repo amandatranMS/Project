@@ -19,7 +19,7 @@ import graph from './graph.routes.js';
 const api = Router();
 
 // Current authenticated principal (from the Entra bearer token, or the service
-// key). Foundation for Phase 2 (Graph: Teams / Outlook / org hierarchy).
+// key). Underpins the Graph routes (Teams / Outlook / org hierarchy).
 api.get('/me', (req, res) => {
   if (!req.user || req.user.kind !== 'user') {
     return res.status(401).json({ success: false, error: 'No signed-in user.' });
