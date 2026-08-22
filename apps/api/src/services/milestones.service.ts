@@ -108,17 +108,47 @@ export const milestonesService = {
     }
 
     const { estDate, blockedSince, expectedResolutionDate, lastUpdated, ...rest } = input;
-    const milestone = await prisma.opportunityMilestone.update({
-      where: { id: existing.id },
-      data: {
-        ...rest,
-        estDate: estDate ? new Date(estDate) : undefined,
-        blockedSince: blockedSince ? new Date(blockedSince) : undefined,
-        expectedResolutionDate: expectedResolutionDate ? new Date(expectedResolutionDate) : undefined,
-        lastUpdated: lastUpdated ? new Date(lastUpdated) : undefined,
-      },
-      include: { opportunity: { select: { id: true, opportunityName: true, customerName: true } } },
-    });
+
+    // A real status transition must be appended to the milestone's status history,
+    // exactly like statusHistoryService.create does for the "Change status" path.
+    // Without this, edits made through the milestone form or through an approved
+    // agent UpdateMilestone action would move the status but leave no trace on the
+    // timeline. Written in the same transaction so the two can never diverge.
+    const statusChanged =
+      input.milestoneStatus !== undefined && input.milestoneStatus !== existing.milestoneStatus;
+    const changedBy = ctx?.changedBy ?? input.createdBy ?? 'system';
+
+    const [milestone] = await prisma.$transaction([
+      prisma.opportunityMilestone.update({
+        where: { id: existing.id },
+        data: {
+          ...rest,
+          estDate: estDate ? new Date(estDate) : undefined,
+          blockedSince: blockedSince ? new Date(blockedSince) : undefined,
+          expectedResolutionDate: expectedResolutionDate ? new Date(expectedResolutionDate) : undefined,
+          lastUpdated: lastUpdated ? new Date(lastUpdated) : undefined,
+        },
+        include: { opportunity: { select: { id: true, opportunityName: true, customerName: true } } },
+      }),
+      ...(statusChanged
+        ? [
+            prisma.milestoneStatusHistory.create({
+              data: {
+                statusHistoryBusinessId: genId('SH'),
+                milestone: { connect: { id: existing.id } },
+                ...(existing.opportunityId
+                  ? { opportunity: { connect: { id: existing.opportunityId } } }
+                  : {}),
+                oldStatus: existing.milestoneStatus,
+                newStatus: input.milestoneStatus,
+                statusDate: new Date(),
+                reason: input.statusReason ?? undefined,
+                changedBy,
+              },
+            }),
+          ]
+        : []),
+    ]);
 
     const changedFields = Object.keys(input).filter(
       (k) => (input as Record<string, unknown>)[k] !== undefined,
@@ -130,8 +160,8 @@ export const milestonesService = {
       opportunityId: existing.opportunityId,
       relatedMilestoneId: milestone.id,
       inputSummary: `Updated ${existing.milestoneBusinessId}${
-        changedFields.length ? ` (fields: ${changedFields.join(', ')})` : ''
-      }`,
+        statusChanged ? ` (${existing.milestoneStatus ?? '—'} → ${input.milestoneStatus})` : ''
+      }${changedFields.length ? ` (fields: ${changedFields.join(', ')})` : ''}`,
     });
 
     // Side effect: a real transition INTO "Lost To Competitor" notifies the

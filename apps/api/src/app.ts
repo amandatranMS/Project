@@ -4,6 +4,7 @@ import apiRoutes from './routes/index.js';
 import { errorHandler } from './lib/errorHandler.js';
 import { authenticate } from './lib/entraAuth.js';
 import { requestContextMiddleware } from './lib/requestContext.js';
+import { HttpError } from './lib/httpError.js';
 import { sendOk } from './lib/responses.js';
 
 /** Builds and configures the Express application. */
@@ -26,6 +27,12 @@ export function createApp() {
   });
 
   app.use('/api', authenticate, requestContextMiddleware, apiRoutes);
+
+  // Any /api path that matched no route above is a 404 in the standard envelope,
+  // so API clients never receive Express's default HTML error page.
+  app.use('/api', (req, _res, next) => {
+    next(new HttpError(404, `No API route matches ${req.method} ${req.baseUrl}${req.path}.`));
+  });
 
   app.use(errorHandler);
 

@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Multi-Agent Sales Assistant API (Mock)",
-    "version": "0.4.0",
+    "version": "0.5.0",
     "description": "REST API for the Multi-Agent Sales Assistant, a SYNTHETIC MOCK application for Solution Engineering opportunity and milestone management. NOT connected to real MSX, Dataverse, Power Platform, or customer data.\nData is imported from the Excel workbook (single source of truth): data/MSX_Mirror_Necessary_Tables_Import_10_More_Entries.xlsx.\nEvery response uses a consistent envelope:\n  success: { \"success\": true, \"data\": ... }\n  error:   { \"success\": false, \"error\": \"Plain language error message\" }\n\nGovernance: agent-initiated writes — including creating a milestone or an opportunity — happen only when a human decides an approval request via PATCH /api/approval-requests/{id}/approve. Approving executes the request's deferred action (create/update/delete, email, or Teams) or performs the mock milestone writeback for a recommendation-backed request, and records it in the Agent Action Audit Log. reject / needs-changes never execute anything.\n"
   },
   "servers": [
@@ -58,6 +58,15 @@
     },
     {
       "name": "Microsoft Graph"
+    },
+    {
+      "name": "Identity"
+    },
+    {
+      "name": "Assistant"
+    },
+    {
+      "name": "Diagnostics"
     }
   ],
   "paths": {
@@ -420,6 +429,229 @@
           },
           "400": {
             "description": "Missing q or unknown entity."
+          }
+        }
+      }
+    },
+    "/api/me": {
+      "get": {
+        "tags": [
+          "Identity"
+        ],
+        "summary": "The currently authenticated principal, derived from the Entra bearer token. Returns kind ('user'), oid, name and email for a signed-in seller. A service principal (agent app token or x-api-key) is NOT a signed-in user and receives 401 — use this to check whether a real human is present before offering Graph (Teams / Outlook / hierarchy) features.\n",
+        "responses": {
+          "200": {
+            "description": "Envelope with { kind, oid, name, email }."
+          },
+          "401": {
+            "description": "No signed-in user (unauthenticated",
+            "or a service principal).": null
+          }
+        }
+      }
+    },
+    "/api/diagnostics/session-metrics": {
+      "get": {
+        "tags": [
+          "Diagnostics"
+        ],
+        "summary": "PII-free operational snapshot of on-behalf-of session-handle resolution — the counters behind the Outlook/Teams read watchdog. Reports how often the hosted agent presented an x-msx-session handle, how often it resolved to a user, and how often the request fell back to the service principal (the outage signature). Contains only counts, timestamps and short handle prefixes; never tokens, message content or user identifiers.\n",
+        "responses": {
+          "200": {
+            "description": "Envelope with { counters, lastResolvedAt, lastServiceFallbackAt, recent, now }."
+          }
+        }
+      }
+    },
+    "/api/chat": {
+      "post": {
+        "tags": [
+          "Assistant"
+        ],
+        "summary": "Send a chat turn to the Foundry hosted agent and receive the complete reply in one response. The assistant can READ mock business data freely, but it can never mutate records or send messages directly — anything that changes data or contacts a person is submitted as an ApprovalRequest carrying a deferred action, which a human must approve. Requires an authenticated caller; the signed-in user's identity drives the on-behalf-of model call so Microsoft Purview DLP is enforced.\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Envelope with { reply }."
+          },
+          "400": {
+            "description": "Validation failed (at least one message is required)."
+          },
+          "401": {
+            "description": "Unauthorized."
+          },
+          "501": {
+            "description": "No chat engine configured (FOUNDRY_AGENT_ENDPOINT is blank)."
+          }
+        }
+      }
+    },
+    "/api/chat/stream": {
+      "post": {
+        "tags": [
+          "Assistant"
+        ],
+        "summary": "Same as POST /api/chat but streams the answer as newline-delimited JSON so the UI can render tokens as they arrive. Emits {\"delta\":\"…\"} chunks, then a final {\"done\":true}; on failure it emits {\"error\":\"…\",\"status\":<code>}. Because the stream begins with HTTP 200, transport errors are reported in the final line rather than the status code. The same approval gate applies.\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "NDJSON stream of delta chunks terminated by a done or error line.",
+            "content": {
+              "application/x-ndjson": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed."
+          },
+          "401": {
+            "description": "Unauthorized."
+          }
+        }
+      }
+    },
+    "/api/graph/me": {
+      "get": {
+        "tags": [
+          "Microsoft Graph"
+        ],
+        "summary": "The signed-in user's own Microsoft Graph profile (display name, UPN, job title). READ-ONLY, not approval-gated, audited. Requires a real signed-in user — unlike the Outlook/Teams reads this endpoint does NOT accept an x-msx-session handle, so the hosted agent cannot call it as a service. Nothing is persisted into the mock tables.\n",
+        "responses": {
+          "200": {
+            "description": "Envelope with the user's Graph profile."
+          },
+          "401": {
+            "description": "No signed-in Microsoft user."
+          },
+          "501": {
+            "description": "Microsoft Graph is not configured."
+          }
+        }
+      }
+    },
+    "/api/graph/hierarchy": {
+      "get": {
+        "tags": [
+          "Microsoft Graph"
+        ],
+        "summary": "The signed-in user's organisational hierarchy from Microsoft Graph — their manager and direct reports. READ-ONLY, not approval-gated, audited. Requires a real signed-in user (no session-handle fallback). Used to route escalations to the right person; nothing is persisted into the mock tables.\n",
+        "responses": {
+          "200": {
+            "description": "Envelope with { manager, directReports }."
+          },
+          "401": {
+            "description": "No signed-in Microsoft user."
+          },
+          "501": {
+            "description": "Microsoft Graph is not configured."
+          }
+        }
+      }
+    },
+    "/api/graph/manager": {
+      "get": {
+        "tags": [
+          "Microsoft Graph"
+        ],
+        "summary": "The signed-in user's manager, used by the Lost-to-Competitor pop-up to name the person who will be emailed. Degrades gracefully by design: when there is no signed-in Microsoft user it returns 200 with { manager: null } rather than 401, so the UI can still show a generic warning instead of breaking.\n",
+        "responses": {
+          "200": {
+            "description": "Envelope with { manager } — null when no user is signed in or Graph is unavailable."
+          }
+        }
+      }
+    },
+    "/api/graph/outlook/send": {
+      "post": {
+        "tags": [
+          "Microsoft Graph"
+        ],
+        "summary": "Send an Outlook email as the acting user (on-behalf-of). APPROVAL-GATED in normal use — the assistant never calls this directly; it submits a SendOutlookMail ApprovalRequest and this endpoint runs only after a human approves. A two-step confirmation also applies here: without confirm=true the call returns a preview with requiresConfirmation=true and sends nothing. Live delivery additionally requires a real signed-in user and GRAPH_SEND_MODE=live; the service principal can only produce SIMULATED sends. Every attempt is audited as a security event.\n",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MsxSessionHeader"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendMailRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Envelope with either a preview (sent=false, requiresConfirmation=true) or the send result (sent, simulated, to, subject)."
+          },
+          "400": {
+            "description": "Validation failed (to must be an email; subject and body are required)."
+          },
+          "401": {
+            "description": "No resolvable acting user for a live send."
+          },
+          "501": {
+            "description": "Microsoft Graph is not configured."
+          }
+        }
+      }
+    },
+    "/api/graph/teams/notify": {
+      "post": {
+        "tags": [
+          "Microsoft Graph"
+        ],
+        "summary": "Post a 1:1 Microsoft Teams message as the acting user (on-behalf-of). APPROVAL-GATED in normal use — the assistant submits a NotifyTeams ApprovalRequest instead of calling this, and it executes only after a human approves. Without confirm=true the call returns a preview and sends nothing. Live delivery requires a real signed-in user and GRAPH_SEND_MODE=live; the service principal is limited to SIMULATED sends. Every attempt is audited as a security event.\n",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MsxSessionHeader"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotifyTeamsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Envelope with either a preview (sent=false, requiresConfirmation=true) or the send result."
+          },
+          "400": {
+            "description": "Validation failed (message is required; to must be an email when supplied)."
+          },
+          "401": {
+            "description": "No resolvable acting user for a live send."
+          },
+          "501": {
+            "description": "Microsoft Graph is not configured."
           }
         }
       }
@@ -1552,6 +1784,86 @@
           "data": {},
           "error": {
             "type": "string"
+          }
+        }
+      },
+      "ChatRequest": {
+        "type": "object",
+        "required": [
+          "messages"
+        ],
+        "properties": {
+          "messages": {
+            "type": "array",
+            "minItems": 1,
+            "description": "The conversation so far, oldest first. The last entry is the new user turn.",
+            "items": {
+              "type": "object",
+              "required": [
+                "role",
+                "content"
+              ],
+              "properties": {
+                "role": {
+                  "type": "string",
+                  "enum": [
+                    "user",
+                    "assistant"
+                  ]
+                },
+                "content": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          }
+        }
+      },
+      "SendMailRequest": {
+        "type": "object",
+        "required": [
+          "to",
+          "subject",
+          "body"
+        ],
+        "properties": {
+          "to": {
+            "type": "string",
+            "format": "email"
+          },
+          "subject": {
+            "type": "string",
+            "minLength": 1
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1
+          },
+          "confirm": {
+            "type": "boolean",
+            "description": "Explicit human go-ahead. Without it the API returns a preview with requiresConfirmation=true and sends nothing. The approval flow sets this automatically once a human approves the request.\n"
+          }
+        }
+      },
+      "NotifyTeamsRequest": {
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string",
+            "minLength": 1
+          },
+          "to": {
+            "type": "string",
+            "format": "email",
+            "description": "Recipient of the 1:1 Teams chat. Defaults to the configured broadcast recipient when omitted."
+          },
+          "confirm": {
+            "type": "boolean",
+            "description": "Explicit human go-ahead. Without it the API returns a preview with requiresConfirmation=true and posts nothing.\n"
           }
         }
       },

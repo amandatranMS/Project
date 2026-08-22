@@ -42,6 +42,21 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
     return sendError(res, 409, `A record with the same ${target ?? 'unique value'} already exists.`);
   }
 
+  // body-parser rejects a malformed or oversized request body before any route
+  // runs, and tags the error with its own 4xx status. Honour that instead of
+  // reporting a caller's bad JSON as a server fault.
+  const bodyErr = err as { type?: string; status?: number; statusCode?: number; expose?: boolean };
+  if (bodyErr?.type === 'entity.parse.failed') {
+    return sendError(res, 400, 'The request body is not valid JSON.');
+  }
+  if (bodyErr?.type === 'entity.too.large') {
+    return sendError(res, 413, 'The request body is too large.');
+  }
+  const bodyStatus = bodyErr?.status ?? bodyErr?.statusCode;
+  if (bodyErr?.expose === true && typeof bodyStatus === 'number' && bodyStatus >= 400 && bodyStatus < 500) {
+    return sendError(res, bodyStatus, (err as Error).message || 'The request could not be processed.');
+  }
+
   console.error('Unhandled error:', err);
   return sendError(res, 500, 'Something went wrong on the server.');
 }
