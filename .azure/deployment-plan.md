@@ -4,6 +4,8 @@
 |---|---|
 | Status | Deployed and verified |
 | Last prepared | 2026-07-30 |
+| Last validated | 2026-08-25 |
+| Last deployed | 2026-08-25 |
 | Deployment method | `azure-deploy` only |
 | Data | Development; synthetic mock business data only |
 
@@ -224,6 +226,100 @@ Wait for the restored revision to become healthy and check the existing web addr
 ### Restore the AI assistant
 
 Reactivate or redeploy the previously recorded healthy agent version. Repeat the read-only and approval checks. Do not delete or recreate the agent, project, model, or resource group.
+
+## Validation Proof (2026-08-25)
+
+Validation run before the 2026-08-25 redeploy. Reason for redeploy: the running API image
+(`msx-api:milestone-commit-20260813125829`, pushed 2026-08-13 17:00 UTC) and hosted-agent
+version 37 (created 2026-08-13 16:36 UTC) both predate the 2026-08-21 commits, which include
+the approval-gate bypass fix (`4a466d1`) and its governance tests (`9851618`).
+
+| Check | Command | Result |
+|---|---|---|
+| Subscription | `az account show` | `f850b37c-9bf9-4075-9eb5-43aa2daf6d85` — matches Fixed Targets |
+| API resource group | `az group show -n rg-msx-milestone-api` | Present, Canada Central |
+| Container registry | `az acr show -n ca34643b5fc3acr` | `ca34643b5fc3acr.azurecr.io`, Canada Central |
+| Container App | `az containerapp show -n msx-api` | Succeeded, port `4000`, `Single` revision mode, revision `msx-api--0000036` |
+| Foundry resource group | `az group show -n rg-agent-framework-agent-basic-responses-dev` | Present, Canada East |
+| `azd` auth and environment | `azd auth login --check-status`, `azd env list` | Signed in; `msx` is the default local environment |
+| Whitespace and conflict markers | `git diff --check` | Exit 0 |
+| Database design unchanged | `git diff --exit-code -- prisma\schema.prisma` | Exit 0 |
+| Foundry config unchanged | `git diff --exit-code -- ...\azure.yaml` | Exit 0 |
+| Locked dependencies | `npm ci` | Exit 0 |
+| Prisma client | `npm run prisma:generate` | Generated v6.19.3, exit 0 |
+| OpenAPI JSON | `npm run openapi:json` | Regenerated with no working-tree change — YAML and JSON in sync |
+| Build | `npm run build` | `@msx/shared`, `@msx/api`, `@msx/web` all built, exit 0 |
+| API typecheck | `npm run typecheck -w @msx/api` | Exit 0 |
+| Web typecheck | `npm run typecheck -w @msx/web` | Exit 0 |
+| Governance tests | `npm test` | 2 files, 23 tests passed (approval gate and agent tools) |
+| Hosted agent Python | `python -m compileall -q .` | Exit 0 |
+| Hosted agent package | `azd package --no-prompt -e msx` | Succeeded, code package produced |
+| Live API health | `GET /api/health` | HTTP 200, `{"success":true,"data":{"status":"ok","mock":true}}` |
+| Auth gate | `GET /api/opportunities` unauthenticated | HTTP 401 with the standard error envelope |
+| Table count | `prisma\schema.prisma` | Exactly the 11 approved models, unchanged |
+| Registry hardening | `az acr show --query anonymousPullEnabled` | `false` |
+| Build method | `docker version` | Docker unavailable, so the Azure Container Registry remote build is required |
+
+No infrastructure, database-design, table, seed, identity, ingress, scale, or environment changes
+were found. The working tree is clean and `main` matches `origin/main`.
+
+## Deployment Results (2026-08-25)
+
+Update-only redeploy. No provisioning commands were run.
+
+### API
+
+| Item | Value |
+|---|---|
+| Previous image | `ca34643b5fc3acr.azurecr.io/msx-api:milestone-commit-20260813125829` |
+| Previous revision | `msx-api--0000036` |
+| New image | `ca34643b5fc3acr.azurecr.io/msx-api:redeploy-20260825202329` |
+| Image digest | `sha256:a59889aae028ec83f75fcc9f6d21599614e8c20b969bd81eace2aa8f1acc30ec` |
+| Build | ACR remote build run `cx13`, Succeeded in 1m24s (Docker unavailable locally) |
+| New revision | `msx-api--0000037` — Healthy, RunningAtMaxScale, 100% traffic |
+| Command | `az containerapp update -g rg-msx-milestone-api -n msx-api --image <new image>` |
+
+Two build-tooling issues were worked around without changing the application:
+
+1. `az acr build` crashed while packing the context because the Copilot tooling
+   creates and removes refs under `.git\refs\copilot\` during the walk. Resolved by
+   building from a clean `git archive HEAD` export, which also guarantees only
+   committed code was shipped.
+2. `az acr build` then crashed client-side on a `cp1252` encode error while streaming
+   Prisma's Unicode log output. The remote build task was unaffected and completed
+   successfully; the image and digest were confirmed from the registry.
+
+### Hosted agent
+
+`azd deploy agent-framework-agent-basic-responses` succeeded and reused **version 37**
+rather than creating a new version, because the packaged content hash was unchanged
+(`f1bda610…89cd5`). This is correct: every Python file under the agent `src` directory
+was last modified on or before 2026-08-13, and the only later change in the agent
+directory was `.env.example`, which is not runtime code. The approval-gate bypass fix
+in commit `4a466d1` lives in `apps\api\src\services\chat\msxTools.ts`, so it shipped in
+the API image above.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `GET /api/health` | HTTP 200, `{"success":true,"data":{"status":"ok","mock":true}}` |
+| Unauthenticated `GET /api/opportunities` | HTTP 401 with the standard error envelope |
+| Startup logs | "The database is already in sync with the Prisma schema" — no migration |
+| Seed behaviour | "Database already has 19 opportunities — skipping seed" — no reseed |
+| Listener | "listening on http://localhost:4000" — port unchanged |
+| Config drift | FQDN, port `4000`, `Single` revision mode, external ingress, min/max replicas `1/1`, `SystemAssigned` identity, secret names, and env names all unchanged |
+| Traffic | 100% to the latest revision |
+| Resource counts | 7 in `rg-msx-milestone-api`, 7 in `rg-agent-framework-agent-basic-responses-dev` — no new resources |
+| All 11 tables | Opportunity 19, Milestone 22, StatusHistory 38, Recommendation 37, Approval 17, Note 15, DealTeam 1 (per opportunity), Notification 38, RunLog 17, Audit 300, Snapshot 18 |
+| Agent context endpoint | `GET /api/opportunities/:id/context` returned success |
+
+`GET /api/deal-team-members` returns HTTP 400 without an `opportunityId` query
+parameter. That is the documented contract, not a regression; the request succeeds
+when the parameter is supplied.
+
+No tenant-wide Teams message was sent. No schema migration, reset, import, or seed
+occurred. No secrets were displayed or committed.
 
 ## Previous Validation Results
 
