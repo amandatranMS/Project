@@ -15,13 +15,13 @@ waiting on Azure.
 ## How this differs from the README
 
 The README explains **what the project is** — the problem, the design, the data
-model, the security thinking. It's written for someone evaluating the work.
+model, the security thinking.
 
 This guide is for someone who just wants to **run it**. Everything here is
 specific to getting it working on your own machine:
 
-| | README | This guide |
-|---|---|---|
+|  | README | This guide |
+| --- | --- | --- |
 | **Local database option** | Only documents Azure PostgreSQL | Adds a one-line Docker command so you can run free and offline, without an Azure account |
 | **Optional vs. required** | Presents setup as one path | Splits it into 5 parts and tells you which ones you can skip (only Part 1 is required) |
 | **Node version** | Says "Node 18+" | Says Node 20 or 22, and warns that 19 and 21 will break the build tool |
@@ -85,6 +85,24 @@ postgresql://youruser:yourpassword@yourserver.postgres.database.azure.com:5432/y
 > - If your password has special characters, you have to encode them. `@` becomes
 >   `%40`, `#` becomes `%23`, `/` becomes `%2F`. Otherwise the connection string
 >   gets misread and you'll get a confusing error.
+
+**Heads up: your IP changes, and the firewall will lock you out.**
+
+Every time you connect from a new network — home, office, a café, even after
+your router reassigns your address — Azure's firewall will block you, and the
+app just won't load any data.
+
+To add your current IP, in the Azure Portal on your Postgres Flexible Server go
+to **Settings → Networking** in the left sidebar. There you'll find:
+
+- A checkbox for **"Allow public access from any Azure service within Azure to
+  this server"** — but that only covers Azure's own IPs, not your home network,
+  so it won't help you here.
+- Below it, a **Firewall rules** table with a **"+ Add current client IP
+  address"** button. **This is the one you want.** It detects your public IP and
+  adds the rule instantly — no command line needed. Click **Save** afterwards.
+
+You'll need to do this again whenever you switch networks.
 
 ### 1.2 Download the code
 
@@ -384,7 +402,7 @@ throws attack prompts at the assistant. Needs Python 3.10–3.13 (3.9 won't work
 | What you see | What's actually wrong |
 | --- | --- |
 | Vite crashes on startup | You're on Node 19 or 21. Switch to 20 or 22. |
-| Can't connect to the database | On Azure? Add your IP to the firewall. Password has a `@` or `#`? Encode it (`%40`, `%23`). |
+| Can't connect to the database | On Azure? Add your IP to the firewall — and remember it changes when you switch networks (see 1.1). Password has a `@` or `#`? Encode it (`%40`, `%23`). |
 | `sslmode` error on local Postgres | Drop `?sslmode=require` — that's Azure-only. |
 | App loads but it's completely empty | The data import didn't run. `npm run db:reset`. |
 | Chat says "not configured" | `FOUNDRY_AGENT_ENDPOINT` is blank. That's Part 3. |
