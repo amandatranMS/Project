@@ -251,10 +251,10 @@ the approval-gate bypass fix (`4a466d1`) and its governance tests (`9851618`).
 | Build | `npm run build` | `@msx/shared`, `@msx/api`, `@msx/web` all built, exit 0 |
 | API typecheck | `npm run typecheck -w @msx/api` | Exit 0 |
 | Web typecheck | `npm run typecheck -w @msx/web` | Exit 0 |
-| Governance tests | `npm test` | 2 files, 23 tests passed (approval gate and agent tools) |
+| Governance tests | `npm test` | 2 files, 23 tests passed (approval gate and milestone status history) |
 | Hosted agent Python | `python -m compileall -q .` | Exit 0 |
 | Hosted agent package | `azd package --no-prompt -e msx` | Succeeded, code package produced |
-| Live API health | `GET /api/health` | HTTP 200, `{"success":true,"data":{"status":"ok","mock":true}}` |
+| Live API health | `GET /api/health` | HTTP 200, `{"success":true,"data":{"status":"ok","service":"msx-milestone-assistant-api","mock":true}}` |
 | Auth gate | `GET /api/opportunities` unauthenticated | HTTP 401 with the standard error envelope |
 | Table count | `prisma\schema.prisma` | Exactly the 11 approved models, unchanged |
 | Registry hardening | `az acr show --query anonymousPullEnabled` | `false` |
@@ -303,7 +303,7 @@ the API image above.
 
 | Check | Result |
 |---|---|
-| `GET /api/health` | HTTP 200, `{"success":true,"data":{"status":"ok","mock":true}}` |
+| `GET /api/health` | HTTP 200, `{"success":true,"data":{"status":"ok","service":"msx-milestone-assistant-api","mock":true}}` |
 | Unauthenticated `GET /api/opportunities` | HTTP 401 with the standard error envelope |
 | Startup logs | "The database is already in sync with the Prisma schema" — no migration |
 | Seed behaviour | "Database already has 19 opportunities — skipping seed" — no reseed |

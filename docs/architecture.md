@@ -51,7 +51,8 @@ scripts/
 openapi/
   msx-milestone-assistant.openapi.yaml
 docs/
-  api-test.md, architecture.md, security.md, bant-gated-milestone-progression.md
+  api-test.md, architecture.md, security.md, bant-gated-milestone-progression.md,
+  stakeholder-feedback-roadmap.md
 ```
 
 npm **workspaces** tie the packages together. The web app talks to the API through

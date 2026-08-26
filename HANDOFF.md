@@ -71,6 +71,7 @@ flowchart TD
 
     API -->|Prisma| DB[(Azure PostgreSQL Flexible Server<br/>11 mock tables)]
     API -->|every chat turn| FA[Foundry hosted agent<br/>agent-framework-agent-basic-responses]
+    FA -->|tool calls over HTTPS to API_BASE_URL<br/>reads records, submits proposals<br/>never touches the database directly| API
     FA --> M1[gpt-5.4-mini deployment]
 
     API -->|On-Behalf-Of| GRAPH[Microsoft Graph<br/>Teams / Outlook / user hierarchy]

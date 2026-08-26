@@ -396,9 +396,9 @@ The whole point of the POC: agents are useful but **gated**.
    `CreateMilestone`.
 
 This gate is **enforced by tests**, not just convention — `npm test` runs
-`apps/api/tests/approvalGate.test.ts` and `apps/api/tests/agentToolsGovernance.test.ts`,
-which fail if a rejected request ever executes, if an approval executes twice, or if an
-agent tool mutates data without going through an approval request.
+`apps/api/tests/approvalGate.test.ts`, which fails if a rejected or needs-changes
+decision ever executes, if an approval executes twice, if a tampered action is
+replayed, or if submitting a proposal executes it instead of queueing it.
 
 ## Notify the team on a new opportunity (Teams)
 
@@ -412,6 +412,7 @@ a real message never goes out without a human deciding:
 - **An agent creates it** — the agent never sends. A **Pending** `ApprovalRequest`
   carrying a deferred `NotifyTeams` action is queued; the same consent popup appears
   when a human approves it on the **Approvals** page, and only then is it delivered.
+
 ## API
 
 REST API served at `http://localhost:4000/api`. Full contract in

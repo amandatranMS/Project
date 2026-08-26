@@ -28,8 +28,8 @@ specific to getting it working on your own machine:
 | **Connection string gotchas** | Mentions URL-encoding | Spells out `@` → `%40`, and that `?sslmode=require` is Azure-only and will fail on local Postgres |
 | **The second settings file** | Not covered | Explains that sign-in needs `apps/web/.env` as well as the root `.env`, and why |
 | **Entra app registration** | Lists the variables | Walks through the actual portal clicks: SPA redirect URI, exposing a scope, creating the secret |
-| **Why the tunnel exists** | States it's needed | Explains the reason — the agent runs in Azure, your data is on your laptop, and Azure can't reach `localhost` |
-| **Agent redeploys** | Not covered | Points out that changing the agent's settings needs another `azd deploy`, and that a dropped tunnel makes the assistant lose your data |
+| **Why the tunnel exists** | States it's needed | Explains the reason — the agent runs in Azure and calls your API, which sits on your laptop where Azure can't reach it |
+| **Agent redeploys** | Not covered | Points out that changing the agent's settings needs another `azd deploy`, and that a dropped tunnel leaves the assistant unable to see your records |
 | **What the assistant does** | Described as governance design | Warns that "pending approval" is correct behaviour, not a bug |
 | **Troubleshooting** | None | A symptom-to-cause table for the failures people actually hit |
 | **What can't be shared** | Not covered | States plainly that the AI endpoint, database, and security tooling live in the original tenant and can't be handed over |
@@ -256,10 +256,16 @@ FOUNDRY_AGENT_ENDPOINT="https://...the URL it printed..."
 
 ### 3.3 Open a tunnel (the annoying bit)
 
-Here's the catch: the agent runs **in Azure**, but your app and its data are on
-**your laptop**. Azure can't see `localhost`, so the agent can't reach your data.
+Here's the catch: the agent runs **in Azure**, but the app's API runs on **your
+laptop** at `localhost:4000` — and Azure can't see `localhost`.
 
-The fix is a tunnel that gives your local app a temporary public web address:
+Note that this is about the **API**, not the database. The agent never connects to
+Postgres itself; it asks your API for records over HTTP, because the API is where
+the approval gate and the audit log live. So you need the tunnel either way — even
+if you put your database on Azure in step 1.1, the API it goes through is still
+local.
+
+The fix is a tunnel that gives your local API a temporary public web address:
 
 ```bash
 devtunnel host -p 4000 --allow-anonymous

@@ -41,9 +41,10 @@ React + Express + PostgreSQL + Prisma app.
   recommendations, and submit approval requests.
 - **Every agent action that changes data or sends a message is approval-gated.**
   The agent never mutates/sends directly — it submits an `ApprovalRequest` carrying
-  a deferred `action` (`CreateOpportunity`, `SendOutlookMail`, `NotifyTeams`,
-  `UpdateMilestone`, `UpdateOpportunity`, `UpdateDealTeamMember`, `DeleteMilestone`;
-  milestone *creation* still goes via recommendation). The action
+  a deferred `action` (`CreateMilestone`, `CreateOpportunity`, `SendOutlookMail`,
+  `NotifyTeams`, `UpdateMilestone`, `UpdateOpportunity`, `UpdateDealTeamMember`,
+  `DeleteMilestone`). A milestone can also be created the older way, by approving a
+  recommendation-backed request. The action
   is stored on the existing `ApprovalRequest.errorMessage` column, tagged
   `MSX_ACTION::` + JSON (no new columns/tables).
 - A real change happens **only** when a human decides an approval request via
