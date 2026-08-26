@@ -204,7 +204,8 @@ AAD_CLIENT_ID="your-client-id"
 AAD_CLIENT_SECRET="your-secret"
 ```
 
-Then create a **second** settings file at `apps/web/.env`:
+Then create a **second** settings file at `apps/web/.env` (there's an
+`apps/web/.env.example` next to it you can copy):
 
 ```
 VITE_AAD_TENANT_ID="your-tenant-id"

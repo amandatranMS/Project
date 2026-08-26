@@ -26,6 +26,11 @@ prisma/schema.local.prisma
 .env.*.local
 .env.bak
 .env.*
+# ...but the checked-in templates must stay addable. Without this, `.env.*` above
+# silently blocks `git add` on a new .env.example, and the ones already tracked
+# only survive because they predate that rule.
+!.env.example
+!**/.env.example
 
 # Logs
 logs/

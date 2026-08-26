@@ -7,6 +7,9 @@
     "apps/*",
     "packages/*"
   ],
+  "engines": {
+    "node": "^20.0.0 || >=22.0.0"
+  },
   "scripts": {
     "dev": "concurrently --raw -n api,web -c blue,green \"npm:dev:api\" \"npm:dev:web\"",
     "dev:api": "tsx watch apps/api/src/server.ts",
