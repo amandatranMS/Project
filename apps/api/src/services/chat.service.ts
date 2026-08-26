@@ -39,27 +39,22 @@ export const chatService = {
     let userAssertion: string | undefined;
     if (user?.kind === 'user' && user.bearer) {
       userAssertion = user.bearer;
-      sessionId = createUserSession(user.bearer, user.email);
+      sessionId = createUserSession(user.bearer, user.email, user.oid);
     }
 
     const startedAt = new Date();
     const reply = await runFoundryAgent(messages, onToken, sessionId, userAssertion);
     const fullConversation = JSON.stringify([...messages, { role: 'assistant', content: reply }]);
-    // Attribute everything the hosted agent did during THIS user's turn to that
-    // user, so the Approvals log and Audit Log stay private per user. The agent
-    // calls back with the service key (no user identity), so its rows are created
-    // with ownerId=null and back-stamped here.
+    // Attach this turn's transcript to the rows the agent just wrote. The agent
+    // calls back with the service key, but it echoes the session handle, so those
+    // rows were already stamped with this user's oid as they were created —
+    // matching on that owner keeps two people chatting at once from writing their
+    // transcripts onto each other's rows.
     const ownerId = user?.kind === 'user' ? user.oid : undefined;
     await prisma.agentActionAuditLog.updateMany({
-      where: { createdAt: { gte: startedAt }, conversation: null },
-      data: { conversation: fullConversation, ...(ownerId ? { ownerId } : {}) },
+      where: { createdAt: { gte: startedAt }, conversation: null, ownerId: ownerId ?? null },
+      data: { conversation: fullConversation },
     });
-    if (ownerId) {
-      await prisma.approvalRequest.updateMany({
-        where: { createdAt: { gte: startedAt }, ownerId: null },
-        data: { ownerId },
-      });
-    }
     return { reply };
   },
 };

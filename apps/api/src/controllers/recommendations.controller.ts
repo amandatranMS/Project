@@ -15,7 +15,7 @@ export const recommendationsController = {
   }),
 
   get: asyncHandler(async (req, res) => {
-    const data = await recommendationsService.get(req.params.id);
+    const data = await recommendationsService.get(req.params.id, req.user);
     if (!data) throw new HttpError(404, 'Recommendation not found.');
     sendOk(res, data);
   }),

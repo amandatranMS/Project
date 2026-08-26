@@ -2,7 +2,7 @@ import { prisma } from '../lib/prisma.js';
 import { genId } from '../lib/ids.js';
 import { connectOpportunity, connectMilestone, connectRecommendation } from '../lib/connect.js';
 import type { AuthUser } from '../lib/entraAuth.js';
-import { currentOwnerId, ownerScopeWhere } from '../lib/requestContext.js';
+import { currentOwnerId, currentScopeWhere } from '../lib/requestContext.js';
 import type { z } from 'zod';
 import type { createAuditLogSchema } from '../validators/schemas.js';
 
@@ -16,7 +16,7 @@ type CreateInput = z.infer<typeof createAuditLogSchema>;
 export const agentActionAuditLogsService = {
   /** Return the caller's audit rows plus shared rows, with optional API filters. */
   list(where: { agentName?: string; actionType?: string }, user?: AuthUser) {
-    const scope = ownerScopeWhere(user);
+    const scope = currentScopeWhere(user);
     return prisma.agentActionAuditLog.findMany({
       where: scope ? { AND: [where, scope] } : where,
       orderBy: { createdAt: 'desc' },

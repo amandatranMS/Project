@@ -6,7 +6,7 @@ import { recordAgentAction } from '../lib/audit.js';
 import { assertCompetitorForLostStatus } from '../lib/lostToCompetitor.js';
 import { LOST_TO_COMPETITOR } from '@msx/shared';
 import type { AuthUser } from '../lib/entraAuth.js';
-import { currentOwnerId, ownerScopeWhere } from '../lib/requestContext.js';
+import { currentOwnerId, currentScopeWhere, canAccessOwned } from '../lib/requestContext.js';
 import { graphService } from './graph.service.js';
 import { milestonesService } from './milestones.service.js';
 import { opportunitiesService } from './opportunities.service.js';
@@ -180,7 +180,7 @@ function toPublic<T extends { errorMessage?: string | null }>(row: T) {
 
 export const approvalRequestsService = {
   async list(where: { approvalStatus?: string }, user?: AuthUser) {
-    const scope = ownerScopeWhere(user);
+    const scope = currentScopeWhere(user);
     const rows = await prisma.approvalRequest.findMany({
       where: scope ? { AND: [where, scope] } : where,
       orderBy: { approvalRequestBusinessId: 'asc' },
@@ -190,13 +190,17 @@ export const approvalRequestsService = {
     return rows.map(toPublic);
   },
 
-  async get(id: string) {
+  async get(id: string, user?: AuthUser) {
     const row = await prisma.approvalRequest.findUnique({
       where: { id },
       include: detailInclude,
-      omit: { ownerId: true },
     });
-    return row ? toPublic(row) : null;
+    if (!row) return null;
+    // Treat someone else's request as if it does not exist, so an id probe can't
+    // be used to confirm that a given approval belongs to another user.
+    if (!canAccessOwned(row.ownerId, user)) return null;
+    const { ownerId: _ownerId, ...visible } = row;
+    return toPublic(visible);
   },
 
   async create(input: CreateInput) {
@@ -254,9 +258,11 @@ export const approvalRequestsService = {
     return toPublic(row);
   },
 
-  async update(id: string, input: UpdateInput) {
+  async update(id: string, input: UpdateInput, user?: AuthUser) {
     const existing = await prisma.approvalRequest.findUnique({ where: { id } });
-    if (!existing) throw new HttpError(404, 'Approval request not found.');
+    if (!existing || !canAccessOwned(existing.ownerId, user)) {
+      throw new HttpError(404, 'Approval request not found.');
+    }
     return prisma.approvalRequest.update({ where: { id }, data: input });
   },
 
@@ -268,6 +274,11 @@ export const approvalRequestsService = {
    *    is the ONLY place agent-proposed writes/sends actually happen.
    *  - "Rejected" / "Needs Changes" never execute anything.
    * Every decision is written to the audit log.
+   *
+   * Only the person whose agent turn raised the request may decide it. That
+   * matters more here than on a plain read: approving is what actually fires the
+   * send or write, so letting one user decide another's request would hand them
+   * a real action under someone else's name.
    */
   async decide(
     id: string,
@@ -279,7 +290,9 @@ export const approvalRequestsService = {
       where: { id },
       include: { relatedRecommendation: true },
     });
-    if (!approval) throw new HttpError(404, 'Approval request not found.');
+    if (!approval || !canAccessOwned(approval.ownerId, actor)) {
+      throw new HttpError(404, 'Approval request not found.');
+    }
     if (approval.approvalStatus === 'Approved') throw new HttpError(409, 'This request was already approved.');
 
     const agentName = input.agentName ?? 'MilestoneAdvisor';

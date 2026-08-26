@@ -134,6 +134,35 @@ Every governed action is written to `AgentActionAuditLog` via `recordAgentAction
 (`apps/api/src/lib/audit.ts`), so the full history is queryable via
 `GET /api/agent-action-audit-logs` and visible on the Agent Audit Log page.
 
+### Who sees what
+
+Business records are shared; agent activity is not. Everyone sees the same
+opportunities, milestones, notes, and deal teams. But an approval request is the
+record of what *your* agent turn proposed on your behalf, so `ApprovalRequest`
+and `AgentActionAuditLog` are scoped to the signed-in user.
+
+- Both tables carry an `ownerId` (the user's Entra `oid`). Reads are filtered to
+  **your rows plus unowned rows**; unowned means seeded or system activity, which
+  stays shared.
+- The filter also applies where these rows hang off a shared parent — the
+  opportunity context read, the milestone detail, and the recommendation detail
+  all scope their nested `approvalRequests` / `auditLogs`.
+- Only the owner may decide their own request. That matters more than a read:
+  approving is what actually fires the send or write, so deciding someone else's
+  request would take a real action under their name. It returns 404 (not 403) so
+  an id probe can't confirm another user's approval exists.
+- `pendingApprovals` on the dashboard is scoped the same way, so the tile agrees
+  with the Approvals tab.
+- The hosted agent authenticates with a **service** credential and has no user
+  identity of its own. It echoes the user's `x-msx-session` handle on every
+  callback, and the API unseals the `oid` from it to stamp the owner as rows are
+  created. Ownership is never inferred from timing — that would mis-attribute
+  rows whenever two people chat at once.
+
+Helpers live in `apps/api/src/lib/requestContext.ts`: `currentOwnerId()` to stamp
+a new row, `currentScopeWhere(user)` to filter a read, and `canAccessOwned()` to
+guard a single row.
+
 ## Cloud security governance (Defender + Purview)
 
 The app-level approval + audit gate above is complemented by real Microsoft cloud

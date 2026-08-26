@@ -55,6 +55,17 @@ React + Express + PostgreSQL + Prisma app.
   encoded action for a later approval).
 - **Every** governed action is written to `AgentActionAuditLog` via
   `recordAgentAction` (`apps/api/src/lib/audit.ts`).
+- **Agent activity is per-user; business data is shared.** `ApprovalRequest` and
+  `AgentActionAuditLog` carry an `ownerId` (the Entra `oid`) and are filtered to
+  "my rows + unowned rows" on every read, including where they hang off an
+  opportunity/milestone/recommendation `include`. Only the owner may decide their
+  own approval — approving is what fires the real send/write, so another user's
+  request is refused as 404 and executes nothing. Opportunities, milestones, and
+  the rest of the 11 tables stay global. Use the helpers in
+  `apps/api/src/lib/requestContext.ts` (`currentOwnerId`, `currentScopeWhere`,
+  `canAccessOwned`) rather than hand-rolling the filter. The hosted agent calls
+  back with a service credential, so it carries the user's `x-msx-session` handle
+  and the API resolves the owner from it — never infer ownership from timing.
 
 ## Backend architecture (layered)
 - Entry: `apps/api/src/server.ts` → `app.ts` (registers `/api` routes + error handler).

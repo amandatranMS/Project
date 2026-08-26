@@ -6,6 +6,8 @@ import { recordAgentAction } from '../lib/audit.js';
 import { assertCompetitorForLostStatus } from '../lib/lostToCompetitor.js';
 import { maybeNotifyManager, type MilestoneNotifyContext } from './managerNotifications.service.js';
 import { milestoneCommitmentService, COMMITTED_VALUE } from './milestoneCommitment.service.js';
+import type { AuthUser } from '../lib/entraAuth.js';
+import { currentScopeWhere } from '../lib/requestContext.js';
 import type { z } from 'zod';
 import type { createMilestoneSchema, updateMilestoneSchema } from '../validators/schemas.js';
 
@@ -37,14 +39,15 @@ export const milestonesService = {
   },
 
   /** Load one milestone and the related records used by its detail screen. */
-  async get(id: string) {
+  async get(id: string, user?: AuthUser) {
     const milestone = await prisma.opportunityMilestone.findFirst({
       where: { OR: [{ id }, { milestoneBusinessId: id }] },
       include: {
         opportunity: true,
         statusHistories: { orderBy: { statusDate: 'desc' } },
         recommendations: true,
-        approvalRequests: true,
+        // The milestone is shared; the approvals raised against it are not.
+        approvalRequests: { where: currentScopeWhere(user) },
         collaborationNotes: true,
       },
     });

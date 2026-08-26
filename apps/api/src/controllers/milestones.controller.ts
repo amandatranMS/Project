@@ -16,7 +16,7 @@ export const milestonesController = {
   }),
 
   get: asyncHandler(async (req, res) => {
-    const data = await milestonesService.get(req.params.id);
+    const data = await milestonesService.get(req.params.id, req.user);
     if (!data) throw new HttpError(404, 'Milestone not found.');
     sendOk(res, data);
   }),

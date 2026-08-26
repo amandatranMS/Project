@@ -34,7 +34,7 @@ export const opportunitiesController = {
   }),
 
   context: asyncHandler(async (req, res) => {
-    const data = await opportunitiesService.context(req.params.id);
+    const data = await opportunitiesService.context(req.params.id, req.user);
     if (!data) throw new HttpError(404, 'Opportunity not found.');
     sendOk(res, data);
   }),

@@ -57,6 +57,7 @@ interface SessionClaims {
   /** bearer token */ b: string;
   /** email */ e?: string | null;
   /** expiry (epoch ms) */ x: number;
+  /** Entra oid of the user the handle was minted for */ o?: string | null;
 }
 
 /**
@@ -125,6 +126,7 @@ function open(key: Buffer, handle: string): SessionClaims | null {
 interface UserSession {
   bearer: string;
   email?: string;
+  oid?: string;
   expiresAt: number;
 }
 const sessions = new Map<string, UserSession>();
@@ -133,21 +135,27 @@ function sweep() {
   for (const [id, s] of sessions) if (s.expiresAt <= now) sessions.delete(id);
 }
 
-/** Store a user's bearer token and return an opaque handle. */
-export function createUserSession(bearer: string, email?: string): string {
+/**
+ * Store a user's bearer token and return an opaque handle.
+ *
+ * The `oid` rides along so a tool callback can be attributed to the user who
+ * started the turn. Without it the API would have to infer the owner from
+ * timing, which mis-attributes rows whenever two people chat at once.
+ */
+export function createUserSession(bearer: string, email?: string, oid?: string): string {
   const key = deriveKey();
   if (key) {
-    return seal(key, { b: bearer, e: email ?? null, x: Date.now() + TTL_MS });
+    return seal(key, { b: bearer, e: email ?? null, x: Date.now() + TTL_MS, o: oid ?? null });
   }
   // No shared secret configured → single-process in-memory handle.
   sweep();
   const id = randomUUID();
-  sessions.set(id, { bearer, email, expiresAt: Date.now() + TTL_MS });
+  sessions.set(id, { bearer, email, oid, expiresAt: Date.now() + TTL_MS });
   return id;
 }
 
 /** Resolve a handle back to the user's token, or null if unknown/expired. */
-export function getUserSession(id: string): { bearer: string; email?: string } | null {
+export function getUserSession(id: string): { bearer: string; email?: string; oid?: string } | null {
   // Stateless encrypted handle (the normal path).
   if (id.startsWith(HANDLE_PREFIX)) {
     const key = deriveKey();
@@ -155,11 +163,11 @@ export function getUserSession(id: string): { bearer: string; email?: string } |
     const claims = open(key, id);
     if (!claims) return null;
     if (Date.now() > claims.x) return null; // expired
-    return { bearer: claims.b, email: claims.e ?? undefined };
+    return { bearer: claims.b, email: claims.e ?? undefined, oid: claims.o ?? undefined };
   }
   // Legacy in-memory handle (back-compat during rollout / no-secret dev).
   sweep();
   const s = sessions.get(id);
   if (!s || s.expiresAt <= Date.now()) return null;
-  return { bearer: s.bearer, email: s.email };
+  return { bearer: s.bearer, email: s.email, oid: s.oid };
 }

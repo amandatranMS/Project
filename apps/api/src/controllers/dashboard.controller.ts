@@ -3,8 +3,8 @@ import { dashboardService } from '../services/dashboard.service.js';
 import { createSnapshotSchema } from '../validators/schemas.js';
 
 export const dashboardController = {
-  summary: asyncHandler(async (_req, res) => {
-    const data = await dashboardService.summary();
+  summary: asyncHandler(async (req, res) => {
+    const data = await dashboardService.summary(req.user);
     sendOk(res, data);
   }),
 

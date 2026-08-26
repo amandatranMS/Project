@@ -231,7 +231,9 @@ export default function Approvals() {
       <p className="muted">
         Human-in-the-loop gate. The agent only submits requests — approving one here executes the
         action (create milestone, update/delete milestone, send email, or post Teams) and records it
-        in the audit log. Nothing the agent proposes happens until a human approves.
+        in the audit log. Nothing the agent proposes happens until a human approves. You see the
+        requests raised by your own agent turns; opportunities and milestones stay shared with
+        everyone.
       </p>
       {error && <p className="error">{error}</p>}
       {message && <p style={{ color: 'var(--success)' }}>{message}</p>}
@@ -332,7 +334,7 @@ export default function Approvals() {
             </tr>
           ))}
           {!loading && items.length === 0 && !error && (
-            <tr><td colSpan={7} className="muted">No approval requests.</td></tr>
+            <tr><td colSpan={7} className="muted">No approval requests from your agent activity yet.</td></tr>
           )}
         </tbody>
       </table>

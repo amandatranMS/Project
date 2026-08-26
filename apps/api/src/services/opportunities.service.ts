@@ -5,6 +5,7 @@ import { genId } from '../lib/ids.js';
 import { recordAgentAction } from '../lib/audit.js';
 import { milestoneCommitmentService, COMMITTED_VALUE } from './milestoneCommitment.service.js';
 import type { AuthUser } from '../lib/entraAuth.js';
+import { currentScopeWhere, type OwnerScopeWhere } from '../lib/requestContext.js';
 import { opportunityBroadcastService, type BroadcastMode } from './opportunityBroadcast.service.js';
 import type { z } from 'zod';
 import type { createOpportunitySchema, updateOpportunitySchema } from '../validators/schemas.js';
@@ -38,17 +39,26 @@ async function computeNextTpid(): Promise<string> {
   return `${TPID_PREFIX}${max + 1}`;
 }
 
-const childInclude = {
-  milestones: { orderBy: { milestoneBusinessId: 'asc' } },
-  statusHistories: { orderBy: { statusDate: 'desc' } },
-  recommendations: { orderBy: { recommendationBusinessId: 'asc' } },
-  approvalRequests: { orderBy: { approvalRequestBusinessId: 'asc' } },
-  collaborationNotes: { orderBy: { createdOn: 'desc' } },
-  dealTeamMembers: { orderBy: { dealTeamMemberBusinessId: 'asc' } },
-  notifications: { orderBy: { createdDate: 'desc' } },
-  runLogs: { orderBy: { runName: 'asc' } },
-  auditLogs: { orderBy: { createdAt: 'desc' } },
-} as const;
+/**
+ * Related records for the agent's 360° context read.
+ *
+ * Approvals and audit rows are per-user, so they get the caller's owner filter
+ * rather than being pulled in wholesale — the opportunity itself is shared, but
+ * the agent activity hanging off it is not.
+ */
+function childInclude(scope: OwnerScopeWhere) {
+  return {
+    milestones: { orderBy: { milestoneBusinessId: 'asc' } },
+    statusHistories: { orderBy: { statusDate: 'desc' } },
+    recommendations: { orderBy: { recommendationBusinessId: 'asc' } },
+    approvalRequests: { where: scope, orderBy: { approvalRequestBusinessId: 'asc' } },
+    collaborationNotes: { orderBy: { createdOn: 'desc' } },
+    dealTeamMembers: { orderBy: { dealTeamMemberBusinessId: 'asc' } },
+    notifications: { orderBy: { createdDate: 'desc' } },
+    runLogs: { orderBy: { runName: 'asc' } },
+    auditLogs: { where: scope, orderBy: { createdAt: 'desc' } },
+  } satisfies Prisma.OpportunityInclude;
+}
 
 /** Related records loaded for the opportunity detail screen. */
 const detailInclude = {
@@ -133,12 +143,12 @@ export const opportunitiesService = {
   },
 
   /** Full 360° context: opportunity plus every related record. Resolves ref in any format. */
-  async context(ref: string) {
+  async context(ref: string, user?: AuthUser) {
     const id = await resolveOpportunityId(ref);
     if (!id) return null;
     return prisma.opportunity.findUnique({
       where: { id },
-      include: childInclude,
+      include: childInclude(currentScopeWhere(user)),
     });
   },
 

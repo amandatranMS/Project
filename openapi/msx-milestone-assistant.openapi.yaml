@@ -560,6 +560,11 @@ paths:
       tags: [Approval Requests]
       summary: List approval requests
       description: >
+        Returns only the requests raised by the signed-in user's own agent turns,
+        plus seeded/system rows that carry no owner. Opportunities and milestones
+        are shared by everyone; agent activity is personal.
+
+
         Each row includes a sanitized `pendingAction` decoded from the stored
         deferred action. CreateMilestone actions expose their mock business fields
         as `milestoneFields` and CreateOpportunity actions expose theirs as
@@ -681,13 +686,17 @@ paths:
     get:
       tags: [Approval Requests]
       summary: Get an approval request
+      description: >
+        Scoped to the caller. A request owned by another user returns 404 rather
+        than 403, so an id probe cannot confirm that someone else's approval exists.
       parameters: [{ $ref: '#/components/parameters/IdParam' }]
-      responses: { '200': { description: Approval request }, '404': { description: Not found } }
+      responses: { '200': { description: Approval request }, '404': { description: Not found, or owned by another user } }
     patch:
       tags: [Approval Requests]
       summary: Update an approval request
+      description: Scoped to the caller; another user's request returns 404.
       parameters: [{ $ref: '#/components/parameters/IdParam' }]
-      responses: { '200': { description: Updated } }
+      responses: { '200': { description: Updated }, '404': { description: Not found, or owned by another user } }
   /api/approval-requests/{id}/approve:
     patch:
       tags: [Approval Requests]
@@ -698,26 +707,32 @@ paths:
         writeback from the related recommendation (audited as CreateMilestone).
         If the action moves a milestone to "Lost To Competitor", an executive-summary
         email is sent to the reviewer's manager when `acknowledgeManagerEmail` is true.
+      description: >
+        Only the owner may decide their own request. Approving is what actually
+        fires the send or write, so deciding another user's request is refused
+        with 404 and executes nothing.
       parameters: [{ $ref: '#/components/parameters/IdParam' }]
       requestBody:
         content: { application/json: { schema: { $ref: '#/components/schemas/DecisionInput' } } }
-      responses: { '200': { description: Approved (returns approval + created milestone or executed action) }, '409': { description: Already approved }, '422': { description: A competitor is required to move the milestone to "Lost To Competitor" } }
+      responses: { '200': { description: Approved (returns approval + created milestone or executed action) }, '404': { description: Not found, or owned by another user }, '409': { description: Already approved }, '422': { description: A competitor is required to move the milestone to "Lost To Competitor" } }
   /api/approval-requests/{id}/reject:
     patch:
       tags: [Approval Requests]
       summary: Reject an approval request (no milestone created; audited)
+      description: Only the owner may decide their own request; another user's returns 404.
       parameters: [{ $ref: '#/components/parameters/IdParam' }]
       requestBody:
         content: { application/json: { schema: { $ref: '#/components/schemas/DecisionInput' } } }
-      responses: { '200': { description: Rejected } }
+      responses: { '200': { description: Rejected }, '404': { description: Not found, or owned by another user } }
   /api/approval-requests/{id}/needs-changes:
     patch:
       tags: [Approval Requests]
       summary: Mark an approval request as needing changes (audited)
+      description: Only the owner may decide their own request; another user's returns 404.
       parameters: [{ $ref: '#/components/parameters/IdParam' }]
       requestBody:
         content: { application/json: { schema: { $ref: '#/components/schemas/DecisionInput' } } }
-      responses: { '200': { description: Updated } }
+      responses: { '200': { description: Updated }, '404': { description: Not found, or owned by another user } }
 
   /api/collaboration-notes:
     get:
@@ -792,7 +807,14 @@ paths:
       responses: { '201': { description: Created } }
 
   /api/dashboard/summary:
-    get: { tags: [Dashboard], summary: Live dashboard metrics, responses: { '200': { description: Metrics } } }
+    get:
+      tags: [Dashboard]
+      summary: Live dashboard metrics
+      description: >
+        Pipeline figures (opportunities, milestones, revenue) are shared across all
+        users. `pendingApprovals` counts only the caller's own pending requests, so
+        the tile agrees with the Approvals tab.
+      responses: { '200': { description: Metrics } }
   /api/dashboard-metric-snapshots:
     get: { tags: [Dashboard], summary: List metric snapshots, responses: { '200': { description: Snapshots } } }
     post: { tags: [Dashboard], summary: Create a metric snapshot, responses: { '201': { description: Created } } }

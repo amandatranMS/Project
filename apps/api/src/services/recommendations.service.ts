@@ -3,6 +3,8 @@ import { HttpError } from '../lib/httpError.js';
 import { genId } from '../lib/ids.js';
 import { recordAgentAction } from '../lib/audit.js';
 import { connectOpportunity, connectMilestone } from '../lib/connect.js';
+import type { AuthUser } from '../lib/entraAuth.js';
+import { currentScopeWhere } from '../lib/requestContext.js';
 import type { z } from 'zod';
 import type { createRecommendationSchema, updateRecommendationSchema } from '../validators/schemas.js';
 
@@ -21,10 +23,15 @@ export const recommendationsService = {
   },
 
   /** Load one proposal together with the records needed for approval review. */
-  get(id: string) {
+  get(id: string, user?: AuthUser) {
     return prisma.aiMilestoneRecommendation.findUnique({
       where: { id },
-      include: { opportunity: true, relatedMilestone: true, approvalRequests: true },
+      include: {
+        opportunity: true,
+        relatedMilestone: true,
+        // Recommendations are shared; the approvals raised from them are not.
+        approvalRequests: { where: currentScopeWhere(user) },
+      },
     });
   },
 

@@ -12,7 +12,7 @@ export const approvalRequestsController = {
   }),
 
   get: asyncHandler(async (req, res) => {
-    const data = await approvalRequestsService.get(req.params.id);
+    const data = await approvalRequestsService.get(req.params.id, req.user);
     if (!data) throw new HttpError(404, 'Approval request not found.');
     sendOk(res, data);
   }),
@@ -25,7 +25,7 @@ export const approvalRequestsController = {
 
   update: asyncHandler(async (req, res) => {
     const input = updateApprovalSchema.parse(req.body);
-    const data = await approvalRequestsService.update(req.params.id, input);
+    const data = await approvalRequestsService.update(req.params.id, input, req.user);
     sendOk(res, data);
   }),
 
